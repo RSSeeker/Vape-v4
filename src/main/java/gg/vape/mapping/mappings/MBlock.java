@@ -573,7 +573,7 @@ extends Mapping {
             Class clazz34 = MappedClasses.za;
             MBlock mBlock28 = this;
             this.Q = this.registerInstanceFieldForOwner(clazz34, string28, bl, clazz33);
-            if (ForgeVersion.MC_1_20_6.d()) {
+            if (ForgeVersion.MC_1_20_1.d()) {
                 Class clazz35 = MappedClasses.lz;
                 boolean bl28 = true;
                 String string29 = "BLOCK";

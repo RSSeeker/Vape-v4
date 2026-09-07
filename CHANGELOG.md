@@ -4,6 +4,20 @@
 
 **26.x 装备名牌旋转 + 2D 框随镜头修复**
 
+> 补注（在 v4.21.28 基线上额外应用的 1.20.1 修复）：
+> - **1.20.1 Forge 注入支持**：`MBlock.U` 的 `BLOCK` 字段 owner 门控从 `MC_1_20_6.d()` 改为 `MC_1_20_1.d()`，
+>   使 1.20.1+ 把 `BLOCK` 注册到 `BuiltInRegistries`（`MappedClasses.R`）而非 `Registry` 接口（无 `BLOCK` 字段），
+>   修复 `Block.t` 遍历块注册表 NPE、初始化中断（无法注入）
+> - **1.20.1 关闭 Vape 菜单后游戏 GUI 消失 + 卡顿**：1.20.1 整个 2D/GUI 通道在 `GameRenderer.render` 内运行，
+>   图标捕获路径的未捕获 NPE 会中断整帧渲染（GUI 消失/卡顿）。`ClientSettings.renderHudFrames` push/pop 包
+>   try/finally、`renderHudOverlay` 包 try/catch + 保证 flush 仍执行；`Post117ItemIconFramebufferRenderer`
+>   pre-1.20.6 分支 `renderItem.a` 包 try/catch + renderQueued 空守卫；`PotionEffectIconTexture.getSpriteTexture`
+>   空图集 try/catch 返 null；`ItemIconRenderer.createRenderer` 改为总是缓存——组件错误不再从
+>   `EventRender2D.create()` 泄漏到 `GameRenderer.render`（不再黑屏/消失、不再每帧 NPE 卡顿）
+> 
+> 其余 1.20.1 的 ESP/射线/箭头/图标显示等改动已回退，不包含在此版本。
+
+
 - **26.x 装备名牌不旋转（回归）**：v4.21.27 为"防止 1.16.5/1.20.x/26.x 回归"而把两个旋转按基线条件重新应用，
   但 **26.x 的 billboard 已自带相机基线**（`RenderUtil.d()/Y()`），再叠加这两个旋转会双重旋转，导致装备图标
   不再面向相机（26.1.2 实测）。现改为**全程移除**这两个旋转（与 1.21.10/1.21.11 一致）：26.x 与

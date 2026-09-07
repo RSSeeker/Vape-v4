@@ -1,5 +1,6 @@
 package gg.vape.utils.render;
 
+import gg.vape.Vape;
 import gg.vape.utils.render.BufferedGuiRenderPrimitives;
 import gg.vape.utils.render.GlFramebuffer;
 import gg.vape.utils.render.GlImageTexture;
@@ -135,8 +136,16 @@ implements ItemIconRenderBackend {
                     OpenGlBackendHolder.backend.popMatrix();
                 }
             } else {
-                RenderItem renderItem = Minecraft.v();
-                renderItem.a(itemStack, 0, 0, renderMatrixStack);
+                // Pre-1.20.6 (1.16.5, 1.20.1) path: RenderItem.a can throw on 1.20.1
+                // (getBakedModel/legacy zLevel mappings not wired). Swallow so the
+                // framebuffer/viewport/texture restore below always runs.
+                try {
+                    RenderItem renderItem = Minecraft.v();
+                    renderItem.a(itemStack, 0, 0, renderMatrixStack);
+                }
+                catch (Throwable throwable) {
+                    Vape.logThrowable(throwable);
+                }
             }
             this.framebuffer.bindColorTexture();
             this.framebuffer.unbind();
@@ -234,8 +243,15 @@ implements ItemIconRenderBackend {
                 OpenGlBackendHolder.backend.popMatrix();
             }
         } else {
-            RenderItem renderItem = Minecraft.v();
-            renderItem.a(itemStack, 0, 0, renderMatrixStack);
+            // Pre-1.20.6 (1.16.5, 1.20.1) path: RenderItem.a can throw on 1.20.1.
+            // Swallow so the framebuffer/viewport/texture restore below always runs.
+            try {
+                RenderItem renderItem = Minecraft.v();
+                renderItem.a(itemStack, 0, 0, renderMatrixStack);
+            }
+            catch (Throwable throwable) {
+                Vape.logThrowable(throwable);
+            }
         }
         this.framebuffer.bindColorTexture();
         this.framebuffer.unbind();
@@ -247,6 +263,12 @@ implements ItemIconRenderBackend {
 
     @Override
     public void renderQueued(float x, float y, int width, int height, float opacity, boolean worldSpace) {
+        // A capture can legitimately leave framebuffer null/empty (mapping failure, or an
+        // early return). Guard so the HUD call site never NPEs on colorTextureId every frame
+        // (the per-frame lag source).
+        if (this.framebuffer == null || this.framebuffer.colorTextureId <= 0) {
+            return;
+        }
         RenderBatchBuilder batchBuilder = new RenderBatchBuilder(VertexCoordinateMode.DEFAULT, worldSpace).setTexture(new GlImageTexture(this.framebuffer.colorTextureId)).addTexturedRect(x, y, width, height, 64.0f, 64.0f, 0.0f, 1.0f, 1.0f, 0.0f, new Color(1.0f, 1.0f, 1.0f, opacity));
         if (worldSpace) {
             RenderBatchManager.getInstance().queueWorldBatch(batchBuilder);

@@ -1,5 +1,6 @@
 package gg.vape.utils.render;
 
+import gg.vape.Vape;
 import gg.vape.utils.ItemStackScoreUtil;
 import gg.vape.utils.render.GuiRenderPrimitives;
 import gg.vape.utils.render.ItemIcon;
@@ -75,7 +76,16 @@ public class ItemIconRenderer {
 
     private static ItemIconRenderBackend createRenderer(ItemStack itemStack, ItemIconKey cacheKey) {
         ItemIconRenderBackend renderer = GuiRenderPrimitives.d() ? new Post117ItemIconFramebufferRenderer() : new ItemIcon();
-        renderer.capture(itemStack, cacheKey.getScale());
+        // Always cache the renderer even when capture fails/throws. Otherwise a broken
+        // capture (the 1.20.1 getBakedModel mapping NPE) re-runs the expensive offscreen
+        // capture EVERY frame and logs an exception every frame, which is the per-frame lag.
+        // renderQueued() null-guards the framebuffer so a failed capture simply draws nothing.
+        try {
+            renderer.capture(itemStack, cacheKey.getScale());
+        }
+        catch (Throwable throwable) {
+            Vape.logThrowable(throwable);
+        }
         cache.put(cacheKey, renderer);
         return renderer;
     }

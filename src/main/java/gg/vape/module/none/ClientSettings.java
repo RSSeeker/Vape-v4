@@ -499,19 +499,27 @@ extends Mod {
         OpenGlBackendHolder.backend.setAlphaFunction(516, 0.0f);
         if (INSTANCE.isInputEnabled()) {
             OpenGlBackendHolder.backend.pushMatrix();
-            double guiScale = Vape.INSTANCE.getClientSettings().getGuiScaleFactor();
-            OpenGlBackendHolder.backend.scale(guiScale, guiScale, guiScale);
-            if (INSTANCE.isInputEnabled()) {
-                this.renderFrames();
-                if (!ForgeVersion.MC_26_2.d()) {
-                    // 26.2 draws notifications in the post-GUI pass
-                    // (EventRender2D.createGui) where the font is ready; all
-                    // other versions render them here with the HUD.
-                    NotificationManager notificationManager = Vape.INSTANCE.getNotificationManager();
-                    notificationManager.renderNotifications();
+            try {
+                double guiScale = Vape.INSTANCE.getClientSettings().getGuiScaleFactor();
+                OpenGlBackendHolder.backend.scale(guiScale, guiScale, guiScale);
+                if (INSTANCE.isInputEnabled()) {
+                    this.renderFrames();
+                    if (!ForgeVersion.MC_26_2.d()) {
+                        // 26.2 draws notifications in the post-GUI pass
+                        // (EventRender2D.createGui) where the font is ready; all
+                        // other versions render them here with the HUD.
+                        NotificationManager notificationManager = Vape.INSTANCE.getNotificationManager();
+                        notificationManager.renderNotifications();
+                    }
                 }
             }
-            OpenGlBackendHolder.backend.popMatrix();
+            finally {
+                // A HUD component (e.g. the item/potion-icon framebuffer capture on
+                // 1.20.1) can throw mid-render. Pop the matrix we pushed above so the
+                // uncaught error cannot leave the shared matrix stack unbalanced and
+                // corrupt the rest of the frame's render.
+                OpenGlBackendHolder.backend.popMatrix();
+            }
         }
         OpenGlBackendHolder.backend.setAlphaFunction(previousAlphaFunction, previousAlphaReference);
     }
@@ -860,9 +868,24 @@ extends Mod {
 
     public void renderHudOverlay() {
         if (this.inputEnabled) {
-            this.renderHudFrames();
+            try {
+                this.renderHudFrames();
+            }
+            catch (Throwable throwable) {
+                // A HUD component error in renderHudFrames must NOT abort the 2D pass:
+                // on 1.20.1 this whole pass runs inside GameRenderer.render
+                // (EventRender2D.create -> GameRenderer), so an uncaught throw kills the
+                // frame's render/composite -> the screen goes black; and it would re-fire
+                // every frame (the lag). Log and keep the frame alive.
+                Vape.logThrowable(throwable);
+            }
             if (GuiRenderPrimitives.d()) {
-                RenderBatchManager.getInstance().flushGuiBatches(0.0f);
+                try {
+                    RenderBatchManager.getInstance().flushGuiBatches(0.0f);
+                }
+                catch (Throwable throwable) {
+                    Vape.logThrowable(throwable);
+                }
             }
         }
     }

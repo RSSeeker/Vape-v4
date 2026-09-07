@@ -67,16 +67,24 @@ implements PotionEffectIconRenderBackend {
     }
 
     private static TextureObject getSpriteTexture(TextureAtlasSprite sprite) {
-        Wrapper textureManager;
-        ResourceLocation textureLocation;
-        if (ForgeVersion.MC_1_20_6.d()) {
-            textureLocation = sprite.getAtlasLocation();
-        } else {
-            Wrapper textureAtlas = new TextureAtlas(sprite.getContentsOrAtlasTexture());
-            textureLocation = ((TextureAtlas)textureAtlas).getTextureLocation();
+        try {
+            Wrapper textureManager;
+            ResourceLocation textureLocation;
+            if (ForgeVersion.MC_1_20_6.d()) {
+                textureLocation = sprite.getAtlasLocation();
+            } else {
+                // Pre-1.20.6 (1.16.5, 1.20.1): the atlas underneath the sprite can be
+                // unresolvable (the legacy field no longer resolves on 1.20.1). Let the
+                // caller's null-check skip the icon instead of throwing a per-frame NPE.
+                Wrapper textureAtlas = new TextureAtlas(sprite.getContentsOrAtlasTexture());
+                textureLocation = ((TextureAtlas)textureAtlas).getTextureLocation();
+            }
+            textureManager = Minecraft.getTextureManager();
+            return ((TextureManager)textureManager).getTexture(textureLocation);
         }
-        textureManager = Minecraft.getTextureManager();
-        return ((TextureManager)textureManager).getTexture(textureLocation);
+        catch (Throwable throwable) {
+            return null;
+        }
     }
 
     @Override
