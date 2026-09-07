@@ -913,7 +913,11 @@ public class MappedClasses {
         F6 = MappedClasses.m("net/minecraft/scoreboard/Scoreboard");
         DX = MappedClasses.m("net/minecraft/scoreboard/Score");
         u6 = MappedClasses.m("net/minecraft/scoreboard/ScorePlayerTeam");
-        l5 = ForgeVersion.MC_1_21_0.d() ? MappedClasses.E("net/minecraft/ChatFormatting", true) : MappedClasses.m("net/minecraft/util/EnumChatFormatting");
+        l5 = ForgeVersion.MC_26_2.d()
+                ? MappedClasses.E("net/minecraft/world/scores/TeamColor", true)
+                : ForgeVersion.MC_1_21_0.d()
+                        ? MappedClasses.E("net/minecraft/ChatFormatting", true)
+                        : MappedClasses.m("net/minecraft/util/EnumChatFormatting");
         Fp = MappedClasses.m("net/minecraft/client/resources/SkinManager");
         qp = MappedClasses.m("com/mojang/authlib/minecraft/MinecraftProfileTexture");
         zk = MappedClasses.m("com/mojang/authlib/minecraft/MinecraftProfileTexture$Type");

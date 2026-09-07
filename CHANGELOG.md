@@ -1,5 +1,17 @@
 # 更新日志
 
+## v4.21.30 (2026-09-07)
+
+**集成上游（4.21-recovered）新功能/修复 + 此前遗留修复**
+
+- **26.2 队伍颜色映射**（`MappedClasses.l5` 增加 `MC_26_2.d() ? TeamColor : ...`；`MScorePlayerTeam` 的 `color` 字段类型改为 `MC_26_2.d() ? Optional.class : ...`）
+- **26.2 攻击按键 tick 线程门控**（`AttackKeyController` 新增 `shouldRunOnClientTick()`，在 26.2 上把 release/press/synthetic-attack 经 `PRE_TICK_EXECUTOR` 延迟到客户端 tick）
+- **左键连点器窗口失焦**（`LeftClicker` 新增 `isMinecraftFocused()` = 输入分发焦点 && `Minecraft.a()`（窗口焦点），替代仅检查输入分发焦点）
+- **宏按键按下触发**（`MacroEventListener` 由按键释放改为按键按下触发）
+- **GUI 分类 frame 网格预排**（`ClientSettings.initializeFrames` 首开即非重叠排列）+ 26.2 通知条件 + try/finally popMatrix
+- 跨版本（1.7.10 / 1.12.2 / 1.21.10 / 1.21.11 / 26.x）审查通过、无回归
+- （说明：上游 Search 1.21.11 的 Fabric 专用门控不适用本仓库；本仓库既有门控已等效覆盖 1.21.11）
+
 ## v4.21.29 (2026-08-25)
 
 **v4.21.28 基线 + 1.20.1 注入支持与卡顿修复（发布版）；其余 1.20.1 改动回退**

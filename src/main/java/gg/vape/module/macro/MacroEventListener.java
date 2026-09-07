@@ -56,7 +56,10 @@ implements EventListener {
 
     @EventHandler
     public void onKeyPress(EventKeyPress event) {
-        if (event.isDown()) {
+        // Fire on key-DOWN (match onMouseButton and module keybinds). The previous
+        // `if (event.isDown()) return;` fired only on key-RELEASE, so the macro never
+        // reacted on the press -> "按按键没反应".
+        if (!event.isDown()) {
             return;
         }
         if (event.getThePlayer().isNull()) {

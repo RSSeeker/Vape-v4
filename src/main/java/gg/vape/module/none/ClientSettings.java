@@ -705,6 +705,33 @@ extends Mod {
         frameSnapshot = ImmutableList.copyOf(allFrames);
         ClientSettings.refreshModuleCategoryHeaders();
         VisibleModuleListFrame.e();
+        // Pre-arrange the draggable module-category lists (Combat, Movement, VAPE/Favorites, ...)
+        // so the very FIRST GUI open already draws them non-overlapping. Every ModuleCategoryFrame
+        // is constructed at the SAME hardcoded x/y (ModuleCategoryFrame.java:121-122) and its frame
+        // A()/L() (bounding box) comes from the component layout, which FrameComponent.H() defers
+        // until the first GL-context render (FrameComponent.java:101-129). Until that layout runs,
+        // A()/L() are ~0, so positionFrameIfNeeded() sees zero-size bounds and stacks every list at
+        // one spot -> Combat overlaps VAPE. Force the layout pass, then assign a non-overlapping
+        // grid, mirroring the state the lists reach after being reduced/cascaded once.
+        double gridX = 32.0;
+        double gridY = 32.0;
+        double rowHeight = 0.0;
+        for (Frame frame : allFrames) {
+            if (!(frame instanceof ModuleCategoryFrame) || !frame.J$src$Z$1eqdghz() || !frame.l$src$Z$193vdc5()) continue;
+            frame.l$src$V$1mibm4x();
+            if (gridX + frame.A() > (double)Minecraft.G().getScaledWidth()) {
+                gridX = 24.0;
+                gridY += rowHeight + 8.0;
+                rowHeight = 0.0;
+            }
+            if (frame.L() > rowHeight) {
+                rowHeight = frame.L();
+            }
+            frame.K(gridX);
+            frame.S(gridY);
+            frame.l$src$V$1mibm4x();
+            gridX += frame.A() + 2.0;
+        }
         framesInitialized = true;
     }
 

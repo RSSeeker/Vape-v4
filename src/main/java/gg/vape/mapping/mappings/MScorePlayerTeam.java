@@ -8,6 +8,7 @@ import gg.vape.mapping.MappingMethodBuilder;
 import gg.vape.ui.click.component.GuiComponent;
 import gg.vape.wrapper.Wrapper;
 import gg.vape.wrapper.impl.ForgeVersion;
+import java.util.Optional;
 
 public class MScorePlayerTeam
 extends Mapping {
@@ -74,7 +75,7 @@ extends Mapping {
                 String string = "playerPrefix";
                 MScorePlayerTeam mScorePlayerTeam = this;
                 this.playerPrefixField = mScorePlayerTeam.J(string, bl, clazz);
-                Class clazz2 = MappedClasses.l5;
+                Class clazz2 = ForgeVersion.MC_26_2.d() ? Optional.class : MappedClasses.l5;
                 boolean bl2 = true;
                 String string2 = "color";
                 MScorePlayerTeam mScorePlayerTeam2 = this;
@@ -110,7 +111,7 @@ extends Mapping {
             String string3 = "playerPrefix";
             MScorePlayerTeam mScorePlayerTeam3 = this;
             this.playerPrefixField = this.J(string3, bl3, clazz3);
-            Class clazz4 = MappedClasses.l5;
+            Class clazz4 = ForgeVersion.MC_26_2.d() ? Optional.class : MappedClasses.l5;
             boolean bl4 = true;
             String string4 = "color";
             MScorePlayerTeam mScorePlayerTeam4 = this;

@@ -14,14 +14,14 @@ A research-oriented recovery project for the Vape 4.21 Java layer and Windows x6
 
 | File | Description |
 | --- | --- |
-| `Vape-v4.21.29.exe` | GUI single-file loader (embeds the complete DLL, Java payload and icon); filename varies with the version (e.g. `Vape-v4.21.29.exe`) |
+| `Vape-v4.21.30.exe` | GUI single-file loader (embeds the complete DLL, Java payload and icon); filename varies with the version (e.g. `Vape-v4.21.30.exe`) |
 
 **Optional external DLL**: if `Vape-v4.21Native.dll` sits next to the exe, it is loaded preferentially (handy for replacing/updating the native layer yourself); otherwise the embedded copy is extracted, so no extra files are required.
 
 **Usage**:
 
 - Double-click to run the GUI (window title "Vape v4"): pick a Minecraft process and inject directly, no login needed
-- Command-line injector: `Vape-v4.21.29.exe -nogui [pid]` — without a pid it opens the process picker; with a pid it injects directly
+- Command-line injector: `Vape-v4.21.30.exe -nogui [pid]` — without a pid it opens the process picker; with a pid it injects directly
 - After injection, press RIGHT SHIFT (default) in-game to open the module GUI
 
 ## Features
@@ -187,10 +187,10 @@ Main Java artifacts are located in `build/libs/`. To generate IntelliJ IDEA proj
   -PnativeJavaHome="C:\Program Files\Java\jdk1.8.0_301"
 ```
 
-The complete test bundle outputs to `build/injection/` (the filename varies with the project version, e.g. `Vape-v4.21.29.exe`):
+The complete test bundle outputs to `build/injection/` (the filename varies with the project version, e.g. `Vape-v4.21.30.exe`):
 
 ```text
-Vape-v4.21.29.exe   GUI single-file loader (embeds the DLL and all resources)
+Vape-v4.21.30.exe   GUI single-file loader (embeds the DLL and all resources)
 README.md
 ```
 

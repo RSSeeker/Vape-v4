@@ -66,12 +66,16 @@ extends ClickerMod {
         return this.triggerMode.getEffectiveValue();
     }
 
+    private boolean isMinecraftFocused() {
+        return InputEventDispatcher.getInstance().getFocusState().isFocused() && Minecraft.a();
+    }
+
     private boolean computeBlocked() {
         if (!ClientSettings.INSTANCE.isInputEnabled()) {
             this.breakingBlock = false;
             return true;
         }
-        if (!InputEventDispatcher.getInstance().getFocusState().isFocused()) {
+        if (!this.isMinecraftFocused()) {
             this.breakingBlock = false;
             return true;
         }
@@ -148,7 +152,7 @@ extends ClickerMod {
     public void updateBlockedState(EventPreTick eventPreTick) {
         this.blocked = this.computeBlocked();
         ClickEngine clickEngine = this.getClickEngine();
-        if (this.breakingBlock && InputEventDispatcher.getInstance().getFocusState().isFocused() && ClientSettings.INSTANCE.inputEnabled && Minecraft.currentScreen().isNull() && clickEngine.isActivationHeld() && !Minecraft.gameSettings().F().isKeyDown()) {
+        if (this.breakingBlock && this.isMinecraftFocused() && ClientSettings.INSTANCE.inputEnabled && Minecraft.currentScreen().isNull() && clickEngine.isActivationHeld() && !Minecraft.gameSettings().F().isKeyDown()) {
             clickEngine.pressClickButton();
         }
     }
