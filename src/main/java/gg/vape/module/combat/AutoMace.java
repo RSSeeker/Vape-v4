@@ -531,9 +531,9 @@ public class AutoMace extends Mod {
         int breach = EnchantmentHelper.e("breach", stack);
         if (this.maceSelection.getValue().toString().equals(SELECTION_MANUAL.toString())) {
             if (this.maceType.getValue().toString().equals(TYPE_DENSITY.toString())) {
-                return density > 0 ? density : -1.0;
+                return density > 0 ? density : 0.5;
             }
-            return breach > 0 ? breach : -1.0;
+            return breach > 0 ? breach : 0.5;
         }
         float fallDistance = Minecraft.thePlayer().getFallDistance();
         double densityScore = density > 0 ? this.baseSmashDamage(fallDistance) + density * fallDistance * 0.5 : -1.0;
