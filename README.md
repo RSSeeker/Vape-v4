@@ -1,10 +1,7 @@
-[简体中文](README.md) | [English](README_EN.md)
-
 # Vape 4.21 Product Recovery
 
 Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附带完整中文本地化。
 
-> GitHub 仓库：[RSSeeker/Vape-v4.21](https://github.com/RSSeeker/Vape-v4.21) ·
 > 发布页：[Releases](https://github.com/RSSeeker/Vape-v4.21/releases)
 >
 > 源代码来源：[OpenVapeCN/OpenVape](https://github.com/OpenVapeCN/OpenVape)
@@ -14,34 +11,34 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 
 | 文件 | 说明 |
 | --- | --- |
-| `Vape-v4.21.31.exe` | GUI 单文件加载器（内嵌完整 DLL 与 Java 载荷 + 图标），文件名随版本号变化（如 `Vape-v4.21.31.exe`） |
+| `Vape-v4.21.*.exe` | GUI 单文件加载器（内嵌完整 DLL 与 Java 载荷 + 图标） |
 
 **可选外部 DLL**：exe 旁放置 `Vape-v4.21Native.dll` 时**优先加载外部 DLL**（便于自行替换/更新原生层）；无外部 DLL 时自动解压内嵌版本，免附带文件。
 
 **使用方式**：
 
 - 双击运行 → GUI 界面（窗口标题「Vape v4」），直接选择 Minecraft 进程注入，无需登录
-- 命令行注入器：`Vape-v4.21.31.exe -nogui [pid]` —— 不带 pid 弹出进程选择器，带 pid 直接注入
+- 命令行注入器：`Vape-v4.21.*.exe -nogui [pid]` —— 不带 pid 弹出进程选择器，带 pid 直接注入
 - 注入完成后游戏中按 右Shift（默认）打开功能界面
 
 ## 特性
 
-**GUI 加载器（v4.21.9+）**
+**GUI 加载器**
 
 - 集成上游 VapeLoader 图形界面（GDI+ 自绘，全中文）：进程选择 / 注入进度 / 加载完成
 - 去掉登录页与缓存询问页：启动即选进程注入，本地生成 token
 - **支持加载外部 DLL**：exe 旁存在 `Vape-v4.21Native.dll` 时优先注入外部 DLL；否则从 exe 内嵌资源解压注入，两种模式均免附带文件
 - 窗口标题「Vape v4」，图标与产品一致
-- 文件落盘全部收拢进 exe 旁隐藏的 `.vapeclient` 目录（解压的 DLL/JAR、日志、配置、服务数据、纹理缓存），**不向 `%TEMP%` 写任何文件**
+- 文件落盘全部收拢进 exe 旁隐藏的 `.vapeclient` 目录（解压的 DLL/JAR、日志、配置、服务数据、纹理缓存）
 
-**动态模糊（MotionBlur，v4.21.20+）**
+**动态模糊（MotionBlur）**
 
 - **HUD 模块「动态模糊」**（显示/Game 分组，与方块彩色边框同区域）：帧混合后处理，开启后根据视角移动产生残影拖尾效果
 - 可调项：模糊强度（默认 5，×2 强度，上限 0.95）、速度自适应（随镜头移动速度增强）、柔和模糊、帧率调制、灰度拖影、菜单 / 游戏菜单中是否生效
 - 支持 **1.17+ 至 26.1** 的 Vanilla / Forge / NeoForge / Fabric 运行时（26.2 的渲染管线无帧末钩子暂不支持）
 - 渲染时机与 GL 状态经专门适配：在 `RenderTarget.blitToScreen` 出口（画面已呈现到屏幕、swap 前）执行，并同步游戏 `GlStateManager` 缓存，避免字体/贴图采样错乱
 
-**功能集成（v4.21.8）**
+**功能集成**
 
 - 合并上游新模块：**AutoMace**（自动重锤，含重锤选择 / 眩晕猛击 / 瞄准范围 / 自动卸下鞘翅 / 仅猛击 / 显示快捷栏）、**NoItemRelease**（不释放物品）、**PearlCatch**（接住珍珠）、**InventoryOverlay**（物品栏覆盖显示）
 - 合并 Badlion 旧版按键事件队列，Badlion 客户端按键兼容
@@ -55,16 +52,12 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 
 - 语言包扩充至 2600+ 键，模块名、值名、提示、教程、确认框、药水/物品名全覆盖
 - 默认语言为中文；语言选项精简为「中文 / English」
-- 修复多行提示换行被压平、颜色码 `§` 丢失导致的翻译不匹配
-- 下拉框 / 目标过滤器等运行时拼串的翻译（先查整串、未命中再逐段翻译）
 - 模块搜索同时匹配英文名与中文翻译名，中文可直接搜到模块
 - 分类导航显示「其他」分类，Other 分类模块（如不释放物品）可直接浏览
-- mace 使用官方译名「重锤」；字库按更新后的翻译字符集重新子集化（含「锤」等新字形）
 
 **字体与显示**
 
-- `noto.ttf` 为覆盖全部翻译字符的 Noto Sans SC 静态子集（SemiBold 600 字重），经 stb（游戏实际渲染引擎）验证 0 缺字
-- 自定义圆角图标嵌入 `Vape-v4.21.exe`
+- `noto.ttf` 为覆盖全部翻译字符的 Noto Sans SC 静态子集（SemiBold 600 字重）
 - 注入器控制台中文化并启用 UTF-8 输出
 
 **工程与稳定性**
@@ -74,7 +67,7 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 - 版本探测增强：区分 Vanilla / Forge / NeoForge / Fabric 运行时，避免旧版 Fabric 误判（1.20.1-Fabric 除外，见兼容性表）
 - 配置本地持久化：模块设置、配置档、好友、框架位置保存至 `.vapeclient\config.json`，自动保存 + 退出兜底
 - 原生日志与 Java 日志统一到 `.vapeclient\log\`，每次注入生成独立日志文件
-- 单文件注入器：`Vape-v4.21.exe` 内嵌完整 DLL 与 Java 载荷
+- 单文件注入器：`Vape-v4.21.*.exe` 内嵌完整 DLL 与 Java 载荷
 
 ### 它不是 Vape 官方源码、原始发布包或厂商签名产物，也不保证具备与原产品完全一致的行为。
 
@@ -120,18 +113,10 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 - **ESP（2D/3D 方框、名字、骨架）不显示**：实体坐标/包围盒或投影在 1.20.1 取值异常，导致
   `ProjectedEntityBounds` 角点投影暴增、`onScreen` 恒为 false；已尝试旋转修正、包围盒方法访问器、
   `entity.b()` clamp、回退透视等多项修复，仍未彻底解决
-- **射线（Tracers）不显示 / 仅 +Z 方向对齐**：起点/终点坐标的相机相对约定与 1.20.1 投影错位
+- **射线（Tracers）不显示**：起点/终点坐标的相机相对约定与 1.20.1 投影错位
 - **箭头（Arrows）方向指示有偏差**（身前实体左右镜像）：投影旋转的 handedness 在 1.20.1 存在翻转
 - **药水图标 / 盔甲（装备）图标不显示**：`getBakedModel`/`getSpriteTexture` 等映射在 1.20.1 失效，
   当前以优雅跳过处理（不崩、不卡，但不显示）
-
-**其它模块**
-- **宏功能（Macro）**：存在缺陷（具体表现待复现定位）
-- **自动重锤（AutoMace）**：存在缺陷（具体表现待复现定位）
-
-> 说明：上述 1.20.1 相关改动已在 v4.21.29 中**回退**，仅保留 1.20.1 的**注入支持**与**关闭菜单后 GUI
-> 消失/卡顿**修复。1.20.1 目前作为**实验性支持**，推荐主力使用 **1.21.11 / 26.x**。
-
 
 **26.2 为实验性适配，可能存在以下问题**：
 
@@ -214,7 +199,7 @@ VapeService 在游戏内自动启动，默认监听 `127.0.0.1:8080`（HTTP）�
 完整测试包输出到 `build/injection/`（文件名随项目版本号变化，如 `Vape-v4.21.31.exe`）：
 
 ```text
-Vape-v4.21.31.exe   GUI 单文件加载器（内嵌 DLL 与全部资源）
+Vape-v4.21.*.exe   GUI 单文件加载器（内嵌 DLL 与全部资源）
 README.md
 ```
 
@@ -232,9 +217,9 @@ Client 实例后，直接运行 `Vape-v4.21.exe` 打开 GUI，选择 Minecraft �
 
 ```powershell
 # 指定进程 ID 注入
-.\Vape-v4.21.exe -nogui <pid>
+.\Vape-v4.21.*.exe -nogui <pid>
 # 不带 pid：弹出自动刷新的 Java 窗口选择器（↑/↓ 选择，回车注入，Esc 退出）
-.\Vape-v4.21.exe -nogui
+.\Vape-v4.21.*.exe -nogui
 ```
 
 注入器仅执行 `LoadLibraryW`。DLL 加载后会等待 JVM 与 Minecraft `Client thread`，通过其
