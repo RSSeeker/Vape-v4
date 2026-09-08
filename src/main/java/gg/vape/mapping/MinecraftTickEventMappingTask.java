@@ -31,8 +31,9 @@ extends JavassistMappingTask {
             boolean[] blArray = new boolean[]{false};
             ctBehavior.instrument(new MinecraftTickCallbackExprEditor(this, mappingMethod, blArray));
             if (!blArray[0]) {
-                this.O(mappingMethod, EventPreTick.class, "", "");
-                this.j(mappingMethod, EventPostTick.class, "", "");
+                MappingMethod gameLoop = Vape.INSTANCE.getMappings().U.v;
+                this.O(gameLoop, EventPreTick.class, "", "");
+                this.j(gameLoop, EventPostTick.class, "", "");
             }
             if (ForgeVersion.MC_1_20_6.d()) {
                 MappingMethod mappingMethod2 = Vape.INSTANCE.getMappings().U.q;

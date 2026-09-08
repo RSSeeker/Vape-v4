@@ -35,6 +35,7 @@ extends Mapping {
     private MappingField b;
     private MappingField r;
     public MappingMethod X;
+    public MappingMethod S;
 
     private float s(Object object) {
         return this.c.getFloat(object);
@@ -127,6 +128,7 @@ extends Mapping {
                 Class clazz14 = MappedClasses.F1;
                 MEntityPlayerSP mEntityPlayerSP12 = this;
                 this.G = this.registerInstanceMethodForOwner(clazz14, string12, bl12, clazz13, classArray);
+                this.S = this.registerInstanceMethodForOwner(MappedClasses.F1, "sendCommand", true, Void.TYPE, new Class[]{String.class});
             } else {
                 Class[] classArray = new Class[]{String.class};
                 Class<Void> clazz15 = Void.TYPE;
@@ -305,6 +307,10 @@ extends Mapping {
         this.G.invokeVoid(object, string);
     }
 
+    private void a2(Object connection, String command) {
+        this.S.invokeVoid(connection, command);
+    }
+
     private void n(Object object, float f) {
         this.n.setFloat(object, f);
     }
@@ -343,6 +349,10 @@ extends Mapping {
 
     public static void X(MEntityPlayerSP mEntityPlayerSP, Object object, String string) {
         mEntityPlayerSP.B(object, string);
+    }
+
+    public static void sendCommand(MEntityPlayerSP mEntityPlayerSP, Object connection, String command) {
+        mEntityPlayerSP.a2(connection, command);
     }
 
     public static float V(MEntityPlayerSP mEntityPlayerSP, Object object) {

@@ -14,14 +14,14 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 
 | 文件 | 说明 |
 | --- | --- |
-| `Vape-v4.21.30.exe` | GUI 单文件加载器（内嵌完整 DLL 与 Java 载荷 + 图标），文件名随版本号变化（如 `Vape-v4.21.30.exe`） |
+| `Vape-v4.21.31.exe` | GUI 单文件加载器（内嵌完整 DLL 与 Java 载荷 + 图标），文件名随版本号变化（如 `Vape-v4.21.31.exe`） |
 
 **可选外部 DLL**：exe 旁放置 `Vape-v4.21Native.dll` 时**优先加载外部 DLL**（便于自行替换/更新原生层）；无外部 DLL 时自动解压内嵌版本，免附带文件。
 
 **使用方式**：
 
 - 双击运行 → GUI 界面（窗口标题「Vape v4」），直接选择 Minecraft 进程注入，无需登录
-- 命令行注入器：`Vape-v4.21.30.exe -nogui [pid]` —— 不带 pid 弹出进程选择器，带 pid 直接注入
+- 命令行注入器：`Vape-v4.21.31.exe -nogui [pid]` —— 不带 pid 弹出进程选择器，带 pid 直接注入
 - 注入完成后游戏中按 右Shift（默认）打开功能界面
 
 ## 特性
@@ -211,10 +211,10 @@ VapeService 在游戏内自动启动，默认监听 `127.0.0.1:8080`（HTTP）�
   -PnativeJavaHome="C:\Program Files\Java\jdk1.8.0_301"
 ```
 
-完整测试包输出到 `build/injection/`（文件名随项目版本号变化，如 `Vape-v4.21.30.exe`）：
+完整测试包输出到 `build/injection/`（文件名随项目版本号变化，如 `Vape-v4.21.31.exe`）：
 
 ```text
-Vape-v4.21.30.exe   GUI 单文件加载器（内嵌 DLL 与全部资源）
+Vape-v4.21.31.exe   GUI 单文件加载器（内嵌 DLL 与全部资源）
 README.md
 ```
 

@@ -101,7 +101,21 @@ extends AbstractClientPlayer {
             new EntityClientPlayerMP(this.getObject()).sendChatMessage(string);
             return;
         }
-        MEntityPlayerSP.X(EntityPlayerSP.vapeInstance.getMappings().CC, this.I, string);
+        // 1.20.6+ 的 sendChat 注册在 NetHandlerPlayClient（连接）上；更早版本注册在玩家类上。
+        Object receiver = ForgeVersion.MC_1_20_6.d() ? this.sendQueue().getObject() : this.I;
+        MEntityPlayerSP.X(EntityPlayerSP.vapeInstance.getMappings().CC, receiver, string);
+    }
+
+    public void sendCommandMessage(String string) {
+        if (!ForgeVersion.MC_1_20_6.d()) {
+            this.sendChatMessage(string);
+            return;
+        }
+        if (ForgeVersion.MC_1_7_10.B()) {
+            new EntityClientPlayerMP(this.getObject()).sendChatMessage(string);
+            return;
+        }
+        MEntityPlayerSP.sendCommand(EntityPlayerSP.vapeInstance.getMappings().CC, this.sendQueue().getObject(), string);
     }
 
     public EntityPlayerSP(Object object) {

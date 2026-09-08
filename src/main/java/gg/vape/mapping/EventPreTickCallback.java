@@ -9,4 +9,3 @@ extends InsertedTickCallbackBase {
         new EventPreTick().fire();
     }
 }
-

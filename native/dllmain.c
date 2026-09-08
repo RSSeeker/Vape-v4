@@ -31,36 +31,10 @@ static int module_directory(wchar_t *output, size_t capacity) {
 }
 
 static void injector_diag(const wchar_t *format, ...) {
-    wchar_t message[512];
-    wchar_t line[640];
-    wchar_t path[MAX_PATH];
-    wchar_t *separator;
-    FILE *file;
-    va_list arguments;
-    DWORD length;
-    va_start(arguments, format);
-    _vsnwprintf_s(message, sizeof(message) / sizeof(message[0]),
-            _TRUNCATE, format, arguments);
-    va_end(arguments);
-    /* Diagnostic output stays inside the .vapeclient tree: the DLL always
-     * lives at <exe>\.vapeclient\Vape-v4.21Recovery\, so its module directory is
-     * a safe, already-existing location (no TEMP writes). */
-    length = GetModuleFileNameW(g_module, path, MAX_PATH);
-    if (length == 0 || length >= MAX_PATH) {
-        wcscpy(path, L".");
-    }
-    separator = wcsrchr(path, L'\\');
-    if (separator != NULL) {
-        *separator = L'\0';
-    }
-    _snwprintf_s(line, sizeof(line) / sizeof(line[0]), _TRUNCATE,
-            L"%ls\\vape_injector_diag.txt", path);
-    _wfopen_s(&file, line, L"a, ccs=UTF-8");
-    if (file != NULL) {
-        fputws(message, file);
-        fputws(L"\r\n", file);
-        fclose(file);
-    }
+    /* vape_injector_diag.txt is no longer written: the injector's diagnostic
+     * capture creates clutter next to the EXE/DLL and is not needed for normal
+     * use. Keep the variadic signature so existing call sites compile. */
+    (void)format;
 }
 
 /* The injected DLL is always extracted to

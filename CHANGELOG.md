@@ -1,5 +1,17 @@
 # 更新日志
 
+## v4.21.31 (2026-09-08)
+
+**宏全面修复（命令宏/物品宏）+ 26.1 EventPreTick 注入修复 + 原生诊断文件收敛**
+
+- **26.1 EventPreTick 注入修复**（`MinecraftTickEventMappingTask`）：26.1 的每 tick 为 `tick(Z)V`，原 `runTick()V` 回退查不到 → `EventPreTick` 从不触发。改为把 Pre/PostTick 注入必可解析的游戏主循环（`U.v`），解决命令/物品宏执行链（`MacroEventListener.onTick`）不运行的问题。
+- **命令宏发送指令包**（`MEntityPlayerSP` 注册 `NetHandlerPlayClient.sendCommand`；`EntityPlayerSP` 新增 `sendCommandMessage`；`CommandMacroAction`）：`/` 开头的命令在 ≥1.20.6 走 `sendCommand`（`ServerboundChatCommandPacket`，去掉前导 `/`），真正作为指令执行而非聊天消息；<1.20.6 保持旧 `sendChatMessage`。
+- **`sendChatMessage` 接收者按版本修正**（`EntityPlayerSP`）：≥1.20.6 用网络连接（`NetHandlerPlayClient`），<1.20.6 用玩家对象，避免旧版本聊天/消息发送回归。
+- **物品宏匹配修复**（`ItemMacro.findHotbarSlot`）：注册名改用物品对象自身 `toString()`（避免 `item.O()` 在 26.1 因 `MItem.S` 未注册抛 NPE）；并支持完整注册名（`minecraft:snowball`）与去掉命名空间前缀的短名（`snowball`）。
+- **移除注入器诊断文件**（`native/dllmain.c`）：`injector_diag()` 改为空操作，不再生成 `vape_injector_diag.txt`。
+- 移除临时宏诊断日志（`EventPreTickCallback`/`MacroEventListener`/`ItemMacro` 的 debugLog）。
+- 跨版本（1.7.10 / 1.8.9 / 1.12.2 / 1.14.4 / 1.16.5 / 1.20.x / 1.21.x / 26.x）门控审查通过、无回归；运行时验证 26.1.2。
+
 ## v4.21.30 (2026-09-07)
 
 **集成上游（4.21-recovered）新功能/修复 + 此前遗留修复**

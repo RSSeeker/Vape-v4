@@ -19,7 +19,12 @@ implements MacroAction {
 
     @Override
     public void tick() {
-        Minecraft.a_xH_J().sendChatMessage(this.macro.getName());
+        String name = this.macro.getName();
+        if (name.startsWith("/") && gg.vape.wrapper.impl.ForgeVersion.MC_1_20_6.d()) {
+            Minecraft.a_xH_J().sendCommandMessage(name.substring(1));
+        } else {
+            Minecraft.a_xH_J().sendChatMessage(name);
+        }
     }
 }
 
