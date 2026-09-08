@@ -54,6 +54,7 @@ import gg.vape.value.Value;
 import gg.vape.wrapper.impl.Entity;
 import gg.vape.wrapper.impl.EntityLivingBase;
 import gg.vape.wrapper.impl.EntityOtherPlayerMP;
+import gg.vape.wrapper.impl.AxisAlignedBB;
 import gg.vape.wrapper.impl.EntityPlayerSP;
 import gg.vape.wrapper.impl.ForgeVersion;
 import gg.vape.wrapper.impl.GuiScreen;
@@ -127,6 +128,16 @@ extends Mod {
     private static final long MODULE_ID;
     public ModeValue targetArea;
     public ModeValue targetMode;
+    private final BooleanValue randomAim;
+    private final NumberValue randomSize;
+    private final NumberValue randomAimSpeed;
+    private final TimerUtil randomAimRetargetTimer;
+    private double randomAimCurrentX = 0.0;
+    private double randomAimCurrentY = 0.0;
+    private double randomAimCurrentZ = 0.0;
+    private double randomAimTargetX = 0.0;
+    private double randomAimTargetY = 0.0;
+    private double randomAimTargetZ = 0.0;
     private boolean deathHandled = false;
 
     public EntityLivingBase getTarget() {
@@ -331,6 +342,11 @@ extends Mod {
         this.pitchJitter = new SilentAuraAimJitter(-0.3, 0.25);
         this.xJitter = new SilentAuraAimJitter(-0.15, 0.15);
         this.zJitter = new SilentAuraAimJitter(-0.15, 0.15);
+        this.randomAim = BooleanValue.create(this, "Random aim", false, "Randomizes the aim point within a configurable range to bypass anti-cheat");
+        this.randomSize = NumberValue.create(this, "Random size", "#", "%", 0.0, 30.0, 100.0, 5.0, "Size of the random aim range as a percentage of your bounding box");
+        this.randomAimSpeed = NumberValue.create(this, "Random aim speed", "#.#", "", 0.1, 2.0, 5.0, 0.1, "Speed at which the random aim point moves");
+        this.randomAimRetargetTimer = new TimerUtil();
+        this.randomAim.addDependentValues(this.randomSize, this.randomAimSpeed);
         this.perfectSwing.whenEqualTo(false).applyTo(this.attackRate);
         // 1.7.10 attacks via attackEntity(target) directly and never rewrites
         // the outgoing packet view, so the silent aim speed is unused there.
@@ -343,7 +359,7 @@ extends Mod {
         this.breakBlocksWhitelist.addDependentValues(this.blockBreakItems);
         this.U(this.perfectSwing, ForgeVersion.MC_1_8_9.N());
         this.U(this.switchTargets, ForgeVersion.MC_1_8_9.H());
-        this.addValue(new Value[]{this.disableOnDeath, this.breakBlocks, this.breakBlocksDelay, this.breakBlocksWhitelist, this.blockBreakItems, this.requireMouseDown, this.showTarget, this.targetColor, this.attackColor, this.renderType, this.limitToItems.addDependentValues(this.allowedItems), this.allowedItems});
+        this.addValue(new Value[]{this.disableOnDeath, this.breakBlocks, this.breakBlocksDelay, this.breakBlocksWhitelist, this.blockBreakItems, this.requireMouseDown, this.showTarget, this.targetColor, this.attackColor, this.renderType, this.limitToItems.addDependentValues(this.allowedItems), this.allowedItems, this.randomAim, this.randomSize, this.randomAimSpeed});
         this.limitToItems.setCompactListValue(this.allowedItems);
         this.rotationClaim.setPriority(this, 5);
         this.attackRate.setMaximumFractionDigits(0);
@@ -602,6 +618,29 @@ extends Mod {
             double jitteredTargetY = playerEyeY < targetY
                     ? targetY + this.pitchJitter.getCurrentOffset() * 0.5
                     : Math.min(playerEyeY, targetY + targetHeight) - 0.275 + this.pitchJitter.getCurrentOffset();
+            if (this.randomAim.getEffectiveValue() && this.target != null) {
+                AxisAlignedBB playerBB = player.R$src$Lgg_vape_wrapper_impl_AxisAlignedBB_$r19dfl();
+                double playerWidth = playerBB.getMaxX() - playerBB.getMinX();
+                double playerHeight = playerBB.getMaxY() - playerBB.getMinY();
+                double playerDepth = playerBB.getMaxZ() - playerBB.getMinZ();
+                double sizePercent = ((Double)this.randomSize.getValue()).doubleValue() / 100.0;
+                double maxOffsetX = playerWidth * sizePercent / 2.0;
+                double maxOffsetY = playerHeight * sizePercent / 2.0;
+                double maxOffsetZ = playerDepth * sizePercent / 2.0;
+                if (this.randomAimRetargetTimer.hasTimeElapsed(100 + this.random.nextInt(200))) {
+                    this.randomAimRetargetTimer.reset();
+                    this.randomAimTargetX = (this.random.nextDouble() * 2.0 - 1.0) * maxOffsetX;
+                    this.randomAimTargetY = (this.random.nextDouble() * 2.0 - 1.0) * maxOffsetY;
+                    this.randomAimTargetZ = (this.random.nextDouble() * 2.0 - 1.0) * maxOffsetZ;
+                }
+                double lerpSpeed = ((Double)this.randomAimSpeed.getValue()).doubleValue() * 0.08;
+                this.randomAimCurrentX += (this.randomAimTargetX - this.randomAimCurrentX) * lerpSpeed;
+                this.randomAimCurrentY += (this.randomAimTargetY - this.randomAimCurrentY) * lerpSpeed;
+                this.randomAimCurrentZ += (this.randomAimTargetZ - this.randomAimCurrentZ) * lerpSpeed;
+                jitteredTargetX += this.randomAimCurrentX;
+                jitteredTargetY += this.randomAimCurrentY;
+                jitteredTargetZ += this.randomAimCurrentZ;
+            }
             if (this.rotationController == null) {
                 this.rotationController = new SilentAuraRotationController(this);
                 this.rotationController.setRelativeMode(false);

@@ -1,5 +1,16 @@
 # 更新日志
 
+## v4.21.32 (2026-09-08)
+
+**新增小且实用的功能（来自 OpenVape4.21 fork）+ 汉化**
+
+- **RightClicker「Sneak Only」**：新增「仅潜行」开关——开启后**只在潜行时右击**（`player.P()`）。
+- **AutoTool「Not during combat / Not during use」**：新增两开关（默认关）——**战斗中不切换**（用 `InventoryActionGuard` 检测受伤/瞄准目标）、**使用物品时不切换**（喝药/吃/格挡/拉弓，`isUsingItem()`），避免换槽中断动作。
+- **SilentAura「Random aim」**：新增随机瞄准——在目标包围盒指定百分比范围内随机化瞄准点（Random size/速度、每 100–300ms 换点平滑插值），用于**防作弊**（瞄准点不固定，更难被判为锁头）。
+- 新增值名/说明的**中文汉化**（`chinese.properties.txt` / `english.properties.txt`），SilentAura 随机瞄准、RightClicker 仅潜行、AutoTool 不切换均汉化。
+- 未加入：SilentAura AI 模式（LiquidBounce MLP，需整套 deeplearn 子系统 + 模型权重，工程量大未验证）；通知 augustus piano 开关音（偏外观，需捆绑音效资源）。
+- 跨版本门控审查通过、注入 payload 验证通过。
+
 ## v4.21.31 (2026-09-08)
 
 **宏全面修复（命令宏/物品宏）+ 26.1 EventPreTick 注入修复 + 原生诊断文件收敛**

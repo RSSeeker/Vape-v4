@@ -5,6 +5,7 @@ import gg.vape.event.EventHandler;
 import gg.vape.event.impl.EventPrePlayerTick;
 import gg.vape.module.Category;
 import gg.vape.module.Mod;
+import gg.vape.module.utility.inventory.InventoryActionGuard;
 import gg.vape.rotation.RotationManager;
 import gg.vape.utils.ItemStackScoreUtil;
 import gg.vape.utils.TimerUtil;
@@ -32,10 +33,22 @@ extends Mod {
     private final BooleanValue requireMouseDown;
     private final NumberValue swapToDelay;
     private final BooleanValue onlyWhileSneaking;
+    private final BooleanValue notDuringCombat = BooleanValue.create(this, "Not during combat", false, "Don't swap tools while in combat");
+    private final BooleanValue notDuringUse = BooleanValue.create(this, "Not during use", false, "Don't swap tools while using an item (drinking, eating, blocking, drawing bow)");
+    private final InventoryActionGuard combatGuard;
 
     @EventHandler
     public void onTick(EventPrePlayerTick eventPrePlayerTick) {
         if (eventPrePlayerTick.getThePlayer().isNull() || Minecraft.currentScreen().isNotNull()) {
+            return;
+        }
+        if (this.notDuringCombat.getEffectiveValue().booleanValue()) {
+            this.combatGuard.update(eventPrePlayerTick.getPlayer());
+            if (this.combatGuard.isBlocked()) {
+                return;
+            }
+        }
+        if (this.notDuringUse.getEffectiveValue().booleanValue() && eventPrePlayerTick.getPlayer().l$src$Z$1io4duf()) {
             return;
         }
         RayTraceResult rayTraceResult = RotationManager.INSTANCE.getExtendedReachRayTrace();
@@ -139,9 +152,10 @@ extends Mod {
         this.onlyWhileSneaking = BooleanValue.create(this, "Only while sneaking", false, "Only swaps tools while sneaking");
         this.swapBackTimer = new TimerUtil();
         this.swapTimer = new TimerUtil();
+        this.combatGuard = new InventoryActionGuard(20);
         this.swapWeapon.addDependentValues(this.instantSwap);
         this.swapBack.addDependentValues(this.swapBackDelay);
-        this.addValue(this.swapToDelay, this.swapWeapon, this.instantSwap, this.swapBack, this.swapBackDelay, this.requireMouseDown, this.onlyWhileSneaking);
+        this.addValue(this.swapToDelay, this.swapWeapon, this.instantSwap, this.swapBack, this.swapBackDelay, this.requireMouseDown, this.onlyWhileSneaking, this.notDuringCombat, this.notDuringUse);
     }
 
 }

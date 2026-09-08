@@ -25,6 +25,7 @@ extends ClickerMod {
     private final BooleanValue jitter;
     private final ModeOption modeNormal;
     private final BooleanValue holdToClick;
+    private final BooleanValue sneakOnly;
     private final ModeOption modeExtra;
     private final ModeValue randomization;
     private final RandomValue cps = RandomValue.create(this, "CPS", "#.#", "", 1.0, 7.0, 13.0, 20.0);
@@ -32,6 +33,9 @@ extends ClickerMod {
     @Override
     public boolean shouldBlockClick(EntityPlayerSP player) {
         if (SharedModuleControlClaims.rightClickUse.isClaimed()) {
+            return true;
+        }
+        if (this.sneakOnly.getEffectiveValue() && !player.P()) {
             return true;
         }
         if (ForgeVersion.MC_1_12_2.d()) {
@@ -64,6 +68,7 @@ extends ClickerMod {
     public RightClicker() {
         super("RightClicker");
         this.holdToClick = BooleanValue.create(this, "Hold to Click", true);
+        this.sneakOnly = BooleanValue.create(this, "Sneak Only", false, "Only right clicks while sneaking");
         this.itemWhitelist = LimitValue.create(this, "autoclicker-allowed-items", "Item whitelist", LimitValue.ALLOW_LIST_COLOR, new ItemLimitData("blocks")).setIncludeOffhand(true);
         this.jitter = BooleanValue.create(this, "Jitter", false);
         this.useItemWhitelist = BooleanValue.create(this, "Use item whitelist", false);
@@ -73,7 +78,7 @@ extends ClickerMod {
         this.randomization = ModeValue.create((Object)this, "Randomization", this.modeExtraPlus, this.modeNormal, this.modeExtra, this.modeExtraPlus);
         this.startDelay = NumberValue.create(this, "Start Delay", "#.#", "", 0.0, 0.0, 1000.0);
         this.useItemWhitelist.addDependentValues(this.itemWhitelist);
-        this.addValue(this.cps, this.startDelay, this.randomization, this.jitter, this.useItemWhitelist, this.itemWhitelist);
+        this.addValue(this.cps, this.startDelay, this.randomization, this.jitter, this.useItemWhitelist, this.itemWhitelist, this.sneakOnly);
         ClickEngine clickEngine = new ClickEngine(ClickButton.RIGHT, this.cps, this.useItemWhitelist,
                 this.itemWhitelist, this.holdToClick, this.randomization, this.jitter, this);
         this.setClickEngine(clickEngine);
