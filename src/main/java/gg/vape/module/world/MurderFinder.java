@@ -88,7 +88,7 @@ extends Mod {
     }
 
     public MurderFinder() {
-        super("MurdererFinder", -11859, Category.WORLD, "Shows a list of suspected Murderers.");
+        super("MurdererFinder", -11859, Category.MINIGAMES, "Shows a list of suspected Murderers.");
         this.callout = BooleanValue.create(this, "Callout", false, "Calls out who the suspected murderer is in chat.");
         this.messages = OptionalLimitValue.createWithDescription(this, "murder-messages", "Messages", "Use %s to use the murderer's name", OptionalLimitValue.NEUTRAL_LIST_COLOR, Arrays.asList("%s is the murderer!", "i saw that %s!"));
         this.delay = NumberValue.createWithDescription(this, "Delay", "#", "ms", 0.0, 3100.0, 5000.0, "Delay between murderer callouts.");

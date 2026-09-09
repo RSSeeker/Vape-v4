@@ -26,7 +26,7 @@ extends Mod {
     private final ConcurrentHashMap<Object, Integer> trackedBlockAges = new ConcurrentHashMap();
 
     public PropHunt() {
-        super("PropHunt", 0, 15962879, Category.WORLD, "Renders where all the hidden props are.");
+        super("PropHunt", 0, 15962879, Category.MINIGAMES, "Renders where all the hidden props are.");
     }
 
 

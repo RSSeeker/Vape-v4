@@ -676,6 +676,7 @@ extends Mod {
         ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.UTILITY), mainStack);
         ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.WORLD), mainStack);
         ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.INVENTORY), mainStack);
+        ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.MINIGAMES), mainStack);
         ClientSettings.registerFrame((Frame)new VisibleModuleListFrame(), mainStack);
         ClientSettings.registerFrame((Frame)new ProfilesSettingsFrame(), mainStack);
         ClientSettings.registerFrame((Frame)new FrameMacros(), mainStack);

@@ -417,7 +417,7 @@ extends Mod {
     }
 
     public BedPlates() {
-        super("BedPlates", new Color(245, 0, 37).getRGB(), Category.RENDER, "Shows block types around beds");
+        super("BedPlates", new Color(245, 0, 37).getRGB(), Category.MINIGAMES, "Shows block types around beds");
         this.v(10L, true);
         this.addValue(this.showDistance);
     }

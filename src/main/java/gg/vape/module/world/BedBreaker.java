@@ -117,7 +117,7 @@ extends Mod {
     }
 
     public BedBreaker() {
-        super("BedBreaker", (int)MODULE_ID, Category.WORLD, "Allows you to break beds through walls\n\u00a7cWarning: This behavior is normally impossible and may be detected on servers");
+        super("BedBreaker", (int)MODULE_ID, Category.MINIGAMES, "Allows you to break beds through walls\n\u00a7cWarning: This behavior is normally impossible and may be detected on servers");
         this.mode = ModeValue.create((Object)this, "Mode", (ModeSelection)this.normalMode,
                 this.normalMode, this.hypixelMode);
         this.addValue(this.mode);
