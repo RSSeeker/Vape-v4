@@ -23,6 +23,7 @@ import gg.vape.module.control.SharedModuleControlClaims;
 import gg.vape.module.render.Freecam;
 import gg.vape.rotation.AdaptiveRotationController;
 import gg.vape.rotation.MouseRotationController;
+import gg.vape.deeplearn.ModelManager;
 import gg.vape.rotation.RotationAngles;
 import gg.vape.rotation.RotationControlClaim;
 import gg.vape.rotation.RotationManager;
@@ -139,6 +140,14 @@ extends Mod {
     private double randomAimTargetY = 0.0;
     private double randomAimTargetZ = 0.0;
     private boolean deathHandled = false;
+    private final ModeOption aiModel21KC11KP;
+    private final ModeOption aiModel19KC8KP;
+    private final ModeValue aiModel;
+    private final ModeOption rotationPidMode;
+    private final ModeOption rotationAiMode;
+    private final ModeValue rotationMode;
+    private final NumberValue aiYawMultiplier;
+    private final NumberValue aiPitchMultiplier;
 
     public EntityLivingBase getTarget() {
         return this.target;
@@ -347,13 +356,22 @@ extends Mod {
         this.randomAimSpeed = NumberValue.create(this, "Random aim speed", "#.#", "", 0.1, 2.0, 5.0, 0.1, "Speed at which the random aim point moves");
         this.randomAimRetargetTimer = new TimerUtil();
         this.randomAim.addDependentValues(this.randomSize, this.randomAimSpeed);
+        this.aiModel21KC11KP = new ModeOption("21KC11KP");
+        this.aiModel19KC8KP = new ModeOption("19KC8KP");
+        this.aiModel = ModeValue.create((Object)this, "AI Model", "Bundled LiquidBounce combat regression model.", (ModeSelection)this.aiModel21KC11KP, this.aiModel21KC11KP, this.aiModel19KC8KP);
+        this.rotationPidMode = new ModeOption("PID");
+        this.rotationAiMode = new ModeOption("AI");
+        this.rotationMode = ModeValue.create((Object)this, "Rotation Mode", "PID: Vape's original rotation engine.\nAI: LiquidBounce MLP combat regression model.", (ModeSelection)this.rotationPidMode, this.rotationPidMode, this.rotationAiMode);
+        this.aiYawMultiplier = NumberValue.create(this, "AI yaw multiplier", "#.#", "", 0.5, 1.5, 2.0, 0.05, "Multiplier applied to the model's yaw output");
+        this.aiPitchMultiplier = NumberValue.create(this, "AI pitch multiplier", "#.#", "", 0.5, 1.0, 2.0, 0.05, "Multiplier applied to the model's pitch output");
+        this.rotationMode.addModeDependentValues(this.rotationAiMode, this.aiModel, this.aiYawMultiplier, this.aiPitchMultiplier);
         this.perfectSwing.whenEqualTo(false).applyTo(this.attackRate);
         // 1.7.10 attacks via attackEntity(target) directly and never rewrites
         // the outgoing packet view, so the silent aim speed is unused there.
         if (ForgeVersion.MC_1_7_10.L()) {
             this.aimSpeed.setHidden(true);
         }
-        this.addValue(this.targetFilter, this.aimSpeed, this.attackRate, this.extraSwingDistance, this.maxAngle, this.targetMode, this.targetArea, this.shieldCheck);
+        this.addValue(this.targetFilter, this.rotationMode, this.aiModel, this.aiYawMultiplier, this.aiPitchMultiplier, this.aimSpeed, this.attackRate, this.extraSwingDistance, this.maxAngle, this.targetMode, this.targetArea, this.shieldCheck);
         this.showTarget.addDependentValues(this.targetColor, this.attackColor, this.renderType);
         this.breakBlocks.addDependentValues(this.breakBlocksDelay, this.breakBlocksWhitelist);
         this.breakBlocksWhitelist.addDependentValues(this.blockBreakItems);
@@ -651,10 +669,14 @@ extends Mod {
                 this.rotationController.setLinearAcceleration(false);
                 RotationManager.INSTANCE.setController(this.rotationController);
             } else {
+                this.rotationController.clearAiRotationMode();
                 this.rotationController.setRelativeMode(false);
                 this.rotationController.setScaleAxesProportionally(false);
                 this.rotationController.setLinearAcceleration(false);
-                RotationAngles desiredRotation = this.rotationController.calculateRotation(Vec3.create(jitteredTargetX, jitteredTargetY, jitteredTargetZ));
+                if (this.rotationMode.getValue() == this.rotationAiMode) {
+                    this.updateAimAi(player, jitteredTargetX, jitteredTargetY, jitteredTargetZ, targetX, targetY, targetZ, distanceToTarget, horizontalTargetMotion);
+                } else {
+                    RotationAngles desiredRotation = this.rotationController.calculateRotation(Vec3.create(jitteredTargetX, jitteredTargetY, jitteredTargetZ));
                 float targetPitch = (float)RotationUtil.h(player, targetX, jitteredTargetY, targetZ);
                 float managedYaw = RotationManager.INSTANCE.getManagedYaw();
                 float managedPitch = RotationManager.INSTANCE.getManagedPitch();
@@ -698,6 +720,7 @@ extends Mod {
                     this.pitchIntegral = 0.0f;
                 }
                 this.rotationController.setTargetRotation(managedYaw + yawError + yawAdjustment / 3.0f, managedPitch + pitchAdjustment);
+                }
             }
             if (RotationManager.INSTANCE.getActiveController() == null || !this.isControllingRotation() && RotationManager.INSTANCE.hasAdaptiveController()) {
                 RotationManager.INSTANCE.setController(this.rotationController);
@@ -705,6 +728,46 @@ extends Mod {
         } else {
             this.resetTargeting();
         }
+    }
+
+    /** LiquidBounceNG AI rotation mode: drives yaw/pitch deltas from the bundled
+     *  MLP combat regression model (21KC11KP / 19KC8KP) instead of Vape's PID
+     *  controller. Input layout mirrors CombatSample:
+     *  [yaw error, pitch error, yaw velocity, pitch velocity, player+target speed, distance]. */
+    private void updateAimAi(EntityPlayerSP player, double jitteredTargetX, double jitteredTargetY, double jitteredTargetZ, double targetX, double targetY, double targetZ, double distanceToTarget, double horizontalTargetMotion) {
+        this.applyAiModelSelection();
+        RotationAngles desiredRotation = this.rotationController.calculateRotation(Vec3.create(jitteredTargetX, jitteredTargetY, jitteredTargetZ));
+        float targetPitch = (float)RotationUtil.h(player, targetX, jitteredTargetY, targetZ);
+        float managedYaw = RotationManager.INSTANCE.getManagedYaw();
+        float managedPitch = RotationManager.INSTANCE.getManagedPitch();
+        float previousManagedYaw = RotationManager.INSTANCE.getPreviousManagedYaw();
+        float previousManagedPitch = RotationManager.INSTANCE.getPreviousManagedPitch();
+        float deltaYaw = MathUtil.wrapAngleTo180(desiredRotation.getYaw() - managedYaw);
+        float deltaPitch = MathUtil.wrapAngleTo180(targetPitch - managedPitch);
+        float velDeltaYaw = MathUtil.wrapAngleTo180(managedYaw - previousManagedYaw);
+        float velDeltaPitch = MathUtil.wrapAngleTo180(managedPitch - previousManagedPitch);
+        double playerHorizontalSpeed = Math.sqrt(player.t() * player.t() + player.T() * player.T());
+        float speedFeature = (float)(horizontalTargetMotion + playerHorizontalSpeed);
+        float distanceFeature = (float)distanceToTarget;
+        float[] input = new float[]{deltaYaw, deltaPitch, velDeltaYaw, velDeltaPitch, speedFeature, distanceFeature};
+        float[] output = ModelManager.getInstance().predictSafe(input);
+        if (output == null || output.length < 2 || !Float.isFinite(output[0]) || !Float.isFinite(output[1])) {
+            this.rotationController.clearAiRotationMode();
+            this.rotationController.setTargetRotation(managedYaw, managedPitch);
+            return;
+        }
+        float yawMultiplier = ((Number)this.aiYawMultiplier.getValue()).floatValue();
+        float pitchMultiplier = ((Number)this.aiPitchMultiplier.getValue()).floatValue();
+        this.rotationController.applyAiRotationDelta(output[0] * yawMultiplier, output[1] * pitchMultiplier);
+    }
+
+    private void applyAiModelSelection() {
+        String desiredName = this.aiModel.getValue() == this.aiModel19KC8KP ? "19KC8KP" : "21KC11KP";
+        ModelManager mgr = ModelManager.getInstance();
+        if (!mgr.isLoaded()) {
+            mgr.load();
+        }
+        mgr.setActiveModel(desiredName);
     }
 
     /** 1.7.10 fallback: track the target and mark it ready to attack. The
@@ -759,6 +822,7 @@ extends Mod {
         this.target = null;
         this.readyToAttack = false;
         if (this.rotationController != null && this.isControllingRotation()) {
+            this.rotationController.clearAiRotationMode();
             this.rotationController.setScaleAxesProportionally(true);
             this.rotationController.setLinearAcceleration(true);
             RotationManager.INSTANCE.releaseController(this.rotationController);
@@ -793,6 +857,7 @@ extends Mod {
     @Override
     public void onDisable() {
         if (this.rotationController != null) {
+            this.rotationController.clearAiRotationMode();
             this.rotationController = null;
         }
         if (this.perfectSwingAttackPending) {

@@ -46,6 +46,7 @@ implements WorldPointRotationTarget {
     private EntityLivingBase referenceEntity;
     private static final RotationAngles ZERO_ROTATION;
     private float pitchJitterSpeed;
+    private boolean aiRotationActive;
 
     public float getReferenceYaw() {
         EntityLivingBase reference = this.referenceEntity != null ? this.referenceEntity : Minecraft.F();
@@ -61,6 +62,9 @@ implements WorldPointRotationTarget {
     @Override
     public boolean updatePitch() {
         if (this.targetPitch == UNSET_ROTATION) {
+            return true;
+        }
+        if (this.aiRotationActive) {
             return true;
         }
         float currentPitch = this.getCurrentPitch() == -90.0f ? -89.99f : this.getCurrentPitch();
@@ -311,6 +315,10 @@ implements WorldPointRotationTarget {
         boolean rotationComplete = yawComplete && pitchComplete
                 && Math.abs(this.pendingYawDelta) < 1.0f
                 && Math.abs(this.pendingPitchDelta) < 1.0f;
+        if (this.aiRotationActive) {
+            this.setComplete(false);
+            return;
+        }
         if (!this.relativeMode && rotationComplete && !this.shouldRetainAfterCompletion()) {
             this.setRelativeMode(true);
         } else {
@@ -346,6 +354,9 @@ implements WorldPointRotationTarget {
     @Override
     public boolean updateYaw() {
         if (this.targetYaw == UNSET_ROTATION) {
+            return true;
+        }
+        if (this.aiRotationActive) {
             return true;
         }
         float mouseScale = this.getMouseScale();
@@ -439,6 +450,21 @@ implements WorldPointRotationTarget {
 
     public void setCurrentYaw(float yaw) {
         this.currentYaw = yaw;
+    }
+
+    public void applyAiRotationDelta(float yawDelta, float pitchDelta) {
+        this.aiRotationActive = true;
+        this.target = null;
+        float conversion = 1.0f / (this.getMouseScale() * 0.15f);
+        this.pendingYawDelta = yawDelta * conversion;
+        this.pendingPitchDelta = pitchDelta * conversion;
+        this.setComplete(false);
+    }
+
+    public void clearAiRotationMode() {
+        this.aiRotationActive = false;
+        this.pendingYawDelta = 0.0f;
+        this.pendingPitchDelta = 0.0f;
     }
 
     public void setRelativeMode(boolean relativeMode) {

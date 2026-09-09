@@ -64,10 +64,10 @@ jobs:
         with:
           name: Vape ${{ github.ref_name }}
           body: |
-            加载器：`Vape-v4.21.32.exe`（内嵌 DLL + 图标 + 全部资源）。
+            加载器：`Vape-v4.21.33.exe`（内嵌 DLL + 图标 + 全部资源）。
             原生库：`Vape-v4.21Native.dll` —— 放在 exe 同目录时优先使用外部 DLL，否则自动解压内嵌 DLL。
 
-            使用：双击打开 GUI 选 Minecraft 进程注入；或命令行 `Vape-v4.21.32.exe -nogui [pid]`。
+            使用：双击打开 GUI 选 Minecraft 进程注入；或命令行 `Vape-v4.21.33.exe -nogui [pid]`。
             详见 CHANGELOG.md。
           files: |
             build/injection/Vape-v4.21*.exe

@@ -1,5 +1,17 @@
 # 更新日志
 
+## v4.21.33 (2026-09-09)
+
+**SilentAura 集成上游 AI 瞄准（Rotation Mode：PID / AI）+ 移植 LiquidBounce MLP 模型**
+
+- **SilentAura 新增「瞄准模式 / Rotation Mode」**：顶部下拉，选项 **PID**（默认，原 Vape 旋转引擎）/ **AI**（LiquidBounce MLP 战斗回归模型）。
+- **AI 模式**：由捆绑的 MLP 模型（`21KC11KP` / `19KC8KP`）驱动静默瞄准的 yaw/pitch 增量，含 `AI Model`、`AI Yaw/Pitch Multiplier` 设置（仅选 AI 时显示）。
+- **移植 `gg.vape.deeplearn`**：`ModelManager` + `MlpModel`（纯 Java MLP 前向推理）+ `DeepLearningEngine`，并**捆绑模型权重** `liquidbounce/models/{21kc11kp,19kc8kp}.bin`。
+- **`AdaptiveRotationController` 加 AI 支持**：`applyAiRotationDelta` / `clearAiRotationMode` / `aiRotationActive`；AI 模式下 `updateYaw/updatePitch` 跳过 PID（避免覆盖 AI 增量，保证收敛）。
+- **带回正**：无目标/模块关闭时 `clearAiRotationMode()`，托管旋转与真实视角对齐，不残留旋转视角。
+- 新增值及说明**中文汉化**（瞄准模式/AI模型/AI偏航乘数/AI俯仰乘数 + tooltip）。
+- 注：上游 AI 面向 LiquidBounce 旋转体系，集成后若命中不稳定，可调 AI 乘数或改用 PID；README 未同步（按需）。
+
 ## v4.21.32 (2026-09-08)
 
 **新增小且实用的功能（来自 OpenVape4.21 fork）+ 汉化**
