@@ -1,5 +1,7 @@
 # Vape 4.21 Product Recovery
 
+> **语言 / Language:** 中文 | [English](README_EN.md)
+
 Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附带完整中文本地化。
 
 > 发布页：[Releases](https://github.com/RSSeeker/Vape-v4/releases)
@@ -196,7 +198,7 @@ VapeService 在游戏内自动启动，默认监听 `127.0.0.1:8080`（HTTP）�
   -PnativeJavaHome="C:\Program Files\Java\jdk1.8.0_301"
 ```
 
-完整测试包输出到 `build/injection/`（文件名随项目版本号变化，如 `Vape-v4.21.31.exe`）：
+完整测试包输出到 `build/injection/`（文件名随项目版本号变化，如 `Vape-v4.21.*.exe`）：
 
 ```text
 Vape-v4.21.*.exe   GUI 单文件加载器（内嵌 DLL 与全部资源）
