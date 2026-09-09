@@ -2,7 +2,7 @@
 
 Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附带完整中文本地化。
 
-> 发布页：[Releases](https://github.com/RSSeeker/Vape-v4.21/releases)
+> 发布页：[Releases](https://github.com/RSSeeker/Vape-v4/releases)
 >
 > 源代码来源：[OpenVapeCN/OpenVape](https://github.com/OpenVapeCN/OpenVape)
 > （本项目基于该公开仓库的源代码进行恢复、整理与本地化）。
