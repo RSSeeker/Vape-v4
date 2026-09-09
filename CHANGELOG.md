@@ -1,5 +1,16 @@
 # 更新日志
 
+## v4.21.34 (2026-09-09)
+
+**恢复 Minigames 独立分类 / Frame**
+
+- **Category.java**：新增 `MINIGAMES` 分类（图标 `minigames.png`），并按原版顺序加入一级分类列表（...Inventory, Minigames, Other...）。
+- **ClientSettings.initializeFrames**：注册 `ModuleCategoryFrame(Category.MINIGAMES)`。
+- **ClientSettingsSearchFrame**：在硬编码导航（Inventory 与 Other 之间）补上 Minigames 分类按钮。
+- 把 **BedBreaker / BedPlates / MurdererFinder / PropHunt** 移入 Minigames 分类。
+- 名称经 `frame.minigames` 汉化为「小游戏」；未动 Other 及其它分类。
+- 注：README 未同步（按需）。
+
 ## v4.21.33 (2026-09-09)
 
 **SilentAura 集成上游 AI 瞄准（Rotation Mode：PID / AI）+ 移植 LiquidBounce MLP 模型**
