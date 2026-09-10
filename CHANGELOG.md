@@ -1,5 +1,18 @@
 # 更新日志
 
+## v4.21.37 (2026-09-10)
+
+**修复 1.21.11 上「按注册名找物品」整条映射链失效（参考 DLL 同样存在的上游缺陷）**
+
+- **根因**：Mojang 在 1.21.11 把 `net.minecraft.resources.ResourceLocation` 改名为 `net.minecraft.resources.Identifier`（1.21.11 的 `joined.srg` 里 `Identifier` 出现 1482 次、`ResourceLocation` 为 0 次；`ClassNameRemapTableV61` 与 `MResourceKey` 也已按 `MC_1_21_11` 处理同一批改名）。而 `MappedClasses.zC`（`ResourceLocation` 类句柄）的门限写成了 `MC_26_1`（1.21.11 是 61，26.1 是 100），于是 1.21.11 落到 `resources/ResourceLocation` 分支 —— 这个名字既不在 className 重映射表里（表里只认 `util/ResourceLocation`），也不在 1.21.11 的 srg 里，**`zC` 解析为 null**。
+- **后果**：`ResourceLocation.parse` / `getPath`、`Registry.getValue`、`TextureAtlasSprite.atlasLocation` 字段注册、`registerStaticField("GUI")` 等一起失效，所有按注册名查找物品的调用**静默返回 null**。具体表现：
+  - **WindCharge**：`onEnable` 中 `findWindChargeSlot()` 返回 -1，模块在同一个 tick 内 `setEnabled(false, true)` 自我关闭 —— 表现为「绑定按键后按了没反应」。
+  - **PearlCatch**、**AutoMace 的 Auto Equip / Auto Unequip Elytra**、**Indicators** 的物品图标受同一原因影响。
+- **修复**：`zC` 不再按版本号猜测，改为按「实际能否解析」探测 —— `Identifier` 解析得到就用它，否则**逐字回退**到原有的 `resources/ResourceLocation` / `util/ResourceLocation` 逻辑。对 1.7.10 ~ 1.21.6 行为完全不变，同时自动覆盖 1.21.10 / 1.21.11 / 26.x，无需再维护版本门限。
+- **与参考版的关系**：逐类比对确认参考 DLL 的映射层（`MRegistrySimple` / `MResourceLocation` / `MappingMethodBuilder` / `Mapping` / `ClassNameRemapTableV110` 等）与本项目**语义完全一致**（参考独有常量均为 0），因此在 1.21.11 上参考版同样失效 —— 与「参考版里 Auto Equip Elytra / AutoPearl 也失败」的 A/B 结果吻合。本修复是**修好了上游缺陷**，而不是恢复移植。
+- **实机验证**（1.21.11，原版 Theseus 启动）：`zC = net.minecraft.resources.Identifier` → `Item.L("minecraft:wind_charge")` 解析成功 → `state=0 → 1 → 2 → -1` 全流程走通；注入后无新增异常与注册失败。`WindCharge` 源码在验证后已还原为与参考 DLL 语义等价（5407 = 5407，双方独有常量均为 0）。
+- 注：README 未同步（按需）。
+
 ## v4.21.36 (2026-09-10)
 
 **高版本启用 Scaffold 的 TellyBridge 模式 + TellyBridge 设置项汉化**

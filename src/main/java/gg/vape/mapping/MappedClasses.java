@@ -721,15 +721,19 @@ public class MappedClasses {
         Dt = MappedClasses.m("net/minecraft/client/renderer/texture/TextureManager");
         qY = MappedClasses.m("net/minecraft/client/resources/IResourceManager");
         ll = MappedClasses.m("net/minecraft/client/shader/Framebuffer");
-        // ResourceLocation 在不同版本改名：1.13 util->resources，26.x 再改为
+        // ResourceLocation 在不同版本改名：1.13 util->resources；1.21.9 起再改名为
         // net.minecraft.resources.Identifier（className 表把 util/ResourceLocation
-        // 重映射到 Identifier）。需按版本用正确源名，否则现代版本（1.20.1 等 mojmap）
-        // zC 解析为 null，registerStaticField("GUI") 等会 NPE（owner=null），破坏
-        // 物品图标/GUI 渲染；而 26.x 若用 resources/ResourceLocation 会因无
-        // Identifier 重映射而变 null，导致 TextureAtlasSprite.atlasLocation 字段
-        // （型 Identifier）注册失败。
-        zC = ForgeVersion.MC_26_1.d()
-                ? MappedClasses.m("net/minecraft/resources/Identifier")
+        // 重映射到 Identifier，1.21.11 的 srg 官方名也已经是 Identifier）。
+        // 用固定版本门限容易漏版本：1.21.11 落在 MC_26_1 分支之外，于是
+        // resources/ResourceLocation 既过不了 className 表、也过不了 1.21.11 的 srg，
+        // zC 解析为 null —— 后果是 registerStaticField("GUI") 等 NPE（owner=null）、
+        // TextureAtlasSprite.atlasLocation（型 Identifier）字段注册失败，以及
+        // Item.L()/Registry.getValue 这类按名查找静默返回 null（WindCharge、
+        // PearlCatch、AutoMace 的 elytra 因此全部失效）。
+        // 因此改为按「实际能否解析」探测：Identifier 拿得到就用它，否则按老规则回退。
+        Class identifierClass = MappedClasses.E("net/minecraft/resources/Identifier", true);
+        zC = identifierClass != null
+                ? identifierClass
                 : (ForgeVersion.MC_1_14_4.d()
                     ? MappedClasses.m("net/minecraft/resources/ResourceLocation")
                     : MappedClasses.m("net/minecraft/util/ResourceLocation"));

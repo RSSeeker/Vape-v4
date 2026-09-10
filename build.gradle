@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'gg.vape.recovery'
-version = '4.21.36'
+version = '4.21.37'
 
 java {
     toolchain {
