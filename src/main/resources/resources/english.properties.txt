@@ -2772,3 +2772,4 @@ blockhit.include_ping=Include ping
 blockhit.include_ping.tooltip=Adds ping to maximum hurt time timing
 blockhit.hold_after=Hold after
 blockhit.hold_after.tooltip=Ticks to keep blocking after hurt time ends if no hit arrives
+shieldbreaker.swap_delay.tooltip=Delay between swapping to an axe and attacking

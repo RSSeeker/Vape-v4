@@ -2788,3 +2788,4 @@ blockhit.include_ping=包含延迟
 blockhit.include_ping.tooltip=将网络延迟计入最大受伤时间
 blockhit.hold_after=结束后保持
 blockhit.hold_after.tooltip=受伤时间结束且未受击后继续格挡的刻数
+shieldbreaker.swap_delay.tooltip=切换到斧头与发起攻击之间的延迟
