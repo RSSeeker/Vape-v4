@@ -1,5 +1,6 @@
 #include "controller_ui.h"
 #include "resource_ids.h"
+#include "loader_strings.h"
 
 // GDI+ headers reference IStream/PROPID from objidl.h, which WIN32_LEAN_AND_MEAN
 // strips from windows.h; include the COM headers explicitly before gdiplus.
@@ -294,7 +295,7 @@ LRESULT ControllerUi::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) 
         } else if (page == ControllerPage::Error) {
             if (hit(x, y, 356, 300, 112, 36)) {
                 const auto detail = model_.status();
-                const auto text = L"阶段 " + std::to_wstring(model_.loadingStage()) +
+                const auto text = ls(Ls::Stage) + std::to_wstring(model_.loadingStage()) +
                     L"\r\nError start\r\n====================\r\n" + detail +
                     L"\r\n====================\r\nError end";
                 const SIZE_T bytes = (text.size() + 1) * sizeof(wchar_t);
@@ -536,24 +537,24 @@ void ControllerUi::drawLogin(Gdiplus::Graphics& graphics) {
             graphics.DrawLine(&caret, caretX, y + 10, caretX, y + 26);
         }
     };
-    input(183, L"用户名 / 邮箱", model_.username(), false, focus_ == Focus::Username);
-    input(231, L"密码", model_.password(), true, focus_ == Focus::Password);
+    input(183, ls(Ls::UsernameEmail), model_.username(), false, focus_ == Focus::Username);
+    input(231, ls(Ls::Password), model_.password(), true, focus_ == Focus::Password);
     const bool enabled = !model_.username().empty();
     const bool loginHover = enabled && pointerIn(352, 302.4f, 112.8f, 36);
     drawRoundedRect(graphics, 352, 302.4f, 112.8f, 36, 3,
         enabled ? (loginHover ? Gdiplus::Color(255, 49, 130, 97)
                               : Gdiplus::Color(255, 43, 112, 84))
                 : Gdiplus::Color(255, 51, 51, 51));
-    drawText(graphics, L"登录", 352, 302.4f, 112.8f, 36, 13,
+    drawText(graphics, ls(Ls::Login), 352, 302.4f, 112.8f, 36, 13,
         enabled ? Gdiplus::Color(255, 220, 225, 222) : Gdiplus::Color(255, 116, 113, 117), true,
         Gdiplus::StringAlignmentCenter);
 
     Gdiplus::Pen line(Gdiplus::Color(255, 34, 33, 34), 1.0f);
     graphics.DrawLine(&line, 278.0f, 374.0f, 392.0f, 374.0f);
     graphics.DrawLine(&line, 432.0f, 374.0f, 546.0f, 374.0f);
-    drawText(graphics, L"或", 392, 362, 40, 24, 12,
+    drawText(graphics, ls(Ls::Or), 392, 362, 40, 24, 12,
         Gdiplus::Color(255, 192, 189, 193), true, Gdiplus::StringAlignmentCenter);
-    drawText(graphics, L"通过浏览器登录", 328, 399, 160, 28, 12,
+    drawText(graphics, ls(Ls::BrowserLogin), 328, 399, 160, 28, 12,
         pointerIn(328, 399, 160, 28) ? Gdiplus::Color(255, 79, 146, 241)
                                     : Gdiplus::Color(255, 46, 120, 227),
         true, Gdiplus::StringAlignmentCenter);
@@ -576,7 +577,7 @@ void ControllerUi::drawBrowserAuth(Gdiplus::Graphics& graphics) {
         graphics.DrawImage(maskBottom_.get(), 276.0f, 372.0f, 91.0f, 46.0f);
     graphics.SetClip(&previousClip, Gdiplus::CombineModeReplace);
 
-    drawText(graphics, L"正在登录", 278, 103, 268, 40, 18,
+    drawText(graphics, ls(Ls::LoggingIn), 278, 103, 268, 40, 18,
         Gdiplus::Color(255, 20, 20, 20), true, Gdiplus::StringAlignmentCenter);
     if (roundedRect_ && roundedRect_->GetLastStatus() == Gdiplus::Ok)
         graphics.DrawImage(roundedRect_.get(), 376.0f, 170.0f, 80.0f, 80.0f);
@@ -588,13 +589,13 @@ void ControllerUi::drawBrowserAuth(Gdiplus::Graphics& graphics) {
         graphics.FillRectangle(&square, spinnerX[index], spinnerY[index], 12.0f, 12.0f);
     }
 
-    drawText(graphics, L"请按浏览器中的提示继续操作", 300, 272, 224, 40, 13,
+    drawText(graphics, ls(Ls::FollowBrowser), 300, 272, 224, 40, 13,
         Gdiplus::Color(255, 20, 20, 20), true, Gdiplus::StringAlignmentCenter);
-    drawText(graphics, L"重新打开", 363, 306, 50, 25, 13,
+    drawText(graphics, ls(Ls::Reopen), 363, 306, 50, 25, 13,
         pointerIn(363, 306, 50, 25) ? Gdiplus::Color(255, 44, 111, 207)
                                     : Gdiplus::Color(255, 76, 140, 231),
         true, Gdiplus::StringAlignmentCenter);
-    drawText(graphics, L"取消", 420, 306, 50, 25, 13,
+    drawText(graphics, ls(Ls::Cancel), 420, 306, 50, 25, 13,
         pointerIn(420, 306, 50, 25) ? Gdiplus::Color(255, 178, 38, 40)
                                     : Gdiplus::Color(255, 209, 51, 53),
         true, Gdiplus::StringAlignmentCenter);
@@ -607,16 +608,16 @@ void ControllerUi::drawMinecraftSelection(Gdiplus::Graphics& graphics) {
     const auto processes = model_.minecraftProcesses();
     if (processes.empty()) {
         drawLogo(graphics, 182.0f - 80.0f * logoPosition_);
-        drawText(graphics, L"未找到 Minecraft", 295, 234, 234, 24, 13,
+        drawText(graphics, ls(Ls::MinecraftNotFound), 295, 234, 234, 24, 13,
             Gdiplus::Color(255, 218, 215, 219), true, Gdiplus::StringAlignmentCenter);
-        drawText(graphics, L"请先打开 Minecraft", 295, 251, 234, 22, 12,
+        drawText(graphics, ls(Ls::OpenMinecraftFirst), 295, 251, 234, 22, 12,
             Gdiplus::Color(255, 116, 113, 117), false, Gdiplus::StringAlignmentCenter);
         return;
     }
     drawLogo(graphics, 182.0f - 80.0f * logoPosition_);
-    drawText(graphics, L"选择要使用的 Minecraft", 220, 150, 384, 38, 18,
+    drawText(graphics, ls(Ls::SelectMinecraft), 220, 150, 384, 38, 18,
         Gdiplus::Color(255, 218, 215, 219), true, Gdiplus::StringAlignmentCenter);
-    drawText(graphics, L"请确保游戏已完全加载", 220, 179, 384, 22, 12,
+    drawText(graphics, ls(Ls::EnsureGameLoaded), 220, 179, 384, 22, 12,
         Gdiplus::Color(255, 116, 113, 117), false, Gdiplus::StringAlignmentCenter);
     float y = 210.0f;
     for (const auto& process : processes) {
@@ -630,7 +631,7 @@ void ControllerUi::drawMinecraftSelection(Gdiplus::Graphics& graphics) {
         const float titleWidth = 560.0f - 268.0f;
         drawText(graphics, ellipsize(graphics, process.title, 13.0f, titleWidth),
             268, y + 4, titleWidth, 22, 13, Gdiplus::Color(255, 202, 199, 203));
-        drawText(graphics, (process.alreadyInjected ? L"已注入 [" : L"PID ") +
+        drawText(graphics, (process.alreadyInjected ? ls(Ls::Injected) : L"PID ") +
             std::to_wstring(process.pid) + (process.alreadyInjected ? L"]" : L""),
             268, y + 24, titleWidth, 18, 11,
             Gdiplus::Color(255, 105, 102, 106));
@@ -652,13 +653,13 @@ void ControllerUi::drawLoading(Gdiplus::Graphics& graphics) {
 
     const double stageElapsed = model_.stageElapsedSeconds();
     if (stageElapsed >= 5.0) {
-        drawText(graphics, L"阶段 " + std::to_wstring(model_.loadingStage()) + L"/30",
+        drawText(graphics, ls(Ls::Stage) + std::to_wstring(model_.loadingStage()) + L"/30",
             300, 286, 224, 24, 12, Gdiplus::Color(255, 139, 136, 140), false,
             Gdiplus::StringAlignmentCenter);
     }
     if (stageElapsed >= 10.0) {
         drawText(graphics,
-            L"该阶段加载时间异常长\n请联系支持人员\n注：26+版本请在打开世界后注入",
+            ls(Ls::StageTakingLong),
             180, 310, 464, 60, 12, Gdiplus::Color(255, 176, 73, 73), false,
             Gdiplus::StringAlignmentCenter);
     }
@@ -666,10 +667,10 @@ void ControllerUi::drawLoading(Gdiplus::Graphics& graphics) {
 
 void ControllerUi::drawCachePrompt(Gdiplus::Graphics& graphics) {
     drawLogo(graphics, 179.0f - 80.0f * logoPosition_);
-    drawText(graphics, L"是否缓存本地文件以加快加载速度？",
+    drawText(graphics, ls(Ls::CachePrompt),
         180, 232, 464, 48, 15, Gdiplus::Color(255, 210, 207, 211), true,
         Gdiplus::StringAlignmentCenter);
-    drawText(graphics, L"文件将存储于", 250, 245, 324, 22, 12,
+    drawText(graphics, ls(Ls::FilesStoredIn), 250, 245, 324, 22, 12,
         Gdiplus::Color(255, 112, 109, 113), false, Gdiplus::StringAlignmentCenter);
     drawText(graphics, model_.cacheDirectory(), 150, 267, 524, 24, 12,
         Gdiplus::Color(255, 151, 148, 152), false, Gdiplus::StringAlignmentCenter);
@@ -679,40 +680,40 @@ void ControllerUi::drawCachePrompt(Gdiplus::Graphics& graphics) {
     drawRoundedRect(graphics, 422, 330, 112, 36, 3,
         pointerIn(422, 330, 112, 36) ? Gdiplus::Color(255, 65, 64, 65)
                                      : Gdiplus::Color(255, 52, 51, 52));
-    drawText(graphics, L"是", 290, 330, 112, 36, 13, Gdiplus::Color(255, 224, 228, 225), true,
+    drawText(graphics, ls(Ls::Yes), 290, 330, 112, 36, 13, Gdiplus::Color(255, 224, 228, 225), true,
         Gdiplus::StringAlignmentCenter);
-    drawText(graphics, L"否", 422, 330, 112, 36, 13, Gdiplus::Color(255, 174, 171, 175), true,
+    drawText(graphics, ls(Ls::No), 422, 330, 112, 36, 13, Gdiplus::Color(255, 174, 171, 175), true,
         Gdiplus::StringAlignmentCenter);
 }
 
 void ControllerUi::drawLoadingComplete(Gdiplus::Graphics& graphics) {
     drawLogo(graphics, 179.0f - 80.0f * logoPosition_);
-    drawText(graphics, L"Vape 加载完成", 220, 232, 384, 30, 13,
+    drawText(graphics, ls(Ls::LoadedComplete), 220, 232, 384, 30, 13,
         Gdiplus::Color(255, 218, 215, 219), true, Gdiplus::StringAlignmentCenter);
-    drawText(graphics, L"游戏中按 右Shift（默认）打开界面", 140, 254, 544, 24,
+    drawText(graphics, ls(Ls::OpenGuiHint), 140, 254, 544, 24,
         12, Gdiplus::Color(255, 116, 113, 117), false, Gdiplus::StringAlignmentCenter);
     drawRoundedRect(graphics, 356, 348, 112, 36, 3,
         pointerIn(356, 348, 112, 36) ? Gdiplus::Color(255, 65, 64, 65)
                                      : Gdiplus::Color(255, 52, 51, 52));
-    drawText(graphics, L"关闭窗口", 356, 348, 112, 36, 13,
+    drawText(graphics, ls(Ls::CloseWindow), 356, 348, 112, 36, 13,
         Gdiplus::Color(255, 174, 171, 175), true, Gdiplus::StringAlignmentCenter);
 }
 
 void ControllerUi::drawOutdated(Gdiplus::Graphics& graphics) {
     drawLogo(graphics, 179);
     const Gdiplus::Color red(255, 204, 51, 51);
-    drawText(graphics, L"启动器版本过旧", 240, 253, 320, 24, 13,
+    drawText(graphics, ls(Ls::LauncherOutdated), 240, 253, 320, 24, 13,
         red, true, Gdiplus::StringAlignmentCenter);
-    drawText(graphics, L"请从官网重新下载", 240, 270, 320, 24, 13,
+    drawText(graphics, ls(Ls::RedownloadFromSite), 240, 270, 320, 24, 13,
         red, true, Gdiplus::StringAlignmentCenter);
 }
 
 void ControllerUi::drawError(Gdiplus::Graphics& graphics) {
     drawLogo(graphics, 179);
-    drawText(graphics, model_.status().empty() ? L"加载出错。阶段 0" : model_.status(),
+    drawText(graphics, model_.status().empty() ? ls(Ls::LoadErrorStage0) : model_.status(),
         250, 235, 324, 48, 13, Gdiplus::Color(255, 203, 200, 204), true,
         Gdiplus::StringAlignmentCenter);
     drawRoundedRect(graphics, 356, 300, 112, 36, 3, Gdiplus::Color(255, 51, 51, 51));
-    drawText(graphics, L"复制错误", 356, 300, 112, 36, 13,
+    drawText(graphics, ls(Ls::CopyError), 356, 300, 112, 36, 13,
         Gdiplus::Color(255, 174, 171, 175), true, Gdiplus::StringAlignmentCenter);
 }

@@ -1,5 +1,6 @@
 #include "controller_model.h"
 #include "injection_coordinator.h"
+#include "loader_strings.h"
 
 #include <windows.h>
 #include <tlhelp32.h>
@@ -317,7 +318,7 @@ bool ControllerModel::injectMinecraft(std::uint32_t processId) {
     // (Minecraft not running yet). Re-authenticate lazily so the token handed
     // to the injected DLL is always valid.
     if (token.empty() && !loginToService()) {
-        setStatus(L"无法登录本地服务（请先启动 Minecraft）");
+        setStatus(ls(Ls::CannotLoginStartMinecraft));
         setPage(ControllerPage::Error);
         return false;
     }
@@ -325,13 +326,13 @@ bool ControllerModel::injectMinecraft(std::uint32_t processId) {
         std::lock_guard lock(mutex_);
         token = accessToken_;
         if (token.empty()) {
-            setStatus(L"无法登录本地服务（请先启动 Minecraft）");
+            setStatus(ls(Ls::CannotLoginStartMinecraft));
             setPage(ControllerPage::Error);
             return false;
         }
     }
     if (!service_.start(token, cachePreference_, true)) {
-        setStatus(L"无法创建加载器控制套接字");
+        setStatus(ls(Ls::CannotCreateControlSocket));
         setPage(ControllerPage::Error);
         return false;
     }
@@ -339,7 +340,7 @@ bool ControllerModel::injectMinecraft(std::uint32_t processId) {
     // Always use the embedded DLL resource; never load an external copy.
     std::wstring dllPath;
     if (!materializeEmbeddedDll(processId, dllPath)) {
-        setStatus(L"无法解压内嵌的 Vape-v4.21Native.dll");
+        setStatus(ls(Ls::CannotExtractNativeDll));
         setPage(ControllerPage::Error);
         return false;
     }
@@ -349,7 +350,7 @@ bool ControllerModel::injectMinecraft(std::uint32_t processId) {
     if (!InjectionCoordinator::injectProductDll(processId, dllPath, service_.port(),
             serviceHttpBase, error)) {
         service_.stop();
-        setStatus(error.empty() ? L"注入 Vape421Native.dll 失败" : error);
+        setStatus(error.empty() ? ls(Ls::InjectNativeDllFailed) : error);
         setPage(ControllerPage::Error);
         return false;
     }
@@ -491,7 +492,7 @@ void ControllerModel::beginBrowserAuthentication(void* windowHandle) {
             "edition=v4&hwid=" + narrowHwid);
         if (challenge.size() != 40 || cancelAuth_) {
             if (!cancelAuth_) {
-                setStatus(L"无法启动浏览器登录");
+                setStatus(ls(Ls::CannotOpenBrowserLogin));
                 setPage(ControllerPage::Login);
             }
             PostMessageW(window, WM_CONTROLLER_STATE, 0, 0);
@@ -519,7 +520,7 @@ void ControllerModel::beginBrowserAuthentication(void* windowHandle) {
                 break;
             }
             if (status == "timed out") {
-                setStatus(L"浏览器登录超时");
+                setStatus(ls(Ls::BrowserLoginTimeout));
                 setPage(ControllerPage::Login);
                 break;
             }
@@ -593,11 +594,11 @@ void ControllerModel::tick() {
         setPage(ControllerPage::LoadingComplete);
     } else if (service_.failed()) {
         const std::string detail = service_.error();
-        setStatus(detail.empty() ? L"原生加载连接意外关闭"
+        setStatus(detail.empty() ? ls(Ls::NativeConnectionClosed)
                                  : std::wstring(detail.begin(), detail.end()));
         setPage(ControllerPage::Error);
     } else if (loadingElapsedSeconds() >= 90.0) {
-        setStatus(L"原生加载超时\n注：26+版本请在打开世界后注入");
+        setStatus(ls(Ls::NativeLoadTimeout));
         setPage(ControllerPage::Error);
     }
 }
@@ -623,14 +624,14 @@ void ControllerModel::submitCredentialAuthentication() {
     const std::wstring usernameValue = username_;
     const std::string usernameUtf8 = utf8(usernameValue);
     if (usernameUtf8.empty()) {
-        setStatus(L"请输入用户名");
+        setStatus(ls(Ls::EnterUsername));
         return;
     }
     const std::string response = httpPostJson(serviceHttpBase_, L"/loader/login",
         "{\"username\":\"" + jsonEscape(usernameUtf8) + "\"}");
     const std::string token = jsonString(response, "token");
     if (token.empty()) {
-        setStatus(L"无法登录本地服务");
+        setStatus(ls(Ls::CannotLoginLocalService));
         return;
     }
     {

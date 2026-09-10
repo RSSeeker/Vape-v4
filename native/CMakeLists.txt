@@ -130,6 +130,19 @@ if(BUILD_TESTING)
     add_test(NAME Vape421BootstrapHandoff COMMAND Vape421BootstrapTest)
     add_test(NAME Vape421BootstrapRejectsInvalid
             COMMAND Vape421BootstrapTest invalid)
+
+    # Loader GUI language selection: reads the product's saved language from
+    # .vapeclient\config.json and must fall back to Chinese on every failure.
+    add_executable(Vape421LoaderStringsTest
+            tests/loader_strings_test.cpp
+            loader_gui/loader_strings.cpp)
+    target_include_directories(Vape421LoaderStringsTest PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/loader_gui")
+    target_compile_definitions(Vape421LoaderStringsTest PRIVATE
+            WIN32_LEAN_AND_MEAN
+            _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(Vape421LoaderStringsTest PRIVATE /W4 /utf-8)
+    add_test(NAME Vape421LoaderStrings COMMAND Vape421LoaderStringsTest)
 endif()
 
 set_property(TARGET Vape421Native Vape421LoaderGui
