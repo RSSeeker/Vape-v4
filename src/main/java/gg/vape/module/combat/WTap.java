@@ -10,6 +10,8 @@ import gg.vape.module.Mod;
 import gg.vape.utils.TimerUtil;
 import gg.vape.value.BooleanValue;
 import gg.vape.value.NumberValue;
+import gg.vape.wrapper.impl.EntityLivingBase;
+import gg.vape.wrapper.impl.ForgeVersion;
 import gg.vape.wrapper.impl.KeyBinding;
 import gg.vape.wrapper.impl.Minecraft;
 import gg.vape.wrapper.impl.Packet;
@@ -30,10 +32,27 @@ extends Mod {
         if (this.rePressTimer.hasTimeElapsed(((Double)this.rePressDelay.getValue()).longValue())) {
             KeyBinding forwardKey = Minecraft.gameSettings().Y();
             if (ClientSettings.isPhysicalKeyDown(forwardKey)) {
-                forwardKey.setPressed(true);
+                KeyBinding.setKeyBindState(forwardKey, true);
             }
             this.rePressPending = false;
         }
+    }
+
+    private boolean isTargetVulnerable(gg.vape.wrapper.impl.Entity target) {
+        if (!this.selectHits.getEffectiveValue()) {
+            return true;
+        }
+        if (ForgeVersion.MC_1_16_5.d()) {
+            return new EntityLivingBase(target.getObject()).c$src$I$15a9iwo() <= 0;
+        }
+        return target.V$src$I$fk0dv5() <= 14;
+    }
+
+    private void restoreForwardKey() {
+        KeyBinding forwardKey = Minecraft.gameSettings().Y();
+        KeyBinding.setKeyBindState(forwardKey, ClientSettings.isPhysicalKeyDown(forwardKey));
+        this.releasePending = false;
+        this.rePressPending = false;
     }
 
 
@@ -46,7 +65,7 @@ extends Mod {
             if (this.releasePending || this.rePressPending) {
                 return;
             }
-            if (this.selectHits.getEffectiveValue() && event.getTarget().V$src$I$fk0dv5() > 14) {
+            if (!this.isTargetVulnerable(event.getTarget())) {
                 return;
             }
             if (this.shouldTrigger()) {
@@ -76,10 +95,15 @@ extends Mod {
         if (Packet.A()) {
             if (Minecraft.currentScreen().isNull()) {
                 this.handleRePress();
+            } else if (this.releasePending || this.rePressPending) {
+                this.restoreForwardKey();
             }
             return;
         }
         if (Minecraft.currentScreen().isNotNull()) {
+            if (this.releasePending || this.rePressPending) {
+                this.restoreForwardKey();
+            }
             return;
         }
         if (this.releasePending) {
@@ -95,11 +119,16 @@ extends Mod {
     private void handleRelease() {
         if (this.releaseTimer.hasTimeElapsed(((Double)this.releaseDelay.getValue()).longValue())) {
             KeyBinding forwardKey = Minecraft.gameSettings().Y();
-            forwardKey.setPressed(false);
+            KeyBinding.setKeyBindState(forwardKey, false);
             this.releasePending = false;
             this.rePressTimer.reset();
             this.rePressPending = true;
         }
+    }
+
+    @Override
+    public void onDisable() {
+        this.restoreForwardKey();
     }
 
     @Override

@@ -4,63 +4,51 @@ import gg.vape.Vape;
 import gg.vape.event.EventHandler;
 import gg.vape.event.impl.EventPostAttack;
 import gg.vape.event.impl.EventPreAttack;
-import gg.vape.event.impl.EventPrePlayerTick;
-import gg.vape.event.impl.EventSetSprinting;
 import gg.vape.module.Category;
 import gg.vape.module.Mod;
-import gg.vape.module.blatant.Scaffold;
-import gg.vape.utils.MathUtil;
-import gg.vape.utils.TimerUtil;
 import gg.vape.value.BooleanValue;
 import gg.vape.value.NumberValue;
 import gg.vape.wrapper.impl.EntityPlayerSP;
 import gg.vape.wrapper.impl.Minecraft;
 
-public class KeepSprint
-extends Mod {
-    private final NumberValue retainFactor = new NumberValue(this, "Retain factor", 0.95, 0.6, 1.0, "#.##", "");
-    private final TimerUtil sprintResetTimer;
-    private double preAttackMotionX;
-    private boolean cancelNextSprintEnable;
-    private boolean sprintResetPending;
-    private final BooleanValue resetSprint = new BooleanValue((Object)this, "Reset sprint", false);
-    private Scaffold scaffold;
-    private double preAttackMotionZ;
+public class KeepSprint extends Mod {
     private static final long MODULE_ID = -249991328817855756L;
+    private static final double VANILLA_ATTACK_SLOWDOWN = 0.6;
 
-    @EventHandler
-    public void onTick(EventPrePlayerTick event) {
-        if (this.sprintResetPending) {
-            event.getThePlayer().R(false);
-            this.cancelNextSprintEnable = true;
-            this.sprintResetPending = false;
-        }
+    private final NumberValue slowDownVelocity = NumberValue.create(
+            this, "Hit Slow Down During Velocity", "#.##", "", 0.0, 0.6, 1.0, 0.05);
+    private final NumberValue slowDownNormal = NumberValue.create(
+            this, "Hit Slow Down Normal", "#.##", "", 0.0, 0.6, 1.0, 0.05);
+    private final NumberValue bufferDecrease = NumberValue.create(
+            this, "Buffer Decrease", "#.#", "", 0.1, 1.0, 10.0, 0.1);
+    private final NumberValue maxBuffer = NumberValue.create(
+            this, "Max Buffer", "#", "", 1.0, 5.0, 10.0, 1.0);
+    private final BooleanValue sprintSlowDownVelocity = new BooleanValue(
+            this, "Velocity Hit Sprint", true);
+    private final BooleanValue sprintSlowDownNormal = new BooleanValue(
+            this, "Normal Hit Sprint", true);
+    private final BooleanValue bufferAbuse = new BooleanValue(this, "Buffer Abuse", false);
+    private final BooleanValue onlyInAir = new BooleanValue(this, "Only In Air", false);
+
+    private double preAttackMotionX;
+    private double preAttackMotionZ;
+    private double combo;
+    private boolean resetting;
+    private boolean attackStateCaptured;
+    private Scaffold scaffold;
+
+    public KeepSprint() {
+        super("KeepSprint", (int)MODULE_ID, Category.OTHER,
+                "Controls attack slowdown and sprint state");
+        this.bufferAbuse.addDependentValues(this.bufferDecrease, this.maxBuffer);
+        this.addValue(this.slowDownVelocity, this.slowDownNormal,
+                this.sprintSlowDownVelocity, this.sprintSlowDownNormal,
+                this.bufferAbuse, this.bufferDecrease, this.maxBuffer, this.onlyInAir);
     }
-
 
     @Override
     public String getDetailedSuffix() {
-        return this.retainFactor.getDisplayValue();
-    }
-
-    @EventHandler
-    public void onSetSprinting(EventSetSprinting event) {
-        if (this.cancelNextSprintEnable && event.isNewStateSprinting()) {
-            event.setCancelled(true);
-            this.cancelNextSprintEnable = false;
-        }
-    }
-
-    private boolean isMovingForward(EntityPlayerSP player) {
-        float forwardInput = player.F();
-        if (forwardInput > 0.0f) {
-            float yaw = player.J();
-            float forwardX = -MathUtil.sin(yaw * (float)Math.PI / 180.0f);
-            float forwardZ = MathUtil.cos(yaw * (float)Math.PI / 180.0f);
-            double forwardMotion = player.t() * forwardX + player.T() * forwardZ;
-            return forwardMotion > 0.0;
-        }
-        return false;
+        return this.slowDownNormal.getDisplayValue();
     }
 
     @Override
@@ -68,57 +56,91 @@ extends Mod {
         return true;
     }
 
+    @Override
+    public void onEnable() {
+        this.resetState();
+    }
+
+    @Override
+    public void onDisable() {
+        this.resetState();
+    }
+
     @EventHandler
     public void onPreAttack(EventPreAttack event) {
+        this.attackStateCaptured = false;
         EntityPlayerSP player = Minecraft.thePlayer();
-        if (this.scaffold == null) {
-            this.scaffold = Vape.INSTANCE.getModManager().getMod(Scaffold.class);
-        }
-        if (this.scaffold.isActivelyScaffolding()) {
+        if (player.isNull() || this.isScaffolding()) {
             return;
         }
         this.preAttackMotionX = player.t();
         this.preAttackMotionZ = player.T();
-    }
-
-    public KeepSprint() {
-        super("KeepSprint", (int)MODULE_ID, Category.OTHER, "Prevents you from losing sprint when attacking");
-        this.sprintResetTimer = new TimerUtil();
-        this.addValue(this.retainFactor, this.resetSprint);
+        this.attackStateCaptured = true;
     }
 
     @EventHandler
     public void onPostAttack(EventPostAttack event) {
         EntityPlayerSP player = Minecraft.thePlayer();
+        if (!this.attackStateCaptured || player.isNull()) {
+            return;
+        }
+        this.attackStateCaptured = false;
+        if (this.isScaffolding() || this.onlyInAir.getEffectiveValue() && player.b$src$Z$fqlxe4()) {
+            return;
+        }
+        if (player.F() <= 0.0f || !this.hasVanillaAttackSlowdown(player)) {
+            return;
+        }
+        if (!this.shouldApplyConfiguredSlowdown()) {
+            return;
+        }
+
+        boolean takingVelocity = player.c$src$I$15a9iwo() > 0;
+        double slowDown = takingVelocity
+                ? this.slowDownVelocity.getValue()
+                : this.slowDownNormal.getValue();
+        boolean sprint = takingVelocity
+                ? this.sprintSlowDownVelocity.getEffectiveValue()
+                : this.sprintSlowDownNormal.getEffectiveValue();
+
+        player.r(this.preAttackMotionX * slowDown);
+        player.i(this.preAttackMotionZ * slowDown);
+        player.R(sprint);
+    }
+
+    private boolean hasVanillaAttackSlowdown(EntityPlayerSP player) {
+        return Double.compare(player.t(), this.preAttackMotionX * VANILLA_ATTACK_SLOWDOWN) == 0
+                && Double.compare(player.T(), this.preAttackMotionZ * VANILLA_ATTACK_SLOWDOWN) == 0;
+    }
+
+    private boolean shouldApplyConfiguredSlowdown() {
+        if (!this.bufferAbuse.getEffectiveValue()) {
+            this.combo = 0.0;
+            return true;
+        }
+        if (this.combo < this.maxBuffer.getValue() && !this.resetting) {
+            ++this.combo;
+            return true;
+        }
+        if (this.combo > 0.0) {
+            this.combo = Math.max(0.0, this.combo - this.bufferDecrease.getValue());
+            this.resetting = true;
+            return false;
+        }
+        this.resetting = false;
+        return true;
+    }
+
+    private boolean isScaffolding() {
         if (this.scaffold == null) {
             this.scaffold = Vape.INSTANCE.getModManager().getMod(Scaffold.class);
         }
-        if (this.scaffold.isActivelyScaffolding()) {
-            return;
-        }
-        if (event.getThePlayer().F() <= 0.0f) {
-            return;
-        }
-        if (!player.b$src$Z$fqlxe4() && !this.isMovingForward(player)) {
-            return;
-        }
-        double vanillaAttackSlowdown = 0.6;
-        if (player.t() == this.preAttackMotionX * vanillaAttackSlowdown
-                && player.T() == this.preAttackMotionZ * vanillaAttackSlowdown && !player.r()) {
-            double retainedMotionScale = (Double)this.retainFactor.getValue();
-            double restoredMotionX = player.t() / vanillaAttackSlowdown * retainedMotionScale;
-            double restoredMotionZ = player.T() / vanillaAttackSlowdown * retainedMotionScale;
-            player.r(restoredMotionX);
-            player.i(restoredMotionZ);
-            if (this.resetSprint.getEffectiveValue()) {
-                if (this.sprintResetTimer.hasTimeElapsed(500L)) {
-                    this.sprintResetPending = true;
-                    this.sprintResetTimer.reset();
-                }
-            } else {
-                player.R(true);
-            }
-        }
+        return this.scaffold != null && this.scaffold.isActivelyScaffolding();
+    }
+
+    private void resetState() {
+        this.combo = 0.0;
+        this.resetting = false;
+        this.attackStateCaptured = false;
     }
 }
-

@@ -47,6 +47,7 @@ extends ClickerMod {
     private final TimerUtil breakBlockTimer;
     private volatile boolean blocked = false;
     private volatile boolean breakingBlock = false;
+    private volatile boolean blockBreakAttackHeld = false;
     private final RandomValue breakBlocksDelay;
     private final ModeValue randomization;
 
@@ -70,26 +71,39 @@ extends ClickerMod {
         return InputEventDispatcher.getInstance().getFocusState().isFocused() && Minecraft.a();
     }
 
+    private void stopBreakingBlock() {
+        this.breakingBlock = false;
+        if (!this.blockBreakAttackHeld) {
+            return;
+        }
+        this.blockBreakAttackHeld = false;
+        this.getClickEngine().releaseClickButton();
+    }
+
     private boolean computeBlocked() {
         if (!ClientSettings.INSTANCE.isInputEnabled()) {
-            this.breakingBlock = false;
+            this.stopBreakingBlock();
             return true;
         }
         if (!this.isMinecraftFocused()) {
-            this.breakingBlock = false;
+            this.stopBreakingBlock();
             return true;
         }
         if (SharedModuleControlClaims.mouseButtons.isLocked()) {
-            this.breakingBlock = false;
+            this.stopBreakingBlock();
             return true;
         }
         EntityPlayerSP player = Minecraft.thePlayer();
         if (player.isNull()) {
-            this.breakingBlock = false;
+            this.stopBreakingBlock();
             return true;
         }
         boolean shouldBreakBlock = !this.shouldAllowClick(player);
-        this.breakingBlock = shouldBreakBlock;
+        if (shouldBreakBlock) {
+            this.breakingBlock = true;
+        } else {
+            this.stopBreakingBlock();
+        }
         return shouldBreakBlock;
     }
 
@@ -136,13 +150,17 @@ extends ClickerMod {
 
     @Override
     protected boolean shouldSuppressClickRelease() {
-        return this.breakingBlock;
+        if (!this.breakingBlock || !Minecraft.gameSettings().F().isKeyDown()) {
+            return false;
+        }
+        this.blockBreakAttackHeld = true;
+        return true;
     }
 
     @EventHandler(priority=EventPriority.HIGHEST)
     public void keepLegacyBlockBreakingResponsive(EventSendClickBlockToController event) {
         if (ForgeVersion.c() == ForgeVersion.MC_1_8_9.i() && this.breakingBlock
-                && gg.vape.config.ClientSettings.isAttackButtonDown()) {
+                && this.isMinecraftFocused() && gg.vape.config.ClientSettings.isAttackButtonDown()) {
             // A transient miss between blocks sets this to 10, pausing mining for half a second.
             Minecraft.r(0);
         }
@@ -154,7 +172,16 @@ extends ClickerMod {
         ClickEngine clickEngine = this.getClickEngine();
         if (this.breakingBlock && this.isMinecraftFocused() && ClientSettings.INSTANCE.inputEnabled && Minecraft.currentScreen().isNull() && clickEngine.isActivationHeld() && !Minecraft.gameSettings().F().isKeyDown()) {
             clickEngine.pressClickButton();
+            this.blockBreakAttackHeld = Minecraft.gameSettings().F().isKeyDown();
         }
+    }
+
+    @Override
+    public void onDisable() {
+        this.blocked = true;
+        this.breakingBlock = false;
+        super.onDisable();
+        this.stopBreakingBlock();
     }
 
     @Override
