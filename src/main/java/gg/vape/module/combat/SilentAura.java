@@ -161,6 +161,10 @@ extends Mod {
         return this.aimSpeed;
     }
 
+    public boolean isAiMode() {
+        return this.rotationMode.getValue() == this.rotationAiMode;
+    }
+
     public RandomClickDelayValue getAttackRate() {
         return this.attackRate;
     }
@@ -364,6 +368,9 @@ extends Mod {
         this.rotationMode = ModeValue.create((Object)this, "Rotation Mode", "PID: Vape's original rotation engine.\nAI: LiquidBounce MLP combat regression model.", (ModeSelection)this.rotationPidMode, this.rotationPidMode, this.rotationAiMode);
         this.aiYawMultiplier = NumberValue.create(this, "AI yaw multiplier", "#.#", "", 0.5, 1.5, 2.0, 0.05, "Multiplier applied to the model's yaw output");
         this.aiPitchMultiplier = NumberValue.create(this, "AI pitch multiplier", "#.#", "", 0.5, 1.0, 2.0, 0.05, "Multiplier applied to the model's pitch output");
+        // AI 旋转模式下 aim speed 与 target area 不适用（模型直接输出角度），
+        // 仅在 PID 模式显示这两个设置。
+        this.rotationMode.addModeDependentValues(this.rotationPidMode, this.aimSpeed, this.targetArea);
         this.rotationMode.addModeDependentValues(this.rotationAiMode, this.aiModel, this.aiYawMultiplier, this.aiPitchMultiplier);
         this.perfectSwing.whenEqualTo(false).applyTo(this.attackRate);
         // 1.7.10 attacks via attackEntity(target) directly and never rewrites

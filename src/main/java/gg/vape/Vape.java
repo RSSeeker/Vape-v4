@@ -58,8 +58,10 @@ import gg.vape.module.utility.inventory.ItemStackSemanticResolver;
 import gg.vape.module.utility.inventory.cleaner.InventoryFilterPresetRegistry;
 import gg.vape.module.utility.inventory.cleaner.ui.InventoryCleanerProfileValueRefreshListener;
 import gg.vape.movement.PlayerMovementTaskManager;
+import gg.vape.module.combat.SilentAura;
 import gg.vape.notification.NotificationManager;
 import gg.vape.notification.NotificationSoundPlayer;
+import gg.vape.notification.NotificationType;
 import gg.vape.rotation.RotationManager;
 import gg.vape.runtime.NativeBridge;
 import gg.vape.service.VapeServiceLauncher;
@@ -430,6 +432,7 @@ public class Vape {
             }
             this.profilesManager.getActiveProfile().applyLegitEnabledModuleStates();
         }
+        this.autoDisableAiSilentAuraOnce();
         this.traceStep(26);
         this.onlineManager = new OnlineManager();
         this.traceStep(27);
@@ -694,6 +697,27 @@ public class Vape {
 
     public static void logThrowable(Throwable error) {
         Vape.debugLog(Vape.formatThrowable(error));
+    }
+
+    /**
+     * 启动注入完成后执行一次：若 SilentAura 配置为 AI 旋转模式，
+     * 强制关闭 SilentAura（仅启动时关闭一次，不修改配置本身）。
+     */
+    private void autoDisableAiSilentAuraOnce() {
+        try {
+            SilentAura silentAura = this.modManager.getMod(SilentAura.class);
+            if (silentAura != null && silentAura.isEnabled() && silentAura.isAiMode()) {
+                silentAura.setEnabled(false);
+                if (this.notificationManager != null) {
+                    this.notificationManager.show("SilentAura",
+                            "AI mode is not allowed; SilentAura disabled on startup",
+                            NotificationType.WARNING, 2500L);
+                }
+            }
+        }
+        catch (Throwable throwable) {
+            Vape.logThrowable(throwable);
+        }
     }
 
     public LicenseManager getLicenseManager() {
