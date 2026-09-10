@@ -1,5 +1,20 @@
 # 更新日志
 
+## v4.21.36 (2026-09-10)
+
+**高版本启用 Scaffold 的 TellyBridge 模式 + TellyBridge 设置项汉化**
+
+- **在高版本启用 `TellyBridge`**：`Scaffold` 的 Mode 下拉原本在 `>= 1.16.5`（以及正好 1.7.10）时只提供 `Legit` / `GodBridge`，`TellyBridge` 一直存在于代码里但没有被加进下拉，所以在 26.1.2 上根本选不到。现已放开（只保留 1.7.10 的排除）。
+  - 可行性依据：`TellyBridgeScaffoldMode` 与已在高版本正常工作的 `GodBridge` 共用同一批 Scaffold 辅助方法；其会用到版本分支的依赖均已适配高版本（`ScaffoldEdgeSneakHelper`、`MovementInputHelper` 都有 `MC_1_16_5` / `MC_1_8_9` / `MC_1_20_6` 分支）；`Scaffold` 内对 `tellyBridgeMode` 的处理与 `godBridgeMode` 一致，无缺失分支。
+  - `TellyBridge` 是**手动激活**模式：需按住「后退键 + 右键」（`Require right click` 默认开）并手动放置 `Activation Blocks`（默认 2）个方块后才会开始桥接。
+  - 该模式为**可选**：只有主动在 Mode 里选中才会生效，不选则行为与之前完全一致；`TellyBridge` 追加在选项末尾，`Legit` / `GodBridge` 的配置索引不位移。
+- **TellyBridge 设置项汉化**：该模式此前在高版本被隐藏，其设置项从未被翻译（5 个字符串在中英词条文件里均无条目），显示为英文。本次补齐：
+  - `Require right click` → 需要按住右键；说明 → 开：同时按住右键与后退键才会持续搭桥，松开任意一个即停止 / 关：只需按住后退键即可持续搭桥，松开即停止
+  - `Activation Blocks` → 激活方块数；说明 → 开始桥接前需要手动放置的方块数
+  - `Y increase` → Y 轴抬升
+- **术语修正**：模式名与 Mode 说明里原来误译成「望远镜搭路」的 telly，改为「Telly搭桥」。
+- 注：README 未同步（按需）。
+
 ## v4.21.35 (2026-09-10)
 
 **对照 OpenVapeCN 参考 DLL 全量比对，搬运缺失模块实现**
