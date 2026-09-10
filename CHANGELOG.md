@@ -1,5 +1,41 @@
 # 更新日志
 
+## v4.21.35 (2026-09-10)
+
+**对照 OpenVapeCN 参考 DLL 全量比对，搬运缺失模块实现**
+
+以 `project/Vape421Native.dll` 内嵌的 OpenVapeCN 产品 JAR 为基准（提取出 8196 条目的产品包），做了**全量指令级字节码比对**（规范化偏移/常量池/`ldc` 宽度/分支目标/`shaded` 重定位后比对）：3020 个公共类中 **2860 个语义完全相同**；并逐项比对了映射数据、资源与全部模块文案。
+
+**搬运（参考版更完整，已替换为 OpenVapeCN 实现）**
+
+- **AutoMace**：由 649 行简化版换成完整实现（118 个成员）——落体轨迹模拟（`simulateTrajectory`/`findImpact`/`FallSample`/`ImpactPrediction`）、Elytra 状态机（`ElytraFlightState`/`ElytraTarget`/`updateBounceReequip`）、`estimateMaceDamage`/`smashBonusDamage` 评分、`AttackCancellationAdapter` 取消体系；新增 **`combat/automace/AutoMaceRotationController`** 专用旋转控制器。**这是 1.21.11 上 AutoMace 失效的主因。**
+- **KeepSprint**：换成 OpenVapeCN 实现，设置由 2 个增至 **8 个**（受击减速-正常/击退时、缓冲滥用/递减/最大缓冲、普通/击退命中时保持疾跑、仅空中生效），并正确检测「原版减速是否真的生效」；顺带修掉旧版 `Scaffold` 空指针风险。
+- **WTap**：修 3 处真实缺陷——`Select hits` 在 1.21.11 走了旧版映射（改为按 `ForgeVersion` 分支）、**开 GUI 后 W 键卡在松开状态**、**模块禁用后 W 键卡住**（补 `restoreForwardKey()`/`onDisable()`）。
+- **LeftClicker**：补 `stopBreakingBlock()`（停止挖方块时释放点击按钮，避免卡住持续挖）与 `onDisable()`；**保留**本仓库 26.2 窗口失焦修复（合并而非覆盖）。
+- **Animations 预测模式**：换成 OpenVapeCN 实现，新增 **`Maximum hurt time` / `Include ping` / `Hold after`** 三个设置（自适应受伤间隔预测）。
+- **`Entity.getHurtResistantTime()`** 补齐。
+
+**类名/包名对齐 OpenVapeCN**
+
+- `gg.vape.module.render.Animations` → **`gg.vape.module.combat.BlockHit`**
+- `...render.animations.{AnimationsMode, SwordUseMouseGuardAnimationsMode, AnimationsBlockingState, LegacyBlockingPacketBufferedAnimationsMode, DamageResponsiveAnimationsMode}` → **`...combat.blockhit.{BlockHitMode, AutoBlockHitMode, ManualBlockHitMode, LagBlockHitMode, PredictBlockHitMode}`**
+- 同步更新引用：`ModManager`（coreModules[51]）、`LeftClicker`（改同包引用）、`ItemMacroAction`、`SilentAuraClicker`。
+- 模块显示名一直是 `BlockHit`（中文「格挡」），**配置键与汉化词条不受影响**。
+
+**文案补齐**
+
+- `ShieldBreaker` 的 `Swap delay` 补上缺失的说明文字并汉化（参考版唯一真正多出来的模块文案）。
+
+**比对结论（核实后不搬）**
+
+- **PearlCatch / WindCharge / AutoPearl**：与 OpenVapeCN **代码与 1.21.11 映射完全一致**（类大小相同、字符串常量一致、指令流一致；映射文件逐行一致，仅 CRLF/LF 不同）——**不是代码缺失**，搬运无从下手。
+- **TellyBridge**（`TellyBridgeScaffoldMode`）与整个 `scaffold` 包：指令流完全一致，源码逐字节一致。
+- **BlockHit**：本仓库早已存在（显示名即 `BlockHit`），并非缺失。
+- **`TruncatedText*` / `SmoothFontRenderer`**：参考版多出的成员只是包装方法（转发到我已有的 `f/v/W/d/N`），功能等价；我这边用 `FontOption` 做翻译感知，设计不同。
+- 其余 37 个「我这边更全」的类（SilentAura AI/随机瞄准、ESP2D/Search/XRay/SpawnerFinder 渲染修复、AutoTool、RightClicker、Minigames 分类、`deeplearn`、`service`、NeoForge/Fabric 映射等）为本仓库更新内容，**整体搬运会回退**，保留。
+- 全部 64 条「参考版独有字符串」逐条核实后，绝大多数是我把硬编码串拆成 `FontOption.s(...)` 以便汉化的结果。
+- 本地化：参考版 `english`/`chinese` 各 798 键**我全部都有**（参考版自己的中文文件尚有一批未翻译）。
+
 ## v4.21.34 (2026-09-09)
 
 **恢复 Minigames 独立分类 / Frame**
