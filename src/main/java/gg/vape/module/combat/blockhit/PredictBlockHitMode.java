@@ -1,4 +1,4 @@
-package gg.vape.module.render.animations;
+package gg.vape.module.combat.blockhit;
 
 import gg.vape.combat.AttackPacketTimingTracker;
 import gg.vape.config.ClientSettings;
@@ -8,13 +8,13 @@ import gg.vape.event.impl.EventMouseButton;
 import gg.vape.event.impl.EventPreTick;
 import gg.vape.event.impl.EventTickBase;
 import gg.vape.module.Mod;
-import gg.vape.module.render.Animations;
+import gg.vape.module.combat.BlockHit;
 import gg.vape.value.BooleanValue;
 import gg.vape.value.NumberValue;
 import gg.vape.wrapper.impl.Minecraft;
 
-public class DamageResponsiveAnimationsMode
-extends AnimationsMode {
+public class PredictBlockHitMode
+extends BlockHitMode {
     private static final int DAMAGEABLE_HURT_RESISTANT_TIME = 10;
     private static final int DAMAGE_INTERVAL_CAPACITY = 8;
     private static final int PREDICTION_SAMPLE_COUNT = 3;
@@ -57,7 +57,7 @@ extends AnimationsMode {
     private boolean holdTimerStarted;
     private long holdUntil;
 
-    public DamageResponsiveAnimationsMode(Mod parent, String name) {
+    public PredictBlockHitMode(Mod parent, String name) {
         super(parent, name);
         this.addValue(this.maximumHurtTime, this.includePing, this.holdAfter);
     }
@@ -240,7 +240,7 @@ extends AnimationsMode {
         Minecraft.gameSettings().b$src$Lgg_vape_wrapper_impl_KeyBinding_$1yi3362().setPressed(blocking);
     }
 
-    private Animations parent() {
-        return (Animations)this.getParent();
+    private BlockHit parent() {
+        return (BlockHit)this.getParent();
     }
 }

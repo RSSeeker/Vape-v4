@@ -1,11 +1,10 @@
-package gg.vape.module.render.animations;
+package gg.vape.module.combat.blockhit;
 
 import gg.vape.config.ClientSettings;
 import gg.vape.event.EventHandler;
 import gg.vape.event.impl.EventMouseButton;
 import gg.vape.module.Mod;
-import gg.vape.module.render.Animations;
-import gg.vape.module.render.animations.AnimationsMode;
+import gg.vape.module.combat.BlockHit;
 import gg.vape.rotation.RotationManager;
 import gg.vape.utils.ItemStackScoreUtil;
 import gg.vape.wrapper.impl.EntityPlayerSP;
@@ -14,11 +13,11 @@ import gg.vape.wrapper.impl.Minecraft;
 import gg.vape.wrapper.impl.RayTraceResult;
 import gg.vape.wrapper.impl.RayTraceResult_type;
 
-public class SwordUseMouseGuardAnimationsMode
-extends AnimationsMode {
+public class AutoBlockHitMode
+extends BlockHitMode {
     private int targetStreak = 1;
 
-    public SwordUseMouseGuardAnimationsMode(Mod parent, String name) {
+    public AutoBlockHitMode(Mod parent, String name) {
         super(parent, name);
     }
 
@@ -29,11 +28,11 @@ extends AnimationsMode {
 
     @EventHandler
     public void onMouseButton(EventMouseButton event) {
-        if (!((Animations)this.getParent()).isHoldingSword()) {
+        if (!((BlockHit)this.getParent()).isHoldingSword()) {
             return;
         }
         int buttonBinding = -100 + event.getButton();
-        if (event.getButtonState() && buttonBinding == Minecraft.gameSettings().b$src$Lgg_vape_wrapper_impl_KeyBinding_$1yi3362().getKeyCode() && ((Animations)this.getParent()).requiresMouseDown() && ClientSettings.isAttackButtonDown()) {
+        if (event.getButtonState() && buttonBinding == Minecraft.gameSettings().b$src$Lgg_vape_wrapper_impl_KeyBinding_$1yi3362().getKeyCode() && ((BlockHit)this.getParent()).requiresMouseDown() && ClientSettings.isAttackButtonDown()) {
             event.setCancelled(true);
             return;
         }
@@ -41,7 +40,7 @@ extends AnimationsMode {
 
 
     private boolean shouldBlockSwordUse() {
-        if (((Animations)this.getParent()).requiresMouseDown() && !ClientSettings.isUseItemButtonDown()) {
+        if (((BlockHit)this.getParent()).requiresMouseDown() && !ClientSettings.isUseItemButtonDown()) {
             return false;
         }
         boolean shouldBlock = true;

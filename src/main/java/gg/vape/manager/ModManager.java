@@ -43,7 +43,7 @@ import gg.vape.module.render.Search;
 import gg.vape.module.none.TextGuiSettings;
 import gg.vape.module.world.XRay;
 import gg.vape.module.world.AntiAFK;
-import gg.vape.module.render.Animations;
+import gg.vape.module.combat.BlockHit;
 import gg.vape.module.render.AntiDebuff;
 import gg.vape.module.render.Arrows;
 import gg.vape.module.render.Chams;
@@ -198,7 +198,7 @@ implements EventListener {
         coreModules[48] = new Sprint();
         coreModules[49] = new Health();
         coreModules[50] = new HitSelect();
-        coreModules[51] = new Animations();
+        coreModules[51] = new BlockHit();
         SilentAura silentAura = new SilentAura();
         coreModules[52] = silentAura;
         coreModules[53] = new SilentAuraClicker(silentAura);

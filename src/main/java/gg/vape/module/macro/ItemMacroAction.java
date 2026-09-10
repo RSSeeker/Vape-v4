@@ -5,7 +5,7 @@ import gg.vape.config.ClientSettings;
 import gg.vape.input.KeyBindingInputState;
 import gg.vape.mapping.MappedClasses;
 import gg.vape.module.Mod;
-import gg.vape.module.render.Animations;
+import gg.vape.module.combat.BlockHit;
 import gg.vape.utils.RandomUtil;
 import gg.vape.utils.TimerUtil;
 import gg.vape.wrapper.Wrapper;
@@ -59,10 +59,10 @@ implements MacroAction {
             this.originalHotbarSlot = Minecraft.thePlayer().V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().v();
             Minecraft.thePlayer().V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().g(targetHotbarSlot);
             this.timer.reset();
-            Animations animations = Vape.INSTANCE.getModManager().getMod(Animations.class);
+            BlockHit blockHit = Vape.INSTANCE.getModManager().getMod(BlockHit.class);
             if (ClientSettings.isUseItemButtonDown()) {
-                if (((Mod)animations).isEnabled() && animations.requiresMouseDown() && ClientSettings.isKeyBindingDown(Minecraft.gameSettings().b$src$Lgg_vape_wrapper_impl_KeyBinding_$1yi3362())) {
-                    if (animations.getActiveMode().isBlocking() && !animations.getActiveMode().shouldBlock()) {
+                if (((Mod)blockHit).isEnabled() && blockHit.requiresMouseDown() && ClientSettings.isKeyBindingDown(Minecraft.gameSettings().b$src$Lgg_vape_wrapper_impl_KeyBinding_$1yi3362())) {
+                    if (blockHit.getActiveMode().isBlocking() && !blockHit.getActiveMode().shouldBlock()) {
                         this.phase = 2;
                     }
                 } else {

@@ -11,7 +11,6 @@ import gg.vape.input.InputEventDispatcher;
 import gg.vape.mapping.MappedClasses;
 import gg.vape.module.control.SharedModuleControlClaims;
 import gg.vape.module.none.ClientSettings;
-import gg.vape.module.render.Animations;
 import gg.vape.rotation.RotationManager;
 import gg.vape.ui.click.component.GuiComponent;
 import gg.vape.unmap.ItemLimitData;
@@ -53,13 +52,13 @@ extends ClickerMod {
 
     @Override
     public boolean shouldSimulateBlockHit(ClickEngine clickEngine, EntityPlayerSP player) {
-        Animations animations = Vape.INSTANCE.getModManager().getMod(Animations.class);
+        BlockHit blockHit = Vape.INSTANCE.getModManager().getMod(BlockHit.class);
         if (Packet.A()) {
-            boolean animationsEnabled = animations.shouldBlock();
+            boolean animationsEnabled = blockHit.shouldBlock();
             GuiComponent.setLegacyComponentState(new GuiComponent[2]);
             return animationsEnabled;
         }
-        return animations != null && animations.shouldBlock();
+        return blockHit != null && blockHit.shouldBlock();
     }
 
     @Override

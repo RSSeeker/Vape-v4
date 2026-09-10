@@ -1,4 +1,4 @@
-package gg.vape.module.render.animations;
+package gg.vape.module.combat.blockhit;
 
 import gg.vape.event.EventHandler;
 import gg.vape.event.EventPriority;
@@ -12,7 +12,7 @@ import gg.vape.module.Mod;
 import gg.vape.combat.AttackPacketTimingTracker;
 import gg.vape.module.control.PrimaryActionControlClaim;
 import gg.vape.module.control.SharedModuleControlClaims;
-import gg.vape.module.render.Animations;
+import gg.vape.module.combat.BlockHit;
 import gg.vape.utils.ItemStackScoreUtil;
 import gg.vape.utils.TimerUtil;
 import gg.vape.utils.network.PacketDispatchGuard;
@@ -28,8 +28,8 @@ import gg.vape.wrapper.impl.PlayerDiggingAction;
 import java.util.LinkedList;
 import java.util.Queue;
 
-public class LegacyBlockingPacketBufferedAnimationsMode
-extends AnimationsMode {
+public class LagBlockHitMode
+extends BlockHitMode {
     private final Queue<EventPacketSend> queuedPackets;
     private int delayMillis;
     private final PrimaryActionControlClaim primaryActionClaim;
@@ -50,7 +50,7 @@ extends AnimationsMode {
         }
         if (this.findTarget() != null) {
             boolean shouldBlock = this.isHoldingSword();
-            if (((Animations)this.getParent()).requiresMouseDown() && !gg.vape.config.ClientSettings.isUseItemButtonDown()) {
+            if (((BlockHit)this.getParent()).requiresMouseDown() && !gg.vape.config.ClientSettings.isUseItemButtonDown()) {
                 shouldBlock = false;
             }
             if (event.getThePlayer().c$src$I$15a9iwo() > AttackPacketTimingTracker.INSTANCE.getExpectedHurtTimeTicks() + 1) {
@@ -79,7 +79,7 @@ extends AnimationsMode {
             }
             return;
         }
-        if (this.isHoldingSword() && ((Animations)this.getParent()).requiresMouseDown() && ((Animations)this.getParent()).ignoreManualBlock.getEffectiveValue().booleanValue() && !this.bufferingPackets && gg.vape.config.ClientSettings.isUseItemButtonDown() && Minecraft.thePlayer().o$src$Z$1iprrmi()) {
+        if (this.isHoldingSword() && ((BlockHit)this.getParent()).requiresMouseDown() && ((BlockHit)this.getParent()).ignoreManualBlock.getEffectiveValue().booleanValue() && !this.bufferingPackets && gg.vape.config.ClientSettings.isUseItemButtonDown() && Minecraft.thePlayer().o$src$Z$1iprrmi()) {
             KeyBindingInputState.sendRightButtonUp();
             this.blocking = false;
             this.blockCycleCompleted = false;
@@ -184,7 +184,7 @@ extends AnimationsMode {
     }
 
     public EntityLivingBase findTarget() {
-        Animations parent = (Animations)this.getParent();
+        BlockHit parent = (BlockHit)this.getParent();
         return parent.findTarget((Double)parent.targetAngle.getValue(), (Double)parent.targetDistance.getValue());
     }
 
@@ -202,7 +202,7 @@ extends AnimationsMode {
         this.queuedPackets.clear();
     }
 
-    public LegacyBlockingPacketBufferedAnimationsMode(Mod parent, String name) {
+    public LagBlockHitMode(Mod parent, String name) {
         super(parent, name);
         this.queuedPackets = new LinkedList<EventPacketSend>();
         this.delay = RandomValue.create(this, "Delay", "#", "", 0.0, 50.0, 100.0, 500.0);

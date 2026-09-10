@@ -1,4 +1,4 @@
-package gg.vape.module.render.animations;
+package gg.vape.module.combat.blockhit;
 
 import gg.vape.Vape;
 import gg.vape.config.ClientSettings;
@@ -9,27 +9,27 @@ import gg.vape.module.Mod;
 import gg.vape.combat.AttackPacketTimingTracker;
 import gg.vape.module.combat.LeftClicker;
 import gg.vape.module.combat.SilentAura;
-import gg.vape.module.render.Animations;
+import gg.vape.module.combat.BlockHit;
 import gg.vape.value.RandomValue;
 import gg.vape.wrapper.impl.Minecraft;
 
-public class AnimationsBlockingState
-extends AnimationsMode {
+public class ManualBlockHitMode
+extends BlockHitMode {
     private boolean blocking = false;
     private long releaseTime;
     private final RandomValue chance = RandomValue.createWithDescription(this, "Chance", "#", "%", 0.0, 70.0, 90.0, 100.0, 1.0, "Chance that a click will blockhit\n(Blocks per second = Your CPS * Chance)");
 
-    public AnimationsBlockingState(Mod parent, String name) {
+    public ManualBlockHitMode(Mod parent, String name) {
         super(parent, name);
         this.addValue(this.chance);
     }
 
     @Override
     public boolean shouldBlock() {
-        if (!((Animations)this.getParent()).isHoldingSword()) {
+        if (!((BlockHit)this.getParent()).isHoldingSword()) {
             return false;
         }
-        if (((Animations)this.getParent()).requiresMouseDown() && !ClientSettings.isUseItemButtonDown()) {
+        if (((BlockHit)this.getParent()).requiresMouseDown() && !ClientSettings.isUseItemButtonDown()) {
             return false;
         }
         return this.chance.getRandomValue() >= Math.random() * 100.0;

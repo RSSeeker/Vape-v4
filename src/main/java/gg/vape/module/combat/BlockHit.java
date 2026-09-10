@@ -1,12 +1,12 @@
-package gg.vape.module.render;
+package gg.vape.module.combat;
 
 import gg.vape.module.Category;
 import gg.vape.module.Mod;
-import gg.vape.module.render.animations.AnimationsBlockingState;
-import gg.vape.module.render.animations.AnimationsMode;
-import gg.vape.module.render.animations.DamageResponsiveAnimationsMode;
-import gg.vape.module.render.animations.LegacyBlockingPacketBufferedAnimationsMode;
-import gg.vape.module.render.animations.SwordUseMouseGuardAnimationsMode;
+import gg.vape.module.combat.blockhit.BlockHitMode;
+import gg.vape.module.combat.blockhit.ManualBlockHitMode;
+import gg.vape.module.combat.blockhit.PredictBlockHitMode;
+import gg.vape.module.combat.blockhit.LagBlockHitMode;
+import gg.vape.module.combat.blockhit.AutoBlockHitMode;
 import gg.vape.utils.ItemStackScoreUtil;
 import gg.vape.utils.RotationUtil;
 import gg.vape.value.BooleanValue;
@@ -16,17 +16,17 @@ import gg.vape.value.SubModuleValue;
 import gg.vape.wrapper.impl.EntityLivingBase;
 import gg.vape.wrapper.impl.Minecraft;
 
-public class Animations
+public class BlockHit
 extends Mod {
     private static final long MODULE_COLOR = -1033271949203766542L;
     private final ModeValue mode;
-    private final SubModuleValue<DamageResponsiveAnimationsMode> predictiveMode;
-    private final SubModuleValue<AnimationsBlockingState> manualMode = new AnimationsBlockingState(this, "Manual").getSelectionValue();
-    private final SubModuleValue<LegacyBlockingPacketBufferedAnimationsMode> lagMode;
+    private final SubModuleValue<PredictBlockHitMode> predictiveMode;
+    private final SubModuleValue<ManualBlockHitMode> manualMode = new ManualBlockHitMode(this, "Manual").getSelectionValue();
+    private final SubModuleValue<LagBlockHitMode> lagMode;
     public final BooleanValue requireMouseDown;
     public final BooleanValue ignoreManualBlock;
     public final NumberValue targetDistance;
-    private final SubModuleValue<AnimationsMode> automaticMode;
+    private final SubModuleValue<BlockHitMode> automaticMode;
     public final NumberValue targetAngle;
 
     public boolean isHoldingSword() {
@@ -67,11 +67,11 @@ extends Mod {
         return null;
     }
 
-    public Animations() {
+    public BlockHit() {
         super("BlockHit", (int)MODULE_COLOR, Category.COMBAT, "Automatically blockhit");
-        this.predictiveMode = new DamageResponsiveAnimationsMode(this, "Predict").getSelectionValue();
-        this.automaticMode = new SwordUseMouseGuardAnimationsMode(this, "Auto").getSelectionValue();
-        this.lagMode = new LegacyBlockingPacketBufferedAnimationsMode(this, "Lag").getSelectionValue();
+        this.predictiveMode = new PredictBlockHitMode(this, "Predict").getSelectionValue();
+        this.automaticMode = new AutoBlockHitMode(this, "Auto").getSelectionValue();
+        this.lagMode = new LagBlockHitMode(this, "Lag").getSelectionValue();
         this.requireMouseDown = BooleanValue.create(this, "Require mouse down", true, "Require block to be pressed to blockhit");
         this.ignoreManualBlock = BooleanValue.create(this, "Ignore manual block", true, "Prevents manually blocking, useful for holding right click to activate");
         this.targetAngle = NumberValue.createWithDescription(this, "Angle", "#", "", 0.0, 90.0, 360.0, "Max target angle to blockhit");
@@ -85,8 +85,8 @@ extends Mod {
         this.addValue(this.mode, this.requireMouseDown, this.ignoreManualBlock, this.targetAngle, this.targetDistance);
     }
 
-    public AnimationsMode getActiveMode() {
-        return (AnimationsMode)((SubModuleValue)this.mode.getValue()).getInstance();
+    public BlockHitMode getActiveMode() {
+        return (BlockHitMode)((SubModuleValue)this.mode.getValue()).getInstance();
     }
 
     public boolean isBlocking() {

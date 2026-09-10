@@ -6,7 +6,7 @@ import gg.vape.click.ClickEngine;
 import gg.vape.module.Category;
 import gg.vape.module.combat.ClickerMod;
 import gg.vape.module.combat.SilentAura;
-import gg.vape.module.render.Animations;
+import gg.vape.module.combat.BlockHit;
 import gg.vape.value.BooleanValue;
 import gg.vape.wrapper.impl.EntityPlayerSP;
 
@@ -25,8 +25,8 @@ extends ClickerMod {
 
     @Override
     public boolean shouldSimulateBlockHit(ClickEngine clickEngine, EntityPlayerSP player) {
-        Animations animations = Vape.INSTANCE.getModManager().getMod(Animations.class);
-        return animations != null && animations.shouldBlock();
+        BlockHit blockHit = Vape.INSTANCE.getModManager().getMod(BlockHit.class);
+        return blockHit != null && blockHit.shouldBlock();
     }
 
     @Override

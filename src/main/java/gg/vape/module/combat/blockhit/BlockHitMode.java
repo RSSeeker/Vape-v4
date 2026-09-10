@@ -1,18 +1,18 @@
-package gg.vape.module.render.animations;
+package gg.vape.module.combat.blockhit;
 
 import gg.vape.module.Mod;
 import gg.vape.module.SubModule;
-import gg.vape.module.render.Animations;
+import gg.vape.module.combat.BlockHit;
 
-public abstract class AnimationsMode
-extends SubModule<Animations> {
+public abstract class BlockHitMode
+extends SubModule<BlockHit> {
     public boolean shouldBlock() {
         return false;
     }
 
     public abstract boolean isBlocking();
 
-    public AnimationsMode(Mod parent, String name) {
+    public BlockHitMode(Mod parent, String name) {
         super(parent, name);
     }
 }
