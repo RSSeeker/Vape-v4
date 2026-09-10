@@ -604,13 +604,25 @@ implements EventListener {
                 float packetYaw = positionLookPacket.getYaw();
                 float packetPitch = positionLookPacket.getPitch();
                 if (ForgeVersion.MC_1_7_10.Y()) {
-                    // 1.7.10 servers send PositionLook sync packets frequently
-                    // (knockback, collisions, teleports). Accumulating their
-                    // relative yaw/pitch into managedYaw/managedPitch drifts the
-                    // silent-aim reference away from the real view and makes
-                    // SilentAura's PID spin the player's camera. The adaptive
-                    // controller maintains its own target rotation, so leave
-                    // the managed angles untouched here.
+                    // MC_1_7_10.Y() means "current > 1.7.10", so this branch is for
+                    // 1.8.9 and above; 1.7.10 itself never reaches it.
+                    // A server position-look packet with relative yaw/pitch flags is
+                    // a delta from the rotation the client last reported, so the
+                    // managed angles must be re-applied to the player and then
+                    // advanced by the packet deltas. Without this, managedYaw /
+                    // managedPitch desync from the server view and silent rotation
+                    // drifts (matches the OpenVape implementation).
+                    Set relativeFlags = positionLookPacket.getRelativeFlags();
+                    for (Object relativeFlag : relativeFlags) {
+                        PlayerInteractEventAction action = new PlayerInteractEventAction(relativeFlag);
+                        if (action.T() == PlayerInteractEventAction.e()) {
+                            player.C(this.managedPitch);
+                            this.managedPitch += packetPitch;
+                        }
+                        if (action.T() != PlayerInteractEventAction.t()) continue;
+                        player.H(this.managedYaw);
+                        this.managedYaw += packetYaw;
+                    }
                 }
             }
         }
