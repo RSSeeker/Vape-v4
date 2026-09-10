@@ -1,5 +1,31 @@
 # 更新日志
 
+## v4.21.38 (2026-09-10)
+
+**通知文案全部接入翻译 + 停用 AI 模式的启动强制关闭**
+
+### 通知本地化（此前所有通知均不跟随语言，中文界面下中英混排）
+
+- 收口在通知层而非逐个调用点，只用两个必经点：
+  - `TextNotificationContent` 构造器 + `setText` → 覆盖**所有正文**（`NotificationManager.show`、`ReusableTextNotification.withMessage`、`SettingsSyncStatusNotification`、`OnlineFriend`、`RescueModuleUtil`）
+  - `AbstractNotification` 构造器 + `setTitle` → 覆盖**所有标题**（含 `ReusableTextNotification.withTitle`）
+  - 新增 `gg.vape.notification.NotificationText.localize(String)`：走 `FontSelector.W().s(...)`，命中词条即翻译、未命中原样返回，null/异常安全，且不会二次翻译（译文不会反过来再命中英文词条）。
+- **64 条通知文案此前早已有中英词条，只是通知层从未调用 `s()`** —— 接上收口点后立即生效，无需新增词条。
+- 补齐 18 处**拼接型**文案（`"前缀" + 变量` 拼出的整串永远匹配不上词条）：改为 `NotificationText.localize("前缀") + 变量`，英文输出逐字不变。涉及 `FriendManager`、`ClickGuiFriendsPage`、`ModManager`、`AntiBot`、`AutoAnchor`、`Mod`、`BlockIn`、`FriendRequestManager`、`ClientSettingsComponentFactory`、`OnlineAccountSettings*`、`OnlineFriend`、`OnlineConnectionManager`。
+- 启动提示**反向修复**：原本硬编码中文（`加载完成` / `按 ` / ` 打开 GUI`），英文界面会显示中文；改为英文源 `Loaded` / `Press ` / `to open the GUI` 并补词条。
+- 新增 6 条词条：`loaded`、`to_open_the_gui`、`error`、`ai_mode_is_not_allowed_silentaura_disabled_on_startup`、`is_in_development_use_with_caution_and_report_issues_to_support`、`velocity_lag_mode_is_now_knockbackdelay_under_network`。
+- 两个坑：
+  - `java.util.Properties.load` 会吃掉值的**前导空格**（尾随空格保留）。仓库里若干写成 `key= value` 的词条实际载入后不含前导空格，因此凡以空格开头的碎片一律在 Java 侧用 `" " + localize(...)` 拼接，复用既有词条并保持英文输出不变。
+  - `verifyFontCoverage` 拦住全角分号 `U+FF1B`（不在 `noto.ttf` 子集内），AI 警告改用 `，` 措辞；现 1262 个翻译字符全覆盖。
+
+### 停用 AI 模式的启动强制关闭（按需求注释保留）
+
+- `Vape.autoDisableAiSilentAuraOnce()` 的**调用点与方法体均已注释**：启动时不再把 AI 旋转模式的 SilentAura 强制关闭，也不再弹 `AI mode is not allowed; SilentAura disabled on startup` 警告。产物内已确认该方法名与该字符串均不存在。恢复时取消两处注释即可（`SilentAura` / `NotificationType` 两个 import 为恢复而保留）。
+- 附带核实：那句「AI 转头的增量参数要重启才生效」**不成立**。1.21.11 实测日志显示模型只在进程内加载一次，而 `AI 偏航乘数` / `AI 俯仰乘数` 与 `AI模型` 都是每 tick 现读——同一次会话内把乘数从 1.5 拖到 2.0，**当 tick 即生效**。真正需要重启的只有**模型文件**（`ModelManager.load()` 幂等，且只在首次调用时扫描 `~/.vape/deeplearning/models`）。该说法很可能源自已废弃的 DJL/PyTorch 时代（`DeepLearningEngine` 类注释可证）。
+- 已知未改动项（保持与参考版一致）：AI 原始输出摆动较大且被乘数直接放大（实测 ×2.0 时单 tick 转角可达约 24°），手感问题本次不动。
+
+**验证**：通知文案缺口 0、拼接点 18/18 已处理；`verifyFontCoverage` 1262 字符全覆盖；`SilentAura` 与 HEAD 逐字节一致（临时诊断已摘除）。
+
 ## v4.21.37 (2026-09-10)
 
 **修复 1.21.11 上「按注册名找物品」整条映射链失效（参考 DLL 同样存在的上游缺陷）**

@@ -15,6 +15,7 @@ import gg.vape.module.blatant.antibot.AntiBotEntityCache;
 import gg.vape.module.blatant.antibot.AntiBotModeValue;
 import gg.vape.module.blatant.antibot.AntiBotStateTracker;
 import gg.vape.module.render.entity.RenderEntityContext;
+import gg.vape.notification.NotificationText;
 import gg.vape.notification.NotificationType;
 import gg.vape.unmap.ModeOption;
 import gg.vape.utils.BlockUtil;
@@ -311,7 +312,7 @@ extends Mod {
                 if (motionSquared > 2.0 && motionSquared < 400.0 && this.trackedEntities.contains(entityPlayer.getObject()) && (!localPlayer.J$src$Z$fdev5g() || localPlayer.C$src$Lgg_vape_wrapper_impl_ModelPlayer_$19uhx86().H()) && !entityPlayer.f$src$Z$fst3rk()) {
                     int botScore = this.botScoreByEntityId.getOrDefault(entityPlayer.S(), 0);
                     if (botScore > -50000 && !entityPlayer.J$src$Z$fdev5g() && entityPlayer.Q().getFormattedText().contains("\u00a7c" + entityPlayer.getName() + "\u00a7r") && (double)localPlayer.getDistanceToEntity(entityPlayer) < 7.5) {
-                        Vape.INSTANCE.getNotificationManager().show("\u00a7cInvalid Player Spawn", entityPlayer.Q().getFormattedText() + " \u00a7fmay be a fake player!", NotificationType.WARNING, 5000L);
+                        Vape.INSTANCE.getNotificationManager().show("\u00a7cInvalid Player Spawn", entityPlayer.Q().getFormattedText() + " " + NotificationText.localize("\u00a7fmay be a fake player!"), NotificationType.WARNING, 5000L);
                         this.botScoreByEntityId.put(entityPlayer.S(), -999999);
                     }
                     this.botScoreByEntityId.put(entityPlayer.S(), Math.max(botScore - 50, -50));

@@ -9,6 +9,7 @@ import gg.vape.friend.ui.FriendRequestListPanel;
 import gg.vape.friend.ui.OnlineFriendsFrame;
 import gg.vape.manager.client.OnlineConnectionManager;
 import gg.vape.module.none.ClientSettings;
+import gg.vape.notification.NotificationText;
 import gg.vape.notification.NotificationType;
 import gg.vape.protocol.ZeusConnectionManager;
 import gg.vape.protocol.packet.FriendRequestUpdateResponsePacket;
@@ -150,7 +151,7 @@ public class FriendRequestManager {
                 this.incomingRequests.put(friendRequest.getFriend(), (IncomingFriendRequest)friendRequest);
                 this.getRequestListPanel().addRequest(friendRequest);
                 if (OnlineConnectionManager.INSTANCE.getFriendRequestNotificationTimer().hasTimeElapsed(5000L)) {
-                    Vape.INSTANCE.getNotificationManager().show("Friend request", "Incoming friend request from " + friendRequest.getFriend().getDisplayName(), NotificationType.FRIENDS_NEW_REQUEST, 4000L);
+                    Vape.INSTANCE.getNotificationManager().show("Friend request", NotificationText.localize("Incoming friend request from ") + friendRequest.getFriend().getDisplayName(), NotificationType.FRIENDS_NEW_REQUEST, 4000L);
                 }
             }
         }

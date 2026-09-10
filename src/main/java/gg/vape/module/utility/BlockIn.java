@@ -19,6 +19,7 @@ import gg.vape.module.utility.clutch.ClutchSolidBlockPathSearchStrategy;
 import gg.vape.module.utility.clutch.PlacementTarget;
 import gg.vape.movement.PlayerMovementTaskManager;
 import gg.vape.movement.TargetPositionMovementTask;
+import gg.vape.notification.NotificationText;
 import gg.vape.notification.NotificationType;
 import gg.vape.rotation.AdaptiveRotationController;
 import gg.vape.rotation.FixedRotationController;
@@ -376,7 +377,7 @@ extends Mod {
             } else {
                 this.reset();
                 if (failedPlacements > 0) {
-                    Vape.INSTANCE.getNotificationManager().show("Block-In Disabled", "Failed to place " + failedPlacements + " block(s)!", NotificationType.WARNING, 2000L);
+                    Vape.INSTANCE.getNotificationManager().show("Block-In Disabled", NotificationText.localize("Failed to place ") + failedPlacements + " " + NotificationText.localize("block(s)!"), NotificationType.WARNING, 2000L);
                 } else if (nodesWithoutPaths > 0) {
                     Vape.INSTANCE.getNotificationManager().show("Block-In Disabled", "No valid path found!", NotificationType.WARNING, 2000L);
                 }

@@ -52,7 +52,7 @@ public abstract class AbstractNotification implements INotification {
     }
 
     public void setTitle(String title) {
-        this.title = title;
+        this.title = NotificationText.localize(title);
     }
 
     @Override
@@ -83,7 +83,7 @@ public abstract class AbstractNotification implements INotification {
             NotificationContent content, double x, double y) {
         this.currentX = this.targetX = x;
         this.currentY = this.targetY = y;
-        this.title = title;
+        this.title = NotificationText.localize(title);
         this.content = content;
         this.type = type;
         this.notificationColor = new Color(type.getColor());

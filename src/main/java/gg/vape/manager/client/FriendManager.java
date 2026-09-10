@@ -8,6 +8,7 @@ import gg.vape.friend.Friend;
 import gg.vape.friend.FriendEntry;
 import gg.vape.friend.ui.OnlineFriendUiHelper;
 import gg.vape.mapping.MappedClasses;
+import gg.vape.notification.NotificationText;
 import gg.vape.utils.RayTraceUtil;
 import gg.vape.value.BooleanValue;
 import gg.vape.value.ColorValue;
@@ -105,10 +106,10 @@ public class FriendManager {
             ArrayList<FriendEntry> matches = this.getFriendsByName(name);
             if (matches.isEmpty()) {
                 this.addFriend(new Friend(name, name));
-                Vape.INSTANCE.getNotificationManager().showInfo("\u00a7aAdded\u00a7r " + name + " to friends", "", 2000L);
+                Vape.INSTANCE.getNotificationManager().showInfo("\u00a7aAdded\u00a7r " + name + " " + NotificationText.localize("to friends"), "", 2000L);
             } else {
                 this.removeFriend(matches.get(0));
-                Vape.INSTANCE.getNotificationManager().showInfo("\u00a7cRemoved\u00a7r " + name + " from friends", "", 2000L);
+                Vape.INSTANCE.getNotificationManager().showInfo("\u00a7cRemoved\u00a7r " + name + " " + NotificationText.localize("from friends"), "", 2000L);
             }
         }
     }

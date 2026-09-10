@@ -9,6 +9,7 @@ import gg.vape.friend.UserModel;
 import gg.vape.friend.ui.OnlineFriendUiHelper;
 import gg.vape.notification.INotification;
 import gg.vape.notification.Notification;
+import gg.vape.notification.NotificationText;
 import gg.vape.notification.NotificationType;
 import gg.vape.notification.TextNotificationContent;
 import java.util.UUID;
@@ -170,7 +171,7 @@ public class OnlineFriend {
     public void setStatus(OnlineStatus onlineStatus) {
         this.status = onlineStatus;
         if (onlineStatus.equals((Object)OnlineStatus.ONLINE)) {
-            Notification notification = new Notification(NotificationType.FRIENDS_ONLINE, "\u00a7f" + this.getDisplayName() + " \u00a77is online", new TextNotificationContent("", NotificationType.FRIENDS_ONLINE), 0.0, 0.0, 4000L);
+            Notification notification = new Notification(NotificationType.FRIENDS_ONLINE, "\u00a7f" + this.getDisplayName() + " " + NotificationText.localize("\u00a77is online"), new TextNotificationContent("", NotificationType.FRIENDS_ONLINE), 0.0, 0.0, 4000L);
             boolean shouldNotify = true;
             for (INotification iNotification : Vape.INSTANCE.getNotificationManager().getNotifications()) {
                 if (!(iNotification instanceof Notification)

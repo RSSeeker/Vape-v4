@@ -4,6 +4,7 @@ import gg.vape.Vape;
 import gg.vape.account.AccountInfo;
 import gg.vape.manager.client.OnlineConnectionManager;
 import gg.vape.manager.client.OnlineSettings;
+import gg.vape.notification.NotificationText;
 import gg.vape.notification.NotificationType;
 import gg.vape.ui.click.component.FilledSpacerComponent;
 import gg.vape.ui.click.component.GlyphIconComponent;
@@ -92,7 +93,7 @@ extends OnlineConnectionSettingsPageComponent {
     private static void lambda$new$0() {
         String username = currentUsername();
         ClipboardUtil.setText(username);
-        Vape.INSTANCE.getNotificationManager().show("Copied", "Copied " + username, NotificationType.INFO, 5000L);
+        Vape.INSTANCE.getNotificationManager().show("Copied", NotificationText.localize("Copied ") + username, NotificationType.INFO, 5000L);
     }
 
     private static String currentUsername() {

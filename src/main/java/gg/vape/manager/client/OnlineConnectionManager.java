@@ -18,6 +18,7 @@ import gg.vape.friend.ui.OnlineFriendsFrame;
 import gg.vape.friend.ui.PartyMemberRow;
 import gg.vape.friend.ui.PartyMemberTextStatusComponent;
 import gg.vape.module.none.ClientSettings;
+import gg.vape.notification.NotificationText;
 import gg.vape.notification.NotificationType;
 import gg.vape.protocol.ZeusClient;
 import gg.vape.protocol.ZeusConnectionManager;
@@ -375,7 +376,7 @@ public class OnlineConnectionManager {
     }
 
     static {
-        JOINED_PARTY_SUFFIX = " joined the party";
+        JOINED_PARTY_SUFFIX = "joined the party";
         INSTANCE = new OnlineConnectionManager();
     }
 
@@ -536,7 +537,7 @@ public class OnlineConnectionManager {
             partyState.removeInvitedUser(onlineFriend);
             partyState.addMember(onlineFriend);
             onlineFriend.setGroupRole(partyMemberUpdateEvent.S().getGroupRole());
-            Vape.INSTANCE.getNotificationManager().show(onlineFriend.getDisplayName() + JOINED_PARTY_SUFFIX, "", NotificationType.FRIENDS_PARTY_GENERAL, 3000L);
+            Vape.INSTANCE.getNotificationManager().show(onlineFriend.getDisplayName() + " " + NotificationText.localize(JOINED_PARTY_SUFFIX), "", NotificationType.FRIENDS_PARTY_GENERAL, 3000L);
         } else {
             if (onlineFriend.equals(Vape.INSTANCE.getOnlineManager().getLocalFriend())) {
                 clearPartyState.run();

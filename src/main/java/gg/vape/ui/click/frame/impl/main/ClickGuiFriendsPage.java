@@ -11,6 +11,7 @@ import gg.vape.friend.PartyManager;
 import gg.vape.friend.ui.FriendAliasEditInputComponent;
 import gg.vape.friend.ui.OnlineFriendUiHelper;
 import gg.vape.friend.ui.PartyMemberEntryComponent;
+import gg.vape.notification.NotificationText;
 import gg.vape.ui.click.animation.ColorAnimation;
 import gg.vape.ui.click.component.FriendModuleInteractiveComponent;
 import gg.vape.ui.click.component.GlyphIconComponent;
@@ -212,7 +213,7 @@ extends ClickGuiPageBase {
 
     private void removeFriend(FriendEntry friendEntry) {
         Vape.INSTANCE.getFriendManager().removeFriend(friendEntry);
-        Vape.INSTANCE.getNotificationManager().showInfo("\u00a7cRemoved\u00a7r " + friendEntry.getName() + " from friends", "", 2000L);
+        Vape.INSTANCE.getNotificationManager().showInfo("\u00a7cRemoved\u00a7r " + friendEntry.getName() + " " + NotificationText.localize("from friends"), "", 2000L);
         this.refreshSearchResults();
     }
 
@@ -300,7 +301,7 @@ extends ClickGuiPageBase {
         FriendEntry friendEntry = Vape.INSTANCE.getFriendManager().findTargetedFriend(string);
         if (friendEntry != null) {
             Vape.INSTANCE.getFriendManager().removeFriend(friendEntry);
-            Vape.INSTANCE.getNotificationManager().showInfo("\u00a7cRemoved\u00a7r " + string + " from friends", "", 2000L);
+            Vape.INSTANCE.getNotificationManager().showInfo("\u00a7cRemoved\u00a7r " + string + " " + NotificationText.localize("from friends"), "", 2000L);
             this.refreshSearchResults();
         }
     }
@@ -343,7 +344,7 @@ extends ClickGuiPageBase {
 
     private void addFriendByName(String string) {
         Vape.INSTANCE.getFriendManager().addFriend((FriendEntry)new Friend(string, string));
-        Vape.INSTANCE.getNotificationManager().showInfo("\u00a7aAdded\u00a7r " + string + " to friends", "", 2000L);
+        Vape.INSTANCE.getNotificationManager().showInfo("\u00a7aAdded\u00a7r " + string + " " + NotificationText.localize("to friends"), "", 2000L);
         this.refreshSearchResults();
     }
     private void renderCurrentSource() {

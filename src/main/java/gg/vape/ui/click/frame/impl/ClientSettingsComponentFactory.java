@@ -9,6 +9,7 @@ import gg.vape.manager.client.OnlineConnectionManager;
 import gg.vape.manager.client.OnlineConnectionState;
 import gg.vape.mapping.ItemMappingEntry;
 import gg.vape.module.none.ClientSettings;
+import gg.vape.notification.NotificationText;
 import gg.vape.protocol.ZeusConnectionManager;
 import gg.vape.protocol.packet.GroupCreateResponsePacket;
 import gg.vape.protocol.packet.GroupCreateStatus;
@@ -165,7 +166,7 @@ public final class ClientSettingsComponentFactory {
         if (groupCreateResponsePacket.getStatus() == GroupCreateStatus.SUCCESS) {
             Vape.INSTANCE.getNotificationManager().showInfo("Vape Online", "Party created", 3000L);
         } else {
-            Vape.INSTANCE.getNotificationManager().showInfo("Vape Online", "Party creation error: " + (Object)((Object)groupCreateResponsePacket.getStatus()), 3000L);
+            Vape.INSTANCE.getNotificationManager().showInfo("Vape Online", NotificationText.localize("Party creation error: ") + (Object)((Object)groupCreateResponsePacket.getStatus()), 3000L);
         }
     }
 
@@ -176,7 +177,7 @@ public final class ClientSettingsComponentFactory {
 
     private static void lambda$createMainChildren$2() {
         ItemMappingEntry itemMappingEntry = Vape.INSTANCE.getItemStackResolver().resolve(Minecraft.thePlayer().B$src$Lgg_vape_wrapper_impl_ItemStack_$impdvt());
-        Vape.INSTANCE.getNotificationManager().showInfo("Universal Item", "You're holding: " + (itemMappingEntry != null ? itemMappingEntry.getResourceKey() : null), 3000L);
+        Vape.INSTANCE.getNotificationManager().showInfo("Universal Item", NotificationText.localize("You're holding: ") + (itemMappingEntry != null ? itemMappingEntry.getResourceKey() : null), 3000L);
     }
 
     private static void lambda$createSubmenuComponents$15() {

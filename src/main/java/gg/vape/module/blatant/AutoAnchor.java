@@ -11,6 +11,7 @@ import gg.vape.module.blatant.autoanchor.AnchorMacroState;
 import gg.vape.module.blatant.autoanchor.AnchorObstructionPlacementCandidate;
 import gg.vape.module.control.SharedModuleControlClaims;
 import gg.vape.module.utility.clutch.ClutchPlacementPathUtils;
+import gg.vape.notification.NotificationText;
 import gg.vape.notification.NotificationType;
 import gg.vape.rotation.AdaptiveRotationController;
 import gg.vape.rotation.FixedRotationController;
@@ -284,7 +285,7 @@ extends Mod {
     }
 
     private void notifyMissingItem(String itemName) {
-        Vape.INSTANCE.getNotificationManager().show("AutoAnchor", itemName + " not in hotbar", NotificationType.WARNING, 3000L);
+        Vape.INSTANCE.getNotificationManager().show("AutoAnchor", itemName + " " + NotificationText.localize("not in hotbar"), NotificationType.WARNING, 3000L);
     }
 
     private boolean isAnchorFullyVisible(Vec3 viewOrigin, BlockData obstruction) {

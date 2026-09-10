@@ -61,6 +61,7 @@ import gg.vape.movement.PlayerMovementTaskManager;
 import gg.vape.module.combat.SilentAura;
 import gg.vape.notification.NotificationManager;
 import gg.vape.notification.NotificationSoundPlayer;
+import gg.vape.notification.NotificationText;
 import gg.vape.notification.NotificationType;
 import gg.vape.rotation.RotationManager;
 import gg.vape.runtime.NativeBridge;
@@ -432,7 +433,10 @@ public class Vape {
             }
             this.profilesManager.getActiveProfile().applyLegitEnabledModuleStates();
         }
-        this.autoDisableAiSilentAuraOnce();
+        // 已按需求停用：不再在启动时把 AI 旋转模式的 SilentAura 强制关闭，
+        // 也不再弹 "AI mode is not allowed" 警告。恢复时取消下面这行注释即可
+        // （方法体 autoDisableAiSilentAuraOnce() 原样保留）。
+        // this.autoDisableAiSilentAuraOnce();
         this.traceStep(26);
         this.onlineManager = new OnlineManager();
         this.traceStep(27);
@@ -635,7 +639,7 @@ public class Vape {
     private void showLoadCompleteNotification() {
         ClientSettings clientSettingsModule = INSTANCE.getModManager().getMod(ClientSettings.class);
         if (clientSettingsModule.guiBindIndicator.getEffectiveValue().booleanValue()) {
-            this.notificationManager.showInfo("加载完成", "按 " + clientSettingsModule.getBind().getBindText() + " 打开 GUI", 5000L);
+            this.notificationManager.showInfo(NotificationText.localize("Loaded"), NotificationText.localize("Press ") + clientSettingsModule.getBind().getBindText() + " " + NotificationText.localize("to open the GUI"), 5000L);
         }
     }
 
@@ -702,7 +706,14 @@ public class Vape {
     /**
      * 启动注入完成后执行一次：若 SilentAura 配置为 AI 旋转模式，
      * 强制关闭 SilentAura（仅启动时关闭一次，不修改配置本身）。
+     *
+     * <p><b>当前已按需求停用</b>：调用点与方法实现均已注释，因此启动时不会再
+     * 强制关闭 AI 模式的 SilentAura，也不会再弹 "AI mode is not allowed;
+     * SilentAura disabled on startup" 警告。恢复时同时取消下面整段与
+     * {@code traceStep(26)} 上方调用点的注释即可（上方 import
+     * {@code SilentAura} / {@code NotificationType} 为恢复而保留）。</p>
      */
+    /*
     private void autoDisableAiSilentAuraOnce() {
         try {
             SilentAura silentAura = this.modManager.getMod(SilentAura.class);
@@ -719,6 +730,7 @@ public class Vape {
             Vape.logThrowable(throwable);
         }
     }
+    */
 
     public LicenseManager getLicenseManager() {
         return this.licenseManager;

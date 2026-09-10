@@ -105,6 +105,7 @@ import gg.vape.module.world.BedBreaker;
 import gg.vape.module.world.ChestSteal;
 import gg.vape.module.world.FastPlace;
 import gg.vape.module.world.FakeLag;
+import gg.vape.notification.NotificationText;
 import gg.vape.notification.NotificationType;
 import gg.vape.notification.ReusableTextNotification;
 import gg.vape.ui.click.component.GuiComponent;
@@ -587,7 +588,7 @@ implements EventListener {
             mod.toggle();
         }
         if (disabledCount > 0) {
-            Vape.INSTANCE.getNotificationManager().show("Hidden Disabled", disabledCount + " module(s) have been disabled!", NotificationType.WARNING, 2500L);
+            Vape.INSTANCE.getNotificationManager().show("Hidden Disabled", disabledCount + " " + NotificationText.localize("module(s) have been disabled!"), NotificationType.WARNING, 2500L);
         }
     }
 

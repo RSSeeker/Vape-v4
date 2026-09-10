@@ -2778,3 +2778,10 @@ tellybridge.require_right_click.tooltip=On: Holding right click, and backwards m
 tellybridge.activation_blocks=Activation Blocks
 tellybridge.activation_blocks.tooltip=Manual blocks placed before bridging
 tellybridge.y_increase=Y increase
+# --- Notifications ---
+loaded=Loaded
+to_open_the_gui=to open the GUI
+error=Error
+ai_mode_is_not_allowed_silentaura_disabled_on_startup=AI mode is not allowed; SilentAura disabled on startup
+is_in_development_use_with_caution_and_report_issues_to_support=is in development\n\nUse with caution and report issues to support
+velocity_lag_mode_is_now_knockbackdelay_under_network=Velocity Lag mode is now KnockbackDelay under Network.\nKnockbackDelay has been enabled.

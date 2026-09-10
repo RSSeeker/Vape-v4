@@ -11,6 +11,7 @@ import gg.vape.event.IEvent;
 import gg.vape.event.impl.EventKeyPress;
 import gg.vape.event.impl.EventModStateChange;
 import gg.vape.input.BindActivationMode;
+import gg.vape.notification.NotificationText;
 import gg.vape.notification.NotificationType;
 import gg.vape.notification.ReusableTextNotification;
 import gg.vape.module.render.hud.HudModule;
@@ -270,7 +271,7 @@ EventListener {
         boolean stateChanged = this.enabled != enabled;
         if (!bypassVisibilityCheck && !this.isVisible() && this.category != Category.NONE && enabled) {
             if (Vape.INSTANCE.getNotificationManager() != null) {
-                Vape.INSTANCE.getNotificationManager().show("Hidden Module", "Attempted to toggle " + this.getName() + "!", NotificationType.WARNING, 2500L);
+                Vape.INSTANCE.getNotificationManager().show("Hidden Module", NotificationText.localize("Attempted to toggle ") + this.getName() + "!", NotificationType.WARNING, 2500L);
             }
             return;
         }
@@ -487,7 +488,7 @@ EventListener {
     public void j() {
         if (!this.developmentWarningShown && this.Q()) {
             this.developmentWarningShown = true;
-            Vape.INSTANCE.getNotificationManager().show("Module in development", this.getName() + " is in development\n\nUse with caution and report issues to support", NotificationType.WARNING, 10000L);
+            Vape.INSTANCE.getNotificationManager().show("Module in development", this.getName() + " " + NotificationText.localize("is in development\n\nUse with caution and report issues to support"), NotificationType.WARNING, 10000L);
         }
     }
 

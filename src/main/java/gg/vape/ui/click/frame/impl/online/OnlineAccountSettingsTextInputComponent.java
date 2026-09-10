@@ -2,6 +2,7 @@ package gg.vape.ui.click.frame.impl.online;
 
 import gg.vape.Vape;
 import gg.vape.friend.ui.UsernameEditorPanel;
+import gg.vape.notification.NotificationText;
 import gg.vape.notification.NotificationType;
 import gg.vape.ui.click.component.input.DebouncedTextInputComponent;
 import gg.vape.ui.click.frame.impl.online.OnlineAccountSettingsPageComponent;
@@ -36,7 +37,7 @@ extends DebouncedTextInputComponent {
 
     private void lambda$enterEvent$0(String string) {
         OnlineAccountSettingsPageComponent.H(this.settingsPage);
-        Vape.INSTANCE.getNotificationManager().show("Username Change", "Username changed to " + string, NotificationType.INFO, 5000L);
+        Vape.INSTANCE.getNotificationManager().show("Username Change", NotificationText.localize("Username changed to ") + string, NotificationType.INFO, 5000L);
     }
 
     @Override

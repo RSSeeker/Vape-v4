@@ -51,7 +51,7 @@ implements NotificationContent {
     }
 
     public void setText(String text) {
-        this.textComponent.setText(text);
+        this.textComponent.setText(NotificationText.localize(text));
     }
 
     public NotificationType getType() {
@@ -59,7 +59,7 @@ implements NotificationContent {
     }
 
     public TextNotificationContent(String text, NotificationType type, boolean emphasized) {
-        this.textComponent = new WrappedTextComponent(text, 0.9, ThemeColors.J.Z, false);
+        this.textComponent = new WrappedTextComponent(NotificationText.localize(text), 0.9, ThemeColors.J.Z, false);
         this.textComponent.setWrapWidth(100.0);
         this.textComponent.setCentered(true);
         this.type = type;
