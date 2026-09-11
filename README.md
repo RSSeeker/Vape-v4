@@ -212,7 +212,7 @@ DLL 将 Java injection JAR 作为 `RCDATA` 嵌入，不要求另行放置 payloa
 ## 隔离环境运行
 
 启动使用 64 位 JVM 的受支持 Minecraft 实例（包括 1.21.11、26.1.2、26.2 Fabric）或 Lunar
-Client 实例后，直接运行 `Vape-v4.21.exe` 打开 GUI，选择 Minecraft 进程点击注入（无登录、
+Client 实例后，直接运行 `Vape-v4.21.*.exe` 打开 GUI，选择 Minecraft 进程点击注入（无登录、
 无外部 DLL）。
 
 也可用命令行方式注入：
