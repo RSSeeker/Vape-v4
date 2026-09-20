@@ -3,11 +3,12 @@
 > **语言 / Language:** 中文 | [English](README_EN.md)
 
 本目录包含一套 x64 Windows JNI/JVMTI 桥接层，依据 `sample.dll` 中那张九方法
-`RegisterNatives` 表重建。它支持以下隔离测试实例：Minecraft 1.7.10
-Forge/Vanilla、1.8.9 Forge/Vanilla、1.12.2 Forge/Vanilla、1.21.11
-Forge/Vanilla/Fabric、26.2 Forge/Vanilla/Fabric，并支持启用了 Forge 的 Lunar
-Client 注入。Minecraft 1.21.11 与 26.2 的 Fabric 目标为 Fabric Loader 0.19.3，
-其它 Fabric 版本不在当前支持范围内。
+`RegisterNatives` 表重建。各版本与各运行时的支持情况以根目录
+[README.md](../README.md) 的「Minecraft 兼容性」表为准（1.7.10 / 1.8.9 / 1.12.2
+的 Forge 与 Vanilla，以及 1.21.11 与 26.1.2 的 Forge/Vanilla/Fabric 为支持项；
+1.16.5、1.20.1、1.21.1、26.2 为实验性）。此外还支持 Forge 环境下的 Lunar Client
+与 Badlion Client 1.8.9 注入。Minecraft 1.21.11 与 26.2 的 Fabric 目标为
+Fabric Loader 0.19.3，其它 Fabric 版本不在当前支持范围内。
 Minecraft 1.16.5 的支持不完整，可能存在映射、渲染与模块兼容性问题。
 
 Badlion Client 1.8.9 会在 JVMTI 类重定义之后重跑它自己的运行时转换器。在 JVMTI
@@ -45,8 +46,8 @@ inv(Method, Object, Object[]) : Object
 
 Product 的设计里有两种明确的启动模式：
 
-- 直接用 `Vape-v4.21Injector.exe` 注入时没有 Loader 引导，因此 native `gat()`
-  返回字符串 `"0"`。
+- 直接用 `Vape-v4.21.<版本>.exe -nogui` 注入时没有 Loader 引导，因此 native
+  `gat()` 返回字符串 `"0"`。
 - 加载器启动时会按用户名从回环 Service 取得一个长期 token，并通过临时回环控制器
   socket 把它交给 `Vape-v4.21Native.dll`。DLL 用命令 `0x269` 请求该 token、缓存
   起来供 `gat()` 使用，用 `0x25c` 上报 `trs(step)`，用 `0x25e` 上报完成。加载器
@@ -64,59 +65,80 @@ Java 初始化的前提下，一旦该 token 被拒绝或 Service 不存在，�
 
 ## 构建
 
-使用 `product` 里的 Gradle 8.8 构建 Java 8 载荷、内嵌全部远程托管的运行时依赖、
-编译原生目标并组装整个包：
+用 Gradle 构建 Java 8 载荷、内嵌全部远程托管的运行时依赖、编译原生目标并组装
+单文件包（与 `.github/workflows/release.yml` 里 CI 的做法一致）：
 
 ```powershell
 .\gradlew.bat prepareInjectionBundle -PtargetRelease=8 `
   -PnativeJavaHome="C:\Program Files\Java\jdk1.8.0_301"
 ```
 
-只想开发原生层时，可以直接用 CMake 并传入注入 JAR：
+只想开发原生层时可以直接调 CMake —— Gradle 的 `configureNative` / `buildNative`
+两个任务做的就是下面这两步（`nativeJavaHome` 会作为 `VAPE421_JAVA_HOME` 传入，
+`VAPE421_VERSION` 取 `build.gradle` 里的版本号）：
 
 ```powershell
-cmake -S . -B build -A x64 `
+cmake -S native -B build/native -A x64 `
   -DVAPE421_JAVA_HOME="C:\Program Files\Java\jdk1.8.0_301" `
-  -DVAPE421_PRODUCT_JAR="..\build\libs\vape421-product-recovery-4.21-recovered-injection.jar"
-cmake --build build --config Release
+  -DVAPE421_PRODUCT_JAR="build\libs\vape421-product-recovery-4.21.39-injection.jar" `
+  -DVAPE421_VERSION=4.21.39
+cmake --build build/native --config Release
 ```
 
-产物写入 `build/dist`：
+原生组件测试（CI 也会跑）：
 
-- `Vape-v4.21Native.dll`
-- `Vape-v4.21.exe`（单文件注入器，内嵌 DLL）
-- `Vape-v4.21Injector.exe`（独立注入器，不内嵌 DLL）
+```powershell
+ctest --test-dir build/native -C Release --output-on-failure
+```
+
+产物写入 `build/native/dist`：
+
+- `Vape-v4.21Native.dll` —— 以 `RCDATA` 资源内含恢复出的产品 JAR
+- `Vape-v4.21.<版本>.exe` —— 单文件 GUI 加载器（内嵌上面那个 DLL）
+
+> 已经没有独立的 `Vape-v4.21Injector.exe` 了：控制台注入改成同一个 exe 的
+> `-nogui` 模式（`injector.c` 直接编进这个 exe）。
+
+`prepareInjectionBundle` 会把这两个产物连同本 README 一起复制到
+`build/injection/`，形成可直接分发的单文件包。
 
 ## 直接注入
 
 `Vape-v4.21Native.dll` 以 `RCDATA` 资源形式内含恢复出的 Java 产品。先以 64 位 JVM
-启动一个受支持的 Minecraft 实例（包括 Minecraft 1.21.11 或 26.2 Fabric），或一个
-启用了 Forge 的 Lunar Client 实例，然后在包目录里运行注入器：
+启动一个受支持的 Minecraft 实例（含 Forge 环境的 Lunar Client、Badlion Client
+1.8.9），再从包目录运行加载器：
 
 ```powershell
-Vape-v4.21.exe
+Vape-v4.21.<版本>.exe
 ```
 
-注入器每 750 ms 刷新一次可见 `java.exe` / `javaw.exe` 窗口列表，并显示它们的窗口
-标题（例如 `Minecraft` 或 `Lunar Client`）。用上/下键选择进程、按 Enter 注入，
-按 Esc 退出。若 DLL 不在旁边，可以把它作为唯一参数传入。原有的非交互形式仍然
-保留，便于脚本调用：
+不带参数就是 GUI 加载器（窗口标题「Vape v4」）：自动刷新可见的 Java 窗口并显示
+窗口标题（例如 `Minecraft`、`Lunar Client`），选中进程即可注入。
+GUI 模式**优先加载 exe 旁的外部 `Vape-v4.21Native.dll`**，旁边没有时才解压内嵌
+副本，因此整个包可以只带一个文件。
+
+命令行（控制台）模式要求第一个参数为 `-nogui`：
 
 ```powershell
-Vape-v4.21Injector.exe <pid> Vape-v4.21Native.dll
+Vape-v4.21.<版本>.exe -nogui <minecraft-pid>
 ```
 
-`Vape-v4.21.exe` 把 `Vape-v4.21Native.dll` 作为 `RCDATA` 资源内嵌。当可执行文件旁
-边没有 `Vape-v4.21Native.dll` 时，它会把内嵌副本解压到
-`<exe>\.vapeclient\Vape-v4.21Recovery\Vape-v4.21Native-<pid>.dll` 并注入该副本，
-因此整个包可以只带一个文件。
+不指定 PID 时会打开自动刷新的 Java 窗口选择器（↑/↓ 选择、回车注入、Esc 退出）。
+控制台模式**始终使用内嵌的 `Vape-v4.21Native.dll`，不加载外部 DLL**；内嵌副本会
+解压到 `<exe>\.vapeclient\Vape-v4.21Recovery\Vape-v4.21Native-<pid>.dll` 再注入。
 
 注入器只做 `LoadLibraryW`。加载之后，DLL 工作线程等待 JVM 与 Minecraft 的
-`Client thread`，把内嵌的产品 JAR 落到进程临时目录，再通过上下文 ClassLoader
-加载它。在 Fabric 上，工作线程使用 Fabric Launcher API 把该 JAR 加入 Knot 目标
-ClassLoader，使被转换的游戏类与载荷回调共享同一个类标识。随后它注册那九个权威
-方法以及 Product 的 `gat()` 兼容 native，并自动调用 `NativeBridge.start()` ——
-不需要第二条命令或启动开关。具体结果请查看包旁
+`Client thread`，把内嵌的产品 JAR 解压到
+`<exe>\.vapeclient\Vape-v4.21Recovery\Vape-v4.21-product-<pid>.jar`（所有落盘都收在
+`.vapeclient` 目录树内，不写 `%TEMP%`），再按运行时分别接入：
+
+- Vanilla：追加到 system ClassLoader 的搜索路径
+- Forge / NeoForge：在 ModLauncher 的 `ModuleClassLoader` 上安装载荷包路由
+- Fabric：用 Fabric Launcher API 把该 JAR 加入 Knot 目标 ClassLoader，使被转换的
+  游戏类与载荷回调共享同一个类标识
+
+随后它注册那九个权威方法以及 Product 的 `gat()` 兼容 native，并自动调用
+`NativeBridge.start()` —— 不需要第二条命令或启动开关。具体结果请查看包旁
 `.vapeclient\log\vape421-native-<pid>-<timestamp>.log` 里本次注入的日志。
 
 注入载荷以 `--release 8` 编译，其项目类使用 class-file major version 52。运行时

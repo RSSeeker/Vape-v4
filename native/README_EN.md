@@ -3,12 +3,14 @@
 > **Language:** English | [中文](README.md)
 
 This directory contains an x64 Windows JNI/JVMTI bridge reconstructed from
-the nine-method `RegisterNatives` table in `sample.dll`. It supports isolated
-Minecraft 1.7.10 Forge/Vanilla, 1.8.9 Forge/Vanilla, 1.12.2
-Forge/Vanilla, 1.21.11 Forge/Vanilla/Fabric, and 26.2 Forge/Vanilla/Fabric test
-instances, including Forge-enabled Lunar Client
-injection. Minecraft 1.21.11 and 26.2 Fabric target Fabric Loader 0.19.3; other Fabric
-versions are outside the current support scope.
+the nine-method `RegisterNatives` table in `sample.dll`. The authoritative
+per-version/per-runtime support matrix lives in the root
+[README.md](../README.md) ("Minecraft compatibility" table): Forge and Vanilla
+for 1.7.10 / 1.8.9 / 1.12.2, and Forge/Vanilla/Fabric for 1.21.11 and 26.1.2 are
+supported; 1.16.5, 1.20.1, 1.21.1 and 26.2 are experimental. Forge-enabled Lunar
+Client and Badlion Client 1.8.9 instances are also supported. Minecraft 1.21.11
+and 26.2 Fabric target Fabric Loader 0.19.3; other Fabric versions are outside
+the current support scope.
 Minecraft 1.16.5 support is incomplete and may have mapping, rendering, and
 module compatibility problems.
 
@@ -51,8 +53,8 @@ implementation used controller command `0x269` over a persistent EXE socket.
 
 The Product design has two explicit launch modes:
 
-- Direct `Vape-v4.21Injector.exe` injection has no Loader bootstrap, so native
-  `gat()` returns the string `"0"`.
+- Direct `Vape-v4.21.<version>.exe -nogui` injection has no Loader bootstrap, so
+  native `gat()` returns the string `"0"`.
 - Loader startup obtains a long-lived token from the loopback Service by
   username and exposes it to `Vape-v4.21Native.dll` through the temporary
   loopback controller socket. The DLL requests it with command `0x269`, caches
@@ -74,66 +76,92 @@ loopback. The full design is documented at
 
 ## Build
 
-Use Gradle 8.8 from `product` to build the Java 8 payload, embed all remotely
-managed runtime dependencies, compile the native targets, and assemble the
-bundle:
+Use Gradle to build the Java 8 payload, embed all remotely managed runtime
+dependencies, compile the native targets, and assemble the single-file bundle
+(this is exactly what `.github/workflows/release.yml` runs in CI):
 
 ```powershell
 .\gradlew.bat prepareInjectionBundle -PtargetRelease=8 `
   -PnativeJavaHome="C:\Program Files\Java\jdk1.8.0_301"
 ```
 
-For native-only development, invoke CMake directly with the injection JAR:
+For native-only development, invoke CMake directly — these are the two steps the
+Gradle `configureNative` / `buildNative` tasks perform (`nativeJavaHome` is passed
+as `VAPE421_JAVA_HOME`, and `VAPE421_VERSION` comes from the version in
+`build.gradle`):
 
 ```powershell
-cmake -S . -B build -A x64 `
+cmake -S native -B build/native -A x64 `
   -DVAPE421_JAVA_HOME="C:\Program Files\Java\jdk1.8.0_301" `
-  -DVAPE421_PRODUCT_JAR="..\build\libs\vape421-product-recovery-4.21-recovered-injection.jar"
-cmake --build build --config Release
+  -DVAPE421_PRODUCT_JAR="build\libs\vape421-product-recovery-4.21.39-injection.jar" `
+  -DVAPE421_VERSION=4.21.39
+cmake --build build/native --config Release
 ```
 
-Outputs are written to `build/dist`:
+Native component tests (CI runs these too):
 
-- `Vape-v4.21Native.dll`
-- `Vape-v4.21.exe` (single-file injector, embeds the DLL)
-- `Vape-v4.21Injector.exe` (standalone injector, does not embed the DLL)
+```powershell
+ctest --test-dir build/native -C Release --output-on-failure
+```
+
+Outputs are written to `build/native/dist`:
+
+- `Vape-v4.21Native.dll` — carries the recovered product JAR as an `RCDATA`
+  resource
+- `Vape-v4.21.<version>.exe` — single-file GUI loader (embeds the DLL above)
+
+> There is no separate `Vape-v4.21Injector.exe` any more: console injection is
+> the `-nogui` mode of the same exe (`injector.c` is compiled into it).
+
+`prepareInjectionBundle` copies those two artifacts plus this README into
+`build/injection/`, producing a single-file bundle ready to hand out.
 
 ## Direct injection
 
 `Vape-v4.21Native.dll` contains the recovered Java product as an `RCDATA`
-resource. Start a supported Minecraft instance (including Minecraft 1.21.11
-or 26.2 Fabric), or a Forge-enabled Lunar Client instance, with a 64-bit JVM,
-then run the injector from the bundle directory:
+resource. Start a supported Minecraft instance with a 64-bit JVM (including
+Forge-enabled Lunar Client and Badlion Client 1.8.9), then run the loader from
+the bundle directory:
 
 ```powershell
-Vape-v4.21.exe
+Vape-v4.21.<version>.exe
 ```
 
-The injector refreshes its list of visible `java.exe` and `javaw.exe` windows
-every 750 ms and displays their window titles (for example, `Minecraft` or
-`Lunar Client`). Select a process with Up/Down and press Enter to inject;
-press Esc to quit. If the DLL is elsewhere, pass its path as the only
-argument. The original non-interactive form remains available for scripts:
+With no arguments this opens the GUI loader (window title "Vape v4"): it
+auto-refreshes the visible Java windows, shows their window titles (for example
+`Minecraft` or `Lunar Client`), and injects into the process you pick.
+In GUI mode an external `Vape-v4.21Native.dll` **next to the exe is preferred**;
+the embedded copy is extracted only when it is absent, so the bundle can be
+carried as a single file.
+
+Console mode requires `-nogui` as the first argument:
 
 ```powershell
-Vape-v4.21Injector.exe <pid> Vape-v4.21Native.dll
+Vape-v4.21.<version>.exe -nogui <minecraft-pid>
 ```
 
-`Vape-v4.21.exe` embeds `Vape-v4.21Native.dll` as an `RCDATA` resource. When
-no `Vape-v4.21Native.dll` sits beside the executable, it extracts the embedded
-copy to `<exe>\.vapeclient\Vape-v4.21Recovery\Vape-v4.21Native-<pid>.dll` and
-injects that, so the bundle can be carried as a single file.
+Without a pid it opens the auto-refreshing Java window picker (Up/Down to select,
+Enter to inject, Esc to quit). Console mode **always uses the embedded
+`Vape-v4.21Native.dll` and never loads an external DLL**; the embedded copy is
+extracted to `<exe>\.vapeclient\Vape-v4.21Recovery\Vape-v4.21Native-<pid>.dll`
+before injection.
 
 The injector only performs `LoadLibraryW`. Once loaded, the DLL worker waits
-for the JVM and Minecraft `Client thread`, materializes its embedded product
-JAR into the process temp directory, and loads it through the context
-ClassLoader. On Fabric, the worker uses the Fabric Launcher API to add the JAR
-to the Knot target ClassLoader so transformed game classes and payload callbacks
-share one class identity. It then
-registers the nine authoritative methods plus the Product `gat()` compatibility
-native, and calls
-`NativeBridge.start()` automatically. No second command or start flag is
-required. Inspect the per-injection log under
+for the JVM and Minecraft `Client thread`, extracts its embedded product JAR to
+`<exe>\.vapeclient\Vape-v4.21Recovery\Vape-v4.21-product-<pid>.jar` (every
+artifact stays inside the `.vapeclient` tree; nothing is written to `%TEMP%`),
+and then attaches it per runtime:
+
+- Vanilla: appended to the system ClassLoader search path
+- Forge / NeoForge: payload package routes installed on the ModLauncher
+  `ModuleClassLoader`
+- Fabric: the JAR is added to the Knot target ClassLoader through the Fabric
+  Launcher API, so transformed game classes and payload callbacks share one
+  class identity
+
+It then registers the nine authoritative methods plus the Product `gat()`
+compatibility native, and calls `NativeBridge.start()` automatically. No second
+command or start flag is required. Inspect the per-injection log under
 `.vapeclient\log\vape421-native-<pid>-<timestamp>.log` next to the bundle for
 the exact result.
 
