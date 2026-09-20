@@ -361,7 +361,10 @@ tasks.register('prepareInjectionBundle', Sync) {
         include 'Vape-v' + project.version + '.exe'
         include 'Vape-v4.21Native.dll'
     }
+    // 包内同时附中英两份 README：native/README.md（中文）与 native/README_EN.md，
+    // 两份互相链接，相对链接在包目录里同样有效。
     from(file('native/README.md'))
+    from(file('native/README_EN.md'))
     into(injectionBundleDirectory)
     doLast {
         def injector = injectionBundleDirectory.get().file('Vape-v' + project.version + '.exe').asFile
