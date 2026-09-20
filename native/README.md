@@ -1,25 +1,23 @@
-# Vape 4.21 native test bridge
+# Vape 4.21 原生测试桥
 
-This directory contains an x64 Windows JNI/JVMTI bridge reconstructed from
-the nine-method `RegisterNatives` table in `sample.dll`. It supports isolated
-Minecraft 1.7.10 Forge/Vanilla, 1.8.9 Forge/Vanilla, 1.12.2
-Forge/Vanilla, 1.21.11 Forge/Vanilla/Fabric, and 26.2 Forge/Vanilla/Fabric test
-instances, including Forge-enabled Lunar Client
-injection. Minecraft 1.21.11 and 26.2 Fabric target Fabric Loader 0.19.3; other Fabric
-versions are outside the current support scope.
-Minecraft 1.16.5 support is incomplete and may have mapping, rendering, and
-module compatibility problems.
+> **语言 / Language:** 中文 | [English](README_EN.md)
 
-Badlion Client 1.8.9 can rerun its runtime transformer after a JVMTI class
-redefinition. During JVMTI initialization, the bridge identifies that runtime
-from the loaded `ave` Minecraft class and `net/badlion` classes. It then
-retains successful class definitions containing `gg/vape` callbacks and
-supplies them again from the final `ClassFileLoadHook` when the same class is
-retransformed. Redefining a class with callback-free original bytecode removes
-its retained definition, so normal rollback still works. `trs(int)` remains
-dedicated to loader progress reporting and window integration.
+本目录包含一套 x64 Windows JNI/JVMTI 桥接层，依据 `sample.dll` 中那张九方法
+`RegisterNatives` 表重建。它支持以下隔离测试实例：Minecraft 1.7.10
+Forge/Vanilla、1.8.9 Forge/Vanilla、1.12.2 Forge/Vanilla、1.21.11
+Forge/Vanilla/Fabric、26.2 Forge/Vanilla/Fabric，并支持启用了 Forge 的 Lunar
+Client 注入。Minecraft 1.21.11 与 26.2 的 Fabric 目标为 Fabric Loader 0.19.3，
+其它 Fabric 版本不在当前支持范围内。
+Minecraft 1.16.5 的支持不完整，可能存在映射、渲染与模块兼容性问题。
 
-The authoritative bridge surface is:
+Badlion Client 1.8.9 会在 JVMTI 类重定义之后重跑它自己的运行时转换器。在 JVMTI
+初始化阶段，桥接层通过已加载的 `ave` Minecraft 类与 `net/badlion` 类识别出该
+运行时，随后保留那些包含 `gg/vape` 回调的成功类定义，并在同一个类被重新转换时
+由最终的 `ClassFileLoadHook` 再次提供。若用不含回调的原始字节码重定义某个类，
+其保留定义会被移除，因此正常回滚依然有效。`trs(int)` 仍然专用于加载器进度上报
+与窗口集成。
+
+权威的桥接接口如下：
 
 ```text
 scb(Class, byte[]) : int
@@ -33,55 +31,48 @@ trs(int) : void
 inv(Method, Object, Object[]) : Object
 ```
 
-The additional native declarations currently present in the recovered Java
-class are not registered by `sample.dll`, and the PE has no export table or
-second registration path. They are intentionally not invented here.
+恢复出的 Java 类里目前还带着的其它 native 声明，`sample.dll` 并未注册，而且该 PE
+既没有导出表也没有第二条注册路径 —— 因此这里有意不去臆造它们。
 
-## Loader token handoff design difference
+## 加载器 token 交接的设计差异
 
-The local-service integration deliberately adds `gat()Ljava/lang/String;`
-as a Product compatibility native while keeping its Java-visible name exactly
-`gat`. It does not add a `native_gat()` Java method and does not change the
-existing Java online, Zeus, friend, Party, or settings-sync implementations.
-This tenth registration is not part of the nine-method `sample.dll` authority;
-the legacy official DLL provides separate evidence for native `gat()`, but its
-implementation used controller command `0x269` over a persistent EXE socket.
+本地服务集成有意新增了一个 Product 兼容 native：`gat()Ljava/lang/String;`，同时
+保持它在 Java 侧可见的名字严格为 `gat`。它没有新增 `native_gat()` 这样的 Java
+方法，也没有改动现有的 Java 在线、Zeus、好友、Party 或设置同步实现。
+这第十条注册并不属于「九方法 `sample.dll`」这个权威范围；旧版官方 DLL 对 native
+`gat()` 提供了独立的证据，但它的实现是通过一条常驻 EXE socket 上的控制器命令
+`0x269` 完成的。
 
-The Product design has two explicit launch modes:
+Product 的设计里有两种明确的启动模式：
 
-- Direct `Vape-v4.21Injector.exe` injection has no Loader bootstrap, so native
-  `gat()` returns the string `"0"`.
-- Loader startup obtains a long-lived token from the loopback Service by
-  username and exposes it to `Vape-v4.21Native.dll` through the temporary
-  loopback controller socket. The DLL requests it with command `0x269`, caches
-  it for `gat()`, reports `trs(step)` with `0x25c`, and reports completion with
-  `0x25e`. The Loader remains open through the Finished Loading page.
+- 直接用 `Vape-v4.21Injector.exe` 注入时没有 Loader 引导，因此 native `gat()`
+  返回字符串 `"0"`。
+- 加载器启动时会按用户名从回环 Service 取得一个长期 token，并通过临时回环控制器
+  socket 把它交给 `Vape-v4.21Native.dll`。DLL 用命令 `0x269` 请求该 token、缓存
+  起来供 `gat()` 使用，用 `0x25c` 上报 `trs(step)`，用 `0x25e` 上报完成。加载器
+  会一直停留在「加载完成」页面。
 
-The Service does not create a token-`"0"` developer account, performs no HWID
-check, and reuses the existing long-lived token for a case-insensitive username
-match. Because current Java initialization uses `gat()` for
-`/api/v1/{token}/authenticated`, direct mode is only guaranteed to return the
-standalone sentinel `"0"`; without changes to Java initialization it may stop
-when that token is rejected or the Service is absent.
+Service 不会创建 token 为 `"0"` 的开发者账号、不做 HWID 校验，并且在用户名大小写
+不敏感匹配时复用既有的长期 token。由于当前 Java 初始化会把 `gat()` 用于
+`/api/v1/{token}/authenticated`，直接模式只能保证返回独立哨兵值 `"0"`；在不改动
+Java 初始化的前提下，一旦该 token 被拒绝或 Service 不存在，它可能会停下来。
 
-The versioned named-memory block is created before DLL injection and carries
-only the controller port and Service endpoints; it never contains the token.
-The token and loading state use the decomp-supported controller commands over
-loopback. The full design is documented at
-`../../native_method_research/loader_product_token_handoff_design.md`.
+带版本号的命名内存块在 DLL 注入之前就已创建，其中只携带控制器端口与 Service
+端点，**从不包含 token**。token 与加载状态都通过反编译可支持的控制器命令走回环。
+完整设计文档见
+`../../native_method_research/loader_product_token_handoff_design.md`。
 
-## Build
+## 构建
 
-Use Gradle 8.8 from `product` to build the Java 8 payload, embed all remotely
-managed runtime dependencies, compile the native targets, and assemble the
-bundle:
+使用 `product` 里的 Gradle 8.8 构建 Java 8 载荷、内嵌全部远程托管的运行时依赖、
+编译原生目标并组装整个包：
 
 ```powershell
 .\gradlew.bat prepareInjectionBundle -PtargetRelease=8 `
   -PnativeJavaHome="C:\Program Files\Java\jdk1.8.0_301"
 ```
 
-For native-only development, invoke CMake directly with the injection JAR:
+只想开发原生层时，可以直接用 CMake 并传入注入 JAR：
 
 ```powershell
 cmake -S . -B build -A x64 `
@@ -90,52 +81,44 @@ cmake -S . -B build -A x64 `
 cmake --build build --config Release
 ```
 
-Outputs are written to `build/dist`:
+产物写入 `build/dist`：
 
 - `Vape-v4.21Native.dll`
-- `Vape-v4.21.exe` (single-file injector, embeds the DLL)
-- `Vape-v4.21Injector.exe` (standalone injector, does not embed the DLL)
+- `Vape-v4.21.exe`（单文件注入器，内嵌 DLL）
+- `Vape-v4.21Injector.exe`（独立注入器，不内嵌 DLL）
 
-## Direct injection
+## 直接注入
 
-`Vape-v4.21Native.dll` contains the recovered Java product as an `RCDATA`
-resource. Start a supported Minecraft instance (including Minecraft 1.21.11
-or 26.2 Fabric), or a Forge-enabled Lunar Client instance, with a 64-bit JVM,
-then run the injector from the bundle directory:
+`Vape-v4.21Native.dll` 以 `RCDATA` 资源形式内含恢复出的 Java 产品。先以 64 位 JVM
+启动一个受支持的 Minecraft 实例（包括 Minecraft 1.21.11 或 26.2 Fabric），或一个
+启用了 Forge 的 Lunar Client 实例，然后在包目录里运行注入器：
 
 ```powershell
 Vape-v4.21.exe
 ```
 
-The injector refreshes its list of visible `java.exe` and `javaw.exe` windows
-every 750 ms and displays their window titles (for example, `Minecraft` or
-`Lunar Client`). Select a process with Up/Down and press Enter to inject;
-press Esc to quit. If the DLL is elsewhere, pass its path as the only
-argument. The original non-interactive form remains available for scripts:
+注入器每 750 ms 刷新一次可见 `java.exe` / `javaw.exe` 窗口列表，并显示它们的窗口
+标题（例如 `Minecraft` 或 `Lunar Client`）。用上/下键选择进程、按 Enter 注入，
+按 Esc 退出。若 DLL 不在旁边，可以把它作为唯一参数传入。原有的非交互形式仍然
+保留，便于脚本调用：
 
 ```powershell
 Vape-v4.21Injector.exe <pid> Vape-v4.21Native.dll
 ```
 
-`Vape-v4.21.exe` embeds `Vape-v4.21Native.dll` as an `RCDATA` resource. When
-no `Vape-v4.21Native.dll` sits beside the executable, it extracts the embedded
-copy to `<exe>\.vapeclient\Vape-v4.21Recovery\Vape-v4.21Native-<pid>.dll` and
-injects that, so the bundle can be carried as a single file.
+`Vape-v4.21.exe` 把 `Vape-v4.21Native.dll` 作为 `RCDATA` 资源内嵌。当可执行文件旁
+边没有 `Vape-v4.21Native.dll` 时，它会把内嵌副本解压到
+`<exe>\.vapeclient\Vape-v4.21Recovery\Vape-v4.21Native-<pid>.dll` 并注入该副本，
+因此整个包可以只带一个文件。
 
-The injector only performs `LoadLibraryW`. Once loaded, the DLL worker waits
-for the JVM and Minecraft `Client thread`, materializes its embedded product
-JAR into the process temp directory, and loads it through the context
-ClassLoader. On Fabric, the worker uses the Fabric Launcher API to add the JAR
-to the Knot target ClassLoader so transformed game classes and payload callbacks
-share one class identity. It then
-registers the nine authoritative methods plus the Product `gat()` compatibility
-native, and calls
-`NativeBridge.start()` automatically. No second command or start flag is
-required. Inspect the per-injection log under
-`.vapeclient\log\vape421-native-<pid>-<timestamp>.log` next to the bundle for
-the exact result.
+注入器只做 `LoadLibraryW`。加载之后，DLL 工作线程等待 JVM 与 Minecraft 的
+`Client thread`，把内嵌的产品 JAR 落到进程临时目录，再通过上下文 ClassLoader
+加载它。在 Fabric 上，工作线程使用 Fabric Launcher API 把该 JAR 加入 Knot 目标
+ClassLoader，使被转换的游戏类与载荷回调共享同一个类标识。随后它注册那九个权威
+方法以及 Product 的 `gat()` 兼容 native，并自动调用 `NativeBridge.start()` ——
+不需要第二条命令或启动开关。具体结果请查看包旁
+`.vapeclient\log\vape421-native-<pid>-<timestamp>.log` 里本次注入的日志。
 
-The injection payload is compiled with `--release 8`; its project classes use
-class-file major version 52. Runtime dependencies are resolved from the
-repositories declared in Gradle and merged into that payload, not restored as
-vendored source directories. The injector rejects non-x64 processes.
+注入载荷以 `--release 8` 编译，其项目类使用 class-file major version 52。运行时
+依赖从 Gradle 中声明的仓库解析并合并进该载荷，而不是以 vendored 源码目录的形式
+恢复。注入器会拒绝非 x64 进程。
