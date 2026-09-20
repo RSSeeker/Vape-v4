@@ -33,7 +33,11 @@ extends JavassistMappingTask {
         eventInjectionSpec = new EventInjectionSpec(mappingMethod2, EventPacketSend.class);
         eventInjectionSpec.setConstructorArguments("$0, $1");
         eventInjectionSpec.setAfterCode("$1 = (" + MappedClasses.Fm.getName() + ") $event.getPacketInstance();");
-        this.registerEventInjection(eventInjectionSpec);
+        // 同样先判解析结果：发包映射在个别版本/环境下可能没登记上，
+        // 之前这里没护栏 → 直接抛 IllegalStateException 变成「注入出错」弹窗。
+        if (mappingMethod2 != null && !mappingMethod2.hasResolutionFailed()) {
+            this.registerEventInjection(eventInjectionSpec);
+        }
     }
 }
 

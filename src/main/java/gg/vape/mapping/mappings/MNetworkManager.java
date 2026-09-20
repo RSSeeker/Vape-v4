@@ -103,9 +103,19 @@ extends Mapping {
             Class[] classArray = new Class[]{MappedClasses.Fm};
             Class<Void> clazz7 = Void.TYPE;
             boolean bl7 = true;
-            String string7 = "sendPacket";
+            // 1.19+ Connection.sendPacket(Packet) 改名为 send(Packet)：
+            // 原版 1.20.1 实测 Connection 只有 (Packet)V 的 send（混淆名 a），
+            // 没有 sendPacket，而下面的 MC_1_20_1 分支因为这里的 vanilla 判定在前
+            // 永远走不到。ForgeVersion 没有 1.18/1.19 常量、分不出边界，所以先按
+            // 新名登记，未解析再回退旧名（与下方 this.a 的处理方式一致）。
+            String string7 = "send";
             MNetworkManager mNetworkManager7 = this;
             this.O = this.Y(string7, bl7, clazz7, classArray);
+            if (this.O.hasResolutionFailed()) {
+                String legacyName = "sendPacket";
+                MNetworkManager legacyMapping = this;
+                this.O = this.Y(legacyName, bl7, clazz7, classArray);
+            }
         } else if (ForgeVersion.MC_1_20_1.d()) {
             Class[] classArray = new Class[]{MappedClasses.Fm};
             Class<Void> clazz8 = Void.TYPE;

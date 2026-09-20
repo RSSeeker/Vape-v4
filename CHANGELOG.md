@@ -1,5 +1,63 @@
 # 更新日志
 
+## v4.21.39 (2026-09-20)
+
+**修复原版（非 Forge）客户端两个映射登记失败：雾 `setupFog` 参数个数 + 1.19+ 发包方法名**
+
+### 症状
+
+原版 1.20.1 启动弹两条「注入出错 / 错误代码 -1 19 / -1 20」，日志：
+
+```
+Mapping task 19 failed during transform: gg.vape.mapping.FogDensityEventMappingTask -> fjp
+  IllegalStateException: Method mapping was not registered: id=950
+Mapping task 20 failed during transform: gg.vape.mapping.NetworkPacketEventMappingTask -> sd
+  IllegalStateException: Method mapping was not registered: id=760
+```
+
+客户端本身能起来（`OK initializeManagers` / `injection is active`），但 `EventFogDensity` 与 **`EventPacketSend`** 两个钩子缺失。
+
+### 根因一：雾 `setupFog` 漏了 partialTick（4 参数 → 5 参数）
+
+`MFogRenderer` 对 `< 1.20.6` 登记的是 4 参数版本。反编译真实 1.20.1 客户端 jar 里的 `FogRenderer`（日志中的 `fjp`），该类只有：
+
+```
+public static void a(emz, fjp$d, float, boolean, float);   // (Camera, FogMode, float, boolean, float)
+```
+
+即 **5 参数**，4 参数形态不存在 → native 永远解析不上（id 950 未登记）。
+（1.21.1 同为 5 参数 `(Lffy;Lger$d;FZF)V`，所以 `>= 1.20.6` 那条分支本来就是对的。）
+
+修复：native 路径统一按 5 参数登记；若仍未解析则回退 4 参数（照顾可能存在的旧形态，不引入回归）。
+
+### 根因二：1.19+ 发包方法改名 `sendPacket` → `send`
+
+`MNetworkManager` 原版分支登记的是 `sendPacket(Packet)`，但 1.20.1 的 `Connection`（`sd`）只有 `void a(uo)`，且同类 `private static <T extends sk> void a(uo<T>, sk)` 表明 `uo<T extends PacketListener>` 即 `Packet` —— 真名是 **`send(Packet)`**，没有 `sendPacket`。
+分支顺序（原版判定在前）还让原版走不到下面那条已经写对名字（`send`）的 `MC_1_20_1` 分支。
+
+修复：原版分支先登记 `send`，未解析再回退 `sendPacket`。`ForgeVersion` 没有 1.18/1.19 常量、分不出边界，用「先新名、失败回退旧名」比按版本判断更稳（与同文件对 `a` 的处理方式一致）。
+
+### 顺带加固（同类问题不再变成弹窗）
+
+- `FogDensityEventMappingTask`：补 `setupFogMethod == null`（1.21.10+ 本来就置 null，原代码此处会 NPE）、`hasResolutionFailed()`、`CtBehavior == null` 三道护栏。
+- `NetworkPacketEventMappingTask`：给发包那一半补同样的护栏（收包那一半原本就有）。
+- 说明：`JavassistMappingTask.P()` 对 `null` 是容忍的（`if (ctBehavior == null) return null`），但 `insertEventInjectionCode()` 直接解引用 `ctBehavior` —— 那里正是原先抛异常、弹窗的来源。
+
+### 实测验证（原版 1.20.1，混淆环境，与失败时同一环境）
+
+```
+[Mapping] net send name=send resolved=true finalResolved=true
+[Mapping] fog setupFog 5arg=true finalResolved=true
+[Mapping] fog event injection OK / packet send injection OK
+```
+
+`Mapping task` 失败数 **2 → 0**，两个钩子恢复；`Field register failed` 计数修复前后一致（110，属映射层候选名探测的正常噪音）。
+
+### 影响面
+
+- 雾：原版（非 Forge）1.16.5 ≤ 版本 < 1.20.4；Forge/NeoForge 不弹窗，但此前恐怕也一直没生效（走反射解析，参数个数同样错，被 `P()` 的 null 容忍静默跳过）。
+- 发包：原版 1.19–1.20.4；1.8.9–1.18.2 原本就是 `sendPacket`（现在靠回退不回归）；Forge/NeoForge、原版 ≥1.20.6 不受影响。
+
 ## v4.21.38 (2026-09-10)
 
 **通知文案全部接入翻译 + 停用 AI 模式的启动强制关闭**
