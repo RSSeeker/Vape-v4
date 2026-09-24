@@ -1,13 +1,38 @@
 # Vape 4.21 Product Recovery
 
 > **Language:** English | [中文](README.md)
-
-A research/recovery project for Vape 4.21's Java layer and Windows x64 native bridge layer, with full Chinese localization.
-
+>
 > Releases: [Releases](https://github.com/RSSeeker/Vape-v4/releases)
 >
 > Source code: [OpenVapeCN/OpenVape](https://github.com/OpenVapeCN/OpenVape)
 > (This project recovers, cleans up and localizes the public source from that repository.)
+
+A research/recovery project for Vape 4.21's Java layer and Windows x64 native bridge layer, with full Chinese localization.
+
+## Disclaimer and Copyright
+
+This is an **educational/research** reverse-engineering recovery project, intended for software compatibility analysis and technical study.
+
+- For educational, research and authorized-environment testing use only
+- You **must already hold a legitimate Vape license** before using this project
+- Users must make sure they comply with local laws, software license agreements and server rules
+- The project author accepts no responsibility for any violation committed by users
+
+## Independence Statement
+
+This project is independent research carried out on the author's own initiative:
+
+- It accepts no external funding, sponsorship or commercial cooperation of any kind
+- It does not represent, and is not affiliated with, any organization, group or individual
+- It has no connection to any political stance, ideology or commercial interest
+- Its content reflects only the author's personal technical research interest
+
+The project is started and maintained independently by one individual; all views and results are technical research only and imply no other position.
+
+## Security Notice
+
+Source code and build artifacts for this project are published only through this GitHub repository and the resources attached to videos on the Bilibili account [RS_Seeker](https://space.bilibili.com/649086235); files released through those channels can be considered safe.
+The safety of any "Vape"-related program published through other GitHub repositories, Discord, QQ groups, Telegram groups, third-party websites, cloud drives or similar channels cannot be guaranteed. This project accepts no responsibility for those programs or for any loss they may cause.
 
 ## Main artifact
 
