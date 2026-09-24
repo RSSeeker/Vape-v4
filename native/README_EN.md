@@ -7,11 +7,21 @@ the nine-method `RegisterNatives` table in `sample.dll`. The authoritative
 per-version/per-runtime support matrix lives in the root
 [README.md](../README.md) ("Minecraft compatibility" table): Forge and Vanilla
 for 1.7.10 / 1.8.9 / 1.12.2, and Forge/Vanilla/Fabric for 1.21.11 and 26.1.2 are
-supported; 1.16.5, 1.20.1, 1.21.1 and 26.2 are experimental. Minecraft 1.21.11
+supported; 1.16.5, 1.20.1, 1.21.1 and 26.2 are experimental. Forge-enabled Lunar
+Client and Badlion Client 1.8.9 instances are also supported. Minecraft 1.21.11
 and 26.2 Fabric target Fabric Loader 0.19.3; other Fabric versions are outside
 the current support scope.
 Minecraft 1.16.5 support is incomplete and may have mapping, rendering, and
 module compatibility problems.
+
+Badlion Client 1.8.9 can rerun its runtime transformer after a JVMTI class
+redefinition. During JVMTI initialization, the bridge identifies that runtime
+from the loaded `ave` Minecraft class and `net/badlion` classes. It then
+retains successful class definitions containing `gg/vape` callbacks and
+supplies them again from the final `ClassFileLoadHook` when the same class is
+retransformed. Redefining a class with callback-free original bytecode removes
+its retained definition, so normal rollback still works. `trs(int)` remains
+dedicated to loader progress reporting and window integration.
 
 The authoritative bridge surface is:
 
@@ -29,8 +39,7 @@ inv(Method, Object, Object[]) : Object
 
 The additional native declarations currently present in the recovered Java
 class are not registered by `sample.dll`, and the PE has no export table or
-second registration path. They are intentionally not invented here. `trs(int)`
-remains dedicated to loader progress reporting and window integration.
+second registration path. They are intentionally not invented here.
 
 ## Loader token handoff design difference
 
@@ -110,8 +119,9 @@ Outputs are written to `build/native/dist`:
 ## Direct injection
 
 `Vape-v4.21Native.dll` contains the recovered Java product as an `RCDATA`
-resource. Start a supported Minecraft instance with a 64-bit JVM, then run the
-loader from the bundle directory:
+resource. Start a supported Minecraft instance with a 64-bit JVM (including
+Forge-enabled Lunar Client and Badlion Client 1.8.9), then run the loader from
+the bundle directory:
 
 ```powershell
 Vape-v4.21.<version>.exe
@@ -119,7 +129,7 @@ Vape-v4.21.<version>.exe
 
 With no arguments this opens the GUI loader (window title "Vape v4"): it
 auto-refreshes the visible Java windows, shows their window titles (for example
-`Minecraft`), and injects into the process you pick.
+`Minecraft` or `Lunar Client`), and injects into the process you pick.
 In GUI mode an external `Vape-v4.21Native.dll` **next to the exe is preferred**;
 the embedded copy is extracted only when it is absent, so the bundle can be
 carried as a single file.
