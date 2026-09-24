@@ -6,17 +6,9 @@
 `RegisterNatives` 表重建。各版本与各运行时的支持情况以根目录
 [README.md](../README.md) 的「Minecraft 兼容性」表为准（1.7.10 / 1.8.9 / 1.12.2
 的 Forge 与 Vanilla，以及 1.21.11 与 26.1.2 的 Forge/Vanilla/Fabric 为支持项；
-1.16.5、1.20.1、1.21.1、26.2 为实验性）。此外还支持 Forge 环境下的 Lunar Client
-与 Badlion Client 1.8.9 注入。Minecraft 1.21.11 与 26.2 的 Fabric 目标为
+1.16.5、1.20.1、1.21.1、26.2 为实验性）。Minecraft 1.21.11 与 26.2 的 Fabric 目标为
 Fabric Loader 0.19.3，其它 Fabric 版本不在当前支持范围内。
 Minecraft 1.16.5 的支持不完整，可能存在映射、渲染与模块兼容性问题。
-
-Badlion Client 1.8.9 会在 JVMTI 类重定义之后重跑它自己的运行时转换器。在 JVMTI
-初始化阶段，桥接层通过已加载的 `ave` Minecraft 类与 `net/badlion` 类识别出该
-运行时，随后保留那些包含 `gg/vape` 回调的成功类定义，并在同一个类被重新转换时
-由最终的 `ClassFileLoadHook` 再次提供。若用不含回调的原始字节码重定义某个类，
-其保留定义会被移除，因此正常回滚依然有效。`trs(int)` 仍然专用于加载器进度上报
-与窗口集成。
 
 权威的桥接接口如下：
 
@@ -33,7 +25,8 @@ inv(Method, Object, Object[]) : Object
 ```
 
 恢复出的 Java 类里目前还带着的其它 native 声明，`sample.dll` 并未注册，而且该 PE
-既没有导出表也没有第二条注册路径 —— 因此这里有意不去臆造它们。
+既没有导出表也没有第二条注册路径 —— 因此这里有意不去臆造它们。`trs(int)` 仍然
+专用于加载器进度上报与窗口集成。
 
 ## 加载器 token 交接的设计差异
 
@@ -105,15 +98,14 @@ ctest --test-dir build/native -C Release --output-on-failure
 ## 直接注入
 
 `Vape-v4.21Native.dll` 以 `RCDATA` 资源形式内含恢复出的 Java 产品。先以 64 位 JVM
-启动一个受支持的 Minecraft 实例（含 Forge 环境的 Lunar Client、Badlion Client
-1.8.9），再从包目录运行加载器：
+启动一个受支持的 Minecraft 实例，再从包目录运行加载器：
 
 ```powershell
 Vape-v4.21.<版本>.exe
 ```
 
 不带参数就是 GUI 加载器（窗口标题「Vape v4」）：自动刷新可见的 Java 窗口并显示
-窗口标题（例如 `Minecraft`、`Lunar Client`），选中进程即可注入。
+窗口标题（例如 `Minecraft`），选中进程即可注入。
 GUI 模式**优先加载 exe 旁的外部 `Vape-v4.21Native.dll`**，旁边没有时才解压内嵌
 副本，因此整个包可以只带一个文件。
 

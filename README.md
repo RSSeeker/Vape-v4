@@ -115,8 +115,6 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 | 26.1.2 | ✓ | ✓ | ✓ |
 | 26.2 | △ 实验性 | △ 实验性 | △ 实验性 |
 
-也支持 Lunar Client 与 Badlion Client 1.8.9 实例注入。
-
 **1.16.5 为实验性适配，可能存在以下问题**：
 
 - 部分映射、渲染和模块功能可能无法正常工作
@@ -236,8 +234,7 @@ DLL 将 Java injection JAR 作为 `RCDATA` 嵌入，不要求另行放置 payloa
 
 ## 隔离环境运行
 
-启动使用 64 位 JVM 的受支持 Minecraft 实例（包括 1.21.11、26.1.2、26.2 Fabric）或 Lunar
-Client 实例后，直接运行 `Vape-v4.21.*.exe` 打开 GUI，选择 Minecraft 进程点击注入（无登录、
+启动使用 64 位 JVM 的受支持 Minecraft 实例（包括 1.21.11、26.1.2、26.2 Fabric）后，直接运行 `Vape-v4.21.*.exe` 打开 GUI，选择 Minecraft 进程点击注入（无登录、
 无外部 DLL）。
 
 也可用命令行方式注入：

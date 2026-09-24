@@ -114,8 +114,6 @@ The safety of any "Vape"-related program published through other GitHub reposito
 | 26.1.2 | ✓ | ✓ | ✓ |
 | 26.2 | △ Experimental | △ Experimental | △ Experimental |
 
-Lunar Client and Badlion Client 1.8.9 instance injection are also supported.
-
 **1.16.5 is an experimental adaptation and may have the following issues**:
 
 - Some mappings, rendering and module functionality may not work correctly
@@ -223,7 +221,7 @@ The DLL embeds the Java injection JAR as an `RCDATA` resource, so a separate pay
 
 ## Running in an isolated environment
 
-Start a supported Minecraft instance using a 64-bit JVM (including 1.21.11, 26.1.2, 26.2 Fabric) or a Lunar Client instance, then run `Vape-v4.21.*.exe` to open the GUI, select the Minecraft process, and inject (no login, no external DLL).
+Start a supported Minecraft instance using a 64-bit JVM (including 1.21.11, 26.1.2, 26.2 Fabric), then run `Vape-v4.21.*.exe` to open the GUI, select the Minecraft process, and inject (no login, no external DLL).
 
 You can also inject from the command line:
 
