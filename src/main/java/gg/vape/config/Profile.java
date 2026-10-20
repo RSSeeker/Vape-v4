@@ -213,6 +213,12 @@ implements Comparable<Profile> {
         }
         if (applyModuleStates && Vape.INSTANCE.getPublicProfileSettings().autoLoadModuleStates.getEffectiveValue().booleanValue()) {
             this.applyEnabledModuleStates();
+            // HUD 模块（如 MotionBlur）不参与上面的 enabled 状态恢复：
+            // ModManager.applyProfileModuleStates 对 HudModule 直接 continue，
+            // 它们的开关只存在 legit_enabled 里。这里必须单独恢复，否则
+            // Profile.apply()（启动、切换档案、重载档案都会走）只恢复非 HUD
+            // 模块，HUD 模块的开关就永远不会随档案回来。
+            this.applyLegitEnabledModuleStates();
         }
         for (Mod mod : Vape.INSTANCE.getModManager().collectMods()) {
             if (!mod.isEnabled()) continue;

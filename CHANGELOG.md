@@ -1,31 +1,25 @@
 # 更新日志
 
-## v4.21.42 (2026-10-17)
+## v4.21.42 (2026-10-20)
 
-**卡顿 / 崩溃修复（NPE 日志风暴）+ 箱子 ESP 修复**
+**动态模糊（MotionBlur）开关不再被"渲染失败"关掉；HUD 模块开关在切档/重载时也能恢复**
 
-### 卡顿与崩溃：未登记字段的每次访问都在抛 NPE + 打印调用栈
+### 现象
 
-`Reflections.getField(int, Object)` 在字段 id 未登记时只做 `field(id).get(instance)`，未命中即 NPE，然后 `System.err.println("Failed allocate field: …")` + `printStackTrace()` —— **每次访问都来一遍**。1.20.1 上字段 `702` 从未登记，而逐物品渲染路径（物品名/物品 ESP 遍历）每帧都要访问它，于是渲染线程每帧刷出成百上千条 `[STDERR] NullPointerException` + 完整调用栈：帧率被打死，日志被刷爆，量大时游戏直接卡死/崩溃。
+1.21.11 上开启动态模糊 → 重启游戏变回关闭；有时运行中会自己关掉。
 
-修复：
-- `Reflections` 新增 `UNAVAILABLE_FIELD_IDS`，失败结果 **memoize**；同一 id 只记录一行 `Field mapping unavailable: <id>`，此后 O(1) 短路返回 null，**不再反射、不再抛异常、不再打印栈**；访问异常也改为只报一次且不调用实例的 `toString()`（那本身就是额外开销）；
-- `ItemStack.isNull()` 在取名链路失败后置标记并短路，不再逐物品重复走昂贵路径；
-- 返回值语义不变（仍为 null），正常版本字段都登记成功，只多一次 `contains`，行为与性能不变。
+### 根因
 
-### 顺带：每帧渲染工作量优化
+- `MotionBlur` 的渲染 catch 里是 `destroyResources(); setEnabled(false);` —— 只要有一帧抛出 `Throwable`（1.21.11 上 shader / uniform / GL 状态变化都可能触发）就**永久关闭模块**；而 `setEnabled` 的状态变化会立刻 `saveAndStop()`，于是"关闭"被写进档案 ⇒ 下次启动忠实地恢复成关。**两个现象是同一个原因**（运行中自关 + 重启后变关）。
+- `Profile.loadData()` 只恢复非 HUD 模块（`applyEnabledModuleStates()`），**从不恢复 HUD 开关**（`applyLegitEnabledModuleStates()`），所以切换档案 / 重载档案都会丢 HUD 模块（含 MotionBlur）的开关。
 
-- `Arrows` 的世界阶段绘制改为「仅当 GUI 批次队列为空且不在冲刷中」才执行，整段 `try/catch` 兜底，否则退回 2D 阶段绘制 —— 不会再把他人的 GUI 批次（含 MC 原生绘制回调）拉到不当时机，也不会拖垮主渲染；
-- `RenderBatchManager` 增加冲刷**重入守卫**（杜绝"冲刷→再入队→再冲刷"），每批次栅格状态重申改为脏标记驱动（仅回调之后重申一次）；
-- `ensureGuiBlendState()` 加去抖（`glIsEnabled` 早退 + 本帧已重申标记），不再每张图下发两次 GL 调用。
+### 修复
 
-### 箱子 ESP（存储 ESP）不显示
+- `MotionBlur`：渲染失败改为**只记录一条日志 + 跳过该帧**，绝不再改模块开关；GL 初始化类失败（典型如 `#version 330` 编译失败、显存不足）只记一条日志且本次启用内不再重试，但**模块保持开启、状态照常保存**；framebuffer / viewport 的改写包进 `try/finally`，失败也一定把 GL 目标还给游戏，避免一帧异常级联成整屏异常；`destroyResources` 拆出无 GL 调用的 `resetResourceHandles`，上下文丢失时安全。
+- `Profile.loadData`：补上 `applyLegitEnabledModuleStates()`（与原门控同一处），启动 / 切档 / 重载都会恢复 HUD 开关。
+- 跨版本通用逻辑，**没有加 1.21.11 专属分支**（加了反而会破坏 1.17–26.1 的一致行为）；26.2 的注册门控未动。
 
-`StorageESP` 通过 `World.getTileEntities → Chunk.l()` 读取方块实体表，而 `Chunk.l()` 只读字段映射 `blockEntities`；1.20.1 上该字段解析不到时 `j()` 返回 null，`.values()` 直接 NPE，整个 `onRender3D` 抛出并被事件系统吞掉 ⇒ 一个框都画不出来且无任何可见报错。
-
-修复：`MChunk` 新增 `getBlockEntities()` 方法映射（`MC_1_17+` 窗口，与字段同窗口）与安全访问器，**字段优先、字段不可用则退方法、都不可用返回 null**；`Chunk.l()` 改为走该访问器并在非 `Map` 时返回 `Collections.emptyMap()` ⇒ 不再可能 NPE。其它版本字段正常解析，取数路径与结果完全不变。
-
-> 已知问题（沿用 4.21.41）：1.20.1 的世界文字（物品标签框内文字、NameTags、Indicators / 箭头距离文字）仍缺，后续按"屏幕空间 2D 绘制"路线补齐。
+> **4.21.41 重发说明**（2026-10-17 同日重发）：并入"卡顿 / NPE 日志风暴修复"——`Reflections` 对未登记字段改为失败 memoize + 同一 id 只记一行、`ItemStack` 取名链路短路；以及每帧渲染工作量优化（Arrows 世界阶段绘制条件、GUI 冲刷重入守卫、混合状态去抖）。箱子 ESP 的临时改动已回退，仍是已知问题。
 
 ## v4.21.41 (2026-10-17)
 

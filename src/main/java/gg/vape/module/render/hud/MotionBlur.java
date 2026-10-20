@@ -52,6 +52,10 @@ extends HudModule {
     private long lastFrameNanos;
     private float lastViewX;
     private float lastViewY;
+    /** 本次启用内是否已记录过渲染失败，避免逐帧刷日志。 */
+    private boolean renderFailureLogged;
+    /** GL 资源初始化失败（如 shader 编译失败）：本次启用内不再重试渲染。 */
+    private boolean renderUnavailable;
 
     private static final String VERTEX_SHADER = "#version 330 core\n"
             + "layout (location = 0) in vec2 aPos;\n"
@@ -141,11 +145,19 @@ extends HudModule {
         this.velocityFactor = 0.0f;
         this.curBlurriness = this.blurrinessValue.getValue().floatValue();
         this.lastFrameNanos = 0L;
+        this.renderFailureLogged = false;
+        this.renderUnavailable = false;
     }
 
     @Override
     public void onDisable() {
-        this.destroyResources();
+        try {
+            this.destroyResources();
+        }
+        catch (Throwable ignored) {
+            // 上下文丢失时 glDelete* 也会失败；句柄直接丢弃，不阻断关闭流程。
+            this.resetResourceHandles();
+        }
     }
 
     @EventHandler
@@ -163,10 +175,10 @@ extends HudModule {
             this.renderMotionBlur();
         }
         catch (Throwable throwable) {
-            // 渲染失败不应影响游戏；记录一次并禁用模块避免刷屏。
-            Vape.logThrowable(throwable);
-            this.destroyResources();
-            this.setEnabled(false);
+            // 渲染失败只跳过这一帧，绝不改变模块开关：开关是用户配置，由档案的
+            // legit_enabled 持久化；旧实现的 setEnabled(false) 会触发 saveAndStop()，
+            // 把"渲染出过错"写成关闭状态，重启后就再也恢复不成开启。
+            this.logRenderFailure(throwable);
         }
     }
 
@@ -183,14 +195,24 @@ extends HudModule {
             this.renderMotionBlur();
         }
         catch (Throwable throwable) {
-            // 渲染失败不应影响游戏；记录一次并禁用模块避免刷屏。
-            Vape.logThrowable(throwable);
-            this.destroyResources();
-            this.setEnabled(false);
+            // 同上：失败不关模块，只记录一次并跳过本帧。
+            this.logRenderFailure(throwable);
         }
     }
 
+    /** 每次启用内只记录一次渲染失败，避免逐帧刷日志。 */
+    private void logRenderFailure(Throwable throwable) {
+        if (this.renderFailureLogged) {
+            return;
+        }
+        this.renderFailureLogged = true;
+        Vape.logThrowable(throwable);
+    }
+
     private void renderMotionBlur() {
+        if (this.renderUnavailable) {
+            return;
+        }
         if (!this.applyOnMenuValue.getEffectiveValue().booleanValue()
                 && !ClientSettings.INSTANCE.isInputEnabled()) {
             return;
@@ -207,54 +229,97 @@ extends HudModule {
         int previousFramebuffer = GL11.glGetInteger((int)36006);
         IntBuffer viewport = BufferUtils.createIntBuffer(4);
         gg.vape.wrapper.impl.GL11.X((int)2978, viewport);
-        GL11.glViewport(0, 0, width, height);
+        try {
+            GL11.glViewport(0, 0, width, height);
+            if (!this.ensureResources(width, height)) {
+                return;
+            }
 
-        if (!this.initialized) {
-            this.initializeTextures(width, height);
-            this.initializeQuad();
-            this.initializeShader();
-            this.initialized = true;
-            this.textureWidth = width;
-            this.textureHeight = height;
-            this.first = true;
-        }
-        if (this.textureWidth != width || this.textureHeight != height) {
-            this.resizeTextures(width, height);
-            this.first = true;
-        }
+            // 26.x 新架构（blitToScreen 出口）：画面已在屏幕默认 framebuffer 0，
+            // 但当前绑定可能是渲染阶段的中间 FBO；显式以 framebuffer 0 为
+            // 读取与绘制目标，确保拷贝到的是完整帧且混合结果能上屏。
+            // 通过游戏 GlStateManager._glBindFramebuffer 绑定以同步其缓存。
+            MotionBlur.bindFramebufferViaGame(36008, 0);
+            MotionBlur.bindFramebufferViaGame(36009, 0);
+            this.copyToCurrent();
+            if (this.first) {
+                this.copyToHistory();
+                this.first = false;
+            }
 
-        // 26.x 新架构（blitToScreen 出口）：画面已在屏幕默认 framebuffer 0，
-        // 但当前绑定可能是渲染阶段的中间 FBO；显式以 framebuffer 0 为
-        // 读取与绘制目标，确保拷贝到的是完整帧且混合结果能上屏。
-        // 通过游戏 GlStateManager._glBindFramebuffer 绑定以同步其缓存。
-        MotionBlur.bindFramebufferViaGame(36008, 0);
-        MotionBlur.bindFramebufferViaGame(36009, 0);
-        this.copyToCurrent();
-        if (this.first) {
+            if (this.velocityAdaptiveValue.getEffectiveValue().booleanValue()) {
+                this.updateVelocityFactor();
+            } else {
+                this.velocityFactor = 1.0f;
+            }
+            if (this.fpsModulateValue.getEffectiveValue().booleanValue()) {
+                this.updateFpsModulation();
+            } else {
+                this.curBlurriness = this.blurrinessValue.getValue().floatValue();
+            }
+
+            this.drawTexture();
             this.copyToHistory();
-            this.first = false;
         }
-
-        if (this.velocityAdaptiveValue.getEffectiveValue().booleanValue()) {
-            this.updateVelocityFactor();
-        } else {
-            this.velocityFactor = 1.0f;
+        finally {
+            // 无论本帧是否失败都必须把 framebuffer / viewport 还给游戏：
+            // 否则后续渲染会画到我们的目标上，一帧的异常会级联成整屏异常。
+            MotionBlur.restoreFrameState(previousFramebuffer, viewport);
         }
-        if (this.fpsModulateValue.getEffectiveValue().booleanValue()) {
-            this.updateFpsModulation();
-        } else {
-            this.curBlurriness = this.blurrinessValue.getValue().floatValue();
+    }
+
+    /**
+     * 确保 GL 资源与当前帧尺寸匹配。
+     *
+     * @return false 表示资源初始化失败（已记录一次日志，本次启用内不再重试）
+     */
+    private boolean ensureResources(int width, int height) {
+        try {
+            if (!this.initialized) {
+                this.initializeTextures(width, height);
+                this.initializeQuad();
+                this.initializeShader();
+                this.initialized = true;
+                this.textureWidth = width;
+                this.textureHeight = height;
+                this.first = true;
+            }
+            if (this.textureWidth != width || this.textureHeight != height) {
+                this.resizeTextures(width, height);
+                this.first = true;
+            }
+            return true;
         }
+        catch (Throwable throwable) {
+            // 初始化类失败（典型：驱动只给到 GL 3.2、#version 330 编译失败，
+            // 或显存不足）：记录一次、释放半初始化资源并停止重试，
+            // 但绝不把模块开关改成关闭。
+            this.renderUnavailable = true;
+            this.logRenderFailure(throwable);
+            try {
+                this.destroyResources();
+            }
+            catch (Throwable ignored) {
+                // 上下文已丢失时 glDelete* 同样会失败，直接丢弃句柄即可。
+                this.resetResourceHandles();
+            }
+            return false;
+        }
+    }
 
-        this.drawTexture();
-        this.copyToHistory();
-
-        // 恢复 framebuffer 绑定：通过游戏 GlStateManager._glBindFramebuffer
-        // 映射恢复，同步其 readFbo/drawFbo 缓存（避免缓存与真实状态不一致
-        // 导致后续渲染到错误目标）。
-        MotionBlur.bindFramebufferViaGame(36160, previousFramebuffer);
-        GL11.glViewport(viewport.get(0), viewport.get(1),
-                viewport.get(2), viewport.get(3));
+    /** 恢复 framebuffer 绑定与 viewport；失败不能盖掉本帧的真实异常。 */
+    private static void restoreFrameState(int previousFramebuffer, IntBuffer viewport) {
+        try {
+            // 恢复 framebuffer 绑定：通过游戏 GlStateManager._glBindFramebuffer
+            // 映射恢复，同步其 readFbo/drawFbo 缓存（避免缓存与真实状态不一致
+            // 导致后续渲染到错误目标）。
+            MotionBlur.bindFramebufferViaGame(36160, previousFramebuffer);
+            GL11.glViewport(viewport.get(0), viewport.get(1),
+                    viewport.get(2), viewport.get(3));
+        }
+        catch (Throwable ignored) {
+            // best-effort：GL 上下文异常时两侧都可能失败。
+        }
     }
 
     /** 通过游戏 GlStateManager._glBindFramebuffer 绑定 framebuffer。 */
@@ -548,6 +613,11 @@ extends HudModule {
         if (this.quadVbo != 0) {
             GL15.glDeleteBuffers(this.quadVbo);
         }
+        this.resetResourceHandles();
+    }
+
+    /** 丢弃 GL 句柄并标记未初始化（不调用任何 GL，可在上下文异常时安全使用）。 */
+    private void resetResourceHandles() {
         this.shaderProgram = 0;
         this.currentTexture = 0;
         this.historyTexture = 0;
