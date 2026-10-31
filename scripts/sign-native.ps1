@@ -44,7 +44,9 @@ if (-not $signtool) {
 }
 
 # Locate the code-signing certificate in the current user's personal store.
-$cert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert -ErrorAction SilentlyContinue |
+# NOTE: Get-ChildItem's -CodeSigningCert switch only exists in PowerShell 7+, so the
+# certificate is looked up by subject + private key to stay PS 5.1 compatible.
+$cert = Get-ChildItem Cert:\CurrentUser\My -ErrorAction SilentlyContinue |
     Where-Object { $_.Subject -eq $Subject -and $_.HasPrivateKey } |
     Sort-Object NotAfter -Descending |
     Select-Object -First 1
