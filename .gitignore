@@ -24,3 +24,11 @@ Vape-v4.21.exe
 # temporary Mojang version metadata / official mappings downloads
 download/
 .vscode/settings.json
+
+# code signing material (private key stays in the Windows certificate store)
+.signing/
+signing/dist/
+
+# local reference material (third-party decompiled sources / jars)
+/OpenZen/
+/kiss/

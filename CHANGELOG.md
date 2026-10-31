@@ -1,5 +1,48 @@
 # 更新日志
 
+## v4.21.44 (2026-10-31)
+
+**新增 Kiss / Zen 两个模块分类；程序开始附带代码签名证书，可自行消除「未知发布者」与 SmartScreen 拦截**
+
+### 新增
+
+- **Kiss 分类**（18 个模块，全部由 KissClient 移植）：Kiss FakeLag（模拟卡顿）、Kiss AutoAim（自动瞄准）、Kiss ESP（透视）、Kiss Aura（杀戮光环，含 Kiss 旋转引擎与余摆抖动）、Kiss CrystalAura（水晶光环）、Kiss AssistRod（辅助鱼竿）、Kiss BothClick（双键连点）、Kiss DistanceControl（自动控距）、Kiss Critical（刀爆）、Kiss MoreKB（击退增强）、Kiss AutoSoup（自动喝汤）、Kiss HitSelect（攻击筛选）、Kiss AutoThrow（自动投掷）。
+- **Zen 分类**（5 个模块，由 OpenZen 反混淆源码移植）：Zen DamageGlow（受击发光）、Zen NameProtect（名称保护）、Zen OldHitting（1.7 挥击动画）、Zen MidPearl（珍珠拦截）、Zen AntiTNT（反 TNT）。
+- 两个分类里的模块名、设置项、模式选项与多行说明已全部汉化。
+- 上述模块的设置已按原版逐项对齐：Kiss Aura 补齐 Aim X/Z、Reach Safe Aim/Margin、Attack Reduce/CPS、NPCs、Death Check、Mode/Switch Speed、Version(1.8/1.9)、Method；Kiss ESP 补齐 NPCs、Draw Mode(2D/3D)；Kiss AutoAim 补齐 Team Check、NPC Check、Break Block。仅有 `Fake Block` 未搬（它只是 Kiss 自己第一人称渲染器消费的标志位，本客户端无消费方，搬过来等于空开关）。
+
+### 修复
+
+- 1.16.5 及以上版本加载旧版本配置时，不再残留一个空的「Rearview / 后视镜」叠加层（该叠加层只在 1.16.5 以下真正渲染）。
+
+### 数字签名
+
+- 程序（注入器 exe 与内嵌 DLL）现在使用自签名代码签名证书 `CN=OpenVape` 签名，并带 DigiCert 时间戳。
+- 直接运行仍会提示「未知发布者」，请先运行附件里的 `OpenVape-Cert.exe` 点「一键安装证书」（需要管理员权限，会把证书装进「受信任的根证书颁发机构」与「受信任的发布者」），之后签名即被视为受信任发布者，不会再被 SmartScreen 拦截。
+- 也可以手动安装 `OpenVape-codesign.cer`：双击 → 安装证书 → 本地计算机 → 「受信任的根证书颁发机构」→ 完成。
+- 证书指纹（SHA-1）：`0405EB817637339808DDD1DD47BD75B6ACF486C0`，有效期至 2036-10-31。证书与签名随构建产出，源码仓库不包含任何私钥。
+- 注意：私钥不可导出，因此只有本机构建产出的包带签名；GitHub Actions 自动构建的包仍为未签名版本，本 Release 的 exe 已替换为签名版。
+
+## v4.21.43 (2026-10-26)
+
+**修复：1.8.9 的 ESP 2D 框不显示；1.21.11 / 26.1.2 的药水效果图标不显示**
+
+### 现象
+
+1. 1.8.9 + OptiFine：ESP 选「2D」模式时，玩家周围完全没有 2D 框（其他 HUD 正常），且日志里没有任何报错。
+2. 1.21.11 Fabric、26.1.2 Fabric：Potion Status 里效果名和倒计时正常，**只有图标是空的**；但打开 GUI（HUD 编辑器的示例效果）时图标又能正常显示。
+
+### 根因
+
+- 1.8.9：2D 框的屏幕坐标要除以「光影（OptiFine）的渲染分辨率倍率」`configRenderResMul`。装了 OptiFine 时该字段存在，但**未加载光影包时值是 `0.0`**（其它版本没有这个类，代码直接返回 1.0，所以只有 1.8.9+OptiFine 中招）⇒ 坐标算成 `Infinity` ⇒ 整块框画到屏幕外。事件总线是空 catch，所以日志一片安静。
+- 1.21.11 / 26.1.2：药水图标的离屏截图（把精灵画进 18×18 帧缓冲再贴出来）在 **HUD 阶段**执行时批次绘制不生效——目标帧缓冲、精灵、UV 全部正确，但截图整张全透明（批次绘制报 `GL_INVALID_ENUM`），而同一段代码在开 GUI 后或世界渲染阶段就正常；更糟的是这张全透明贴图会被**永久缓存**，于是该效果整局都没有图标。
+
+### 修复
+
+- `RenderWorldLastEvent.getRenderResolutionMultiplier()`：读到 `0` / 非有限值 / 读取失败时统一按 `1.0` 处理（等价于未开光影分辨率缩放），不再拿 0 做除数；读取彻底失败只记一条日志。纯数值兜底，不影响任何版本的正常倍率。
+- 药水图标：HUD 阶段不再做离屏截图，只登记「该效果需要图标」；真正的截图挪到**世界渲染阶段**（`EventRender3DCallback`）执行，每帧最多处理 4 个效果避免卡顿；截图后**读回整张 18×18 校验**，全透明视为失败并有限次重试（最多 8 次），成功才缓存复用。
+- 老版本（1.8.9 / 1.12.2）的立即模式图标通道保持不变（其 `isBadEffect()` 实际映射的是 `hasStatusIcon()`，正面效果也有图标）。
+
 ## v4.21.43 (2026-10-26)
 
 **修复：1.8.9 的 ESP 2D 框不显示；1.21.11 / 26.1.2 的药水效果图标不显示**
