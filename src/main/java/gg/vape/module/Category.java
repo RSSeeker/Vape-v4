@@ -24,8 +24,6 @@ implements INamed {
     public static Category FAVORITES;
     public static Category NETWORK;
     public static Category MINIGAMES;
-    public static Category KISS;
-    public static Category ZEN;
 
     public static GuiComponent[] getLegacyComponents() {
         return components;
@@ -55,8 +53,6 @@ implements INamed {
         NETWORK = new Category("Network", "network", -14651232);
         OTHER = new Category("Other", "other", -2419323);
         MINIGAMES = new Category("Minigames", "minigames", "BedBreaker, BedPlates, MurdererFinder, PropHunt", -13421773);
-        KISS = new Category("Kiss", "kiss", "Modules ported from KissClient", -12790104);
-        ZEN = new Category("Zen", "zen", "Modules ported from OpenZen", -7045136);
         FAVORITES = new Category("Favorites", "newfavorites", "", 0);
         HIDDEN = new Category("Hidden", "favorites", -2419323);
         values = new ArrayList<Category>();
@@ -68,8 +64,6 @@ implements INamed {
         values.add(INVENTORY);
         values.add(MINIGAMES);
         values.add(OTHER);
-        values.add(KISS);
-        values.add(ZEN);
         values.add(NONE);
     }
 
@@ -105,8 +99,6 @@ implements INamed {
         WORLD = null;
         FAVORITES = null;
         MINIGAMES = null;
-        KISS = null;
-        ZEN = null;
     }
 
     public String getDescription() {

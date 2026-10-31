@@ -5,6 +5,7 @@ import gg.vape.config.ClientSettings;
 import gg.vape.mapping.MappedClasses;
 import gg.vape.module.Category;
 import gg.vape.module.Mod;
+import gg.vape.module.combat.aimassist.AimAssistKissSubModule;
 import gg.vape.module.combat.aimassist.AimAssistRotationSubModule;
 import gg.vape.module.combat.aimassist.AimAssistTargetingSubModule;
 import gg.vape.module.control.SharedModuleControlClaims;
@@ -48,6 +49,7 @@ extends Mod {
     public final ModeOption yawMode;
     public final ModeOption threatMode;
     private final NumberValue horizontalSpeed;
+    private final AimAssistKissSubModule kissRotation = new AimAssistKissSubModule(this, "Kiss");
     private final AimAssistRotationSubModule simpleRotation = new AimAssistRotationSubModule(this, "Simple");
     private final LimitValue allowedItems;
     private final NumberValue maxAngle;
@@ -123,6 +125,16 @@ extends Mod {
         return this.verticalSpeed;
     }
 
+    /** Kiss 子模块复用父模块的目标筛选（玩家/生物/和平、物品限制）。 */
+    public boolean isTargetFiltered(EntityLivingBase target) {
+        return this.passesItemFilter(target);
+    }
+
+    /** Kiss 子模块复用父模块的好友过滤。 */
+    public boolean isFriendTarget(EntityLivingBase target) {
+        return Vape.INSTANCE.getFriendManager().isFriend(target);
+    }
+
     public boolean isValidTarget(EntityLivingBase target) {
         if (target.isNull()) {
             return false;
@@ -164,7 +176,7 @@ extends Mod {
     public AimAssist() {
         super("AimAssist", -327674, Category.COMBAT, "Smoothly aims to closest valid target");
         this.adaptiveTargeting = new AimAssistTargetingSubModule(this, "Adaptive");
-        this.mode = ModeValue.create((Object)this, "Mode", "Simple - Lightweight smooth aiming\nAdaptive - Advanced tracking with adaptive behavior", (ModeSelection)this.simpleRotation.getSelectionValue(), this.simpleRotation.getSelectionValue(), this.adaptiveTargeting.getSelectionValue());
+        this.mode = ModeValue.create((Object)this, "Mode", "Simple - Lightweight smooth aiming\nAdaptive - Advanced tracking with adaptive behavior\nKiss - KissClient AutoAim spring/smoothing controller", (ModeSelection)this.simpleRotation.getSelectionValue(), this.simpleRotation.getSelectionValue(), this.adaptiveTargeting.getSelectionValue(), this.kissRotation.getSelectionValue());
         this.targetFilter = EntityTargetFilterValue.createForModule(this);
         this.requireMouseDown = BooleanValue.create(this, "Require mouse down", true, "Only aim while mouse is down");
         this.aimVertically = BooleanValue.create(this, "Aim vertically", false, "Aims up and down as well");
@@ -195,6 +207,27 @@ extends Mod {
         this.checkBlockBreak.addDependentValues(this.breakBlocksWhitelist);
         this.addValue(this.mode, this.targetFilter, this.requireMouseDown, this.strafeIncrease, this.checkBlockBreak, this.breakBlocksWhitelist, this.blockBreakItems, this.aimVertically, this.verticalSpeed, this.horizontalSpeed, this.maxAngle, this.distance, this.limitToItems, this.allowedItems, this.targetArea, this.targetMode);
         this.horizontalSpeed.setMaximumFractionDigits(0);
+
+        // Kiss 模式自带 Range / FOV / Aim mode / Mouse down，父模块这些仅对 Simple/Adaptive 生效的设置
+        // 在 Kiss 下隐藏，避免出现「距离/最大角度/水平速度」等重复项。
+        ModeOption simpleModeOption = (ModeOption)this.simpleRotation.getSelectionValue();
+        ModeOption adaptiveModeOption = (ModeOption)this.adaptiveTargeting.getSelectionValue();
+        gg.vape.value.Value<?, ?>[] parentOnly = new gg.vape.value.Value<?, ?>[]{
+                this.strafeIncrease, this.checkBlockBreak, this.breakBlocksWhitelist,
+                this.blockBreakItems, this.aimVertically, this.verticalSpeed, this.horizontalSpeed,
+                this.maxAngle, this.distance, this.limitToItems, this.allowedItems, this.targetArea,
+                this.targetMode};
+        this.mode.addModeDependentValues(simpleModeOption, parentOnly);
+        this.mode.addModeDependentValues(adaptiveModeOption, parentOnly);
+
+        // 把模式选择、目标筛选、鼠标按下排到设置列表最上方（子模块的值会先注册，把下拉框挤到下面）。
+        java.util.List<gg.vape.value.Value<?, ?>> valueOrder = this.getValues();
+        valueOrder.remove(this.mode);
+        valueOrder.add(0, this.mode);
+        valueOrder.remove(this.targetFilter);
+        valueOrder.add(1, this.targetFilter);
+        valueOrder.remove(this.requireMouseDown);
+        valueOrder.add(2, this.requireMouseDown);
     }
 
     public BooleanValue getAimVertically() {

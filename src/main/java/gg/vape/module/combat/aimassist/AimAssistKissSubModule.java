@@ -1,13 +1,15 @@
-package gg.vape.module.kiss;
+package gg.vape.module.combat.aimassist;
 
 import gg.vape.event.EventHandler;
 import gg.vape.event.impl.EventPreRenderTick;
 import gg.vape.mapping.MappedClasses;
 import gg.vape.module.Mod;
 import gg.vape.module.SubModule;
-import gg.vape.module.Category;
+import gg.vape.module.combat.AimAssist;
 import gg.vape.module.none.ClientSettings;
 import gg.vape.rotation.PlayerMouseRotationApplier;
+import gg.vape.Vape;
+import gg.vape.rotation.RotationManager;
 import gg.vape.unmap.ModeOption;
 import gg.vape.unmap.ModeSelection;
 import gg.vape.utils.MathUtil;
@@ -17,15 +19,9 @@ import gg.vape.value.ModeValue;
 import gg.vape.value.NumberValue;
 import gg.vape.wrapper.impl.Entity;
 import gg.vape.wrapper.impl.EntityLivingBase;
-import gg.vape.wrapper.impl.EntityPlayer;
 import gg.vape.wrapper.impl.EntityPlayerSP;
-import gg.vape.wrapper.impl.GameProfile;
 import gg.vape.wrapper.impl.Minecraft;
-import gg.vape.wrapper.impl.PlayerInfo;
-import gg.vape.wrapper.impl.RayTraceResult;
-import gg.vape.wrapper.impl.Team;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 /**
@@ -40,13 +36,12 @@ import java.util.List;
  * </ul>
  * <p>两者最后都会按鼠标灵敏度 GCD 对齐（{@code snapToSensitivity}）再写回玩家朝向。</p>
  *
- * <p>Vape 侧只把"写回朝向"换成 {@link PlayerMouseRotationApplier#setLocalPlayerRotation(float, float)}，
- * 目标搜索、预判、弹簧积分与 Old 模式的平滑全部按 Kiss 源码逐行移植。Kiss 的 Team Check 使用
- * scoreboard team 比较，NPC Check 使用"tab 列表里没有这个名字"的启发式（等价于 Kiss EntityClassifier
- * 的 STRICT tab 检查部分）。</p>
+ * <p>Vape 侧只把"写回朝向"换成 {@link PlayerMouseRotationApplier#applyTrackedMouseDelta(float, float)}，
+ * 目标搜索、预判、弹簧积分与 Old 模式的平滑全部按 Kiss 源码逐行移植。Kiss 的 Team Check / NPC Check
+ * 依赖其自带的 EntityClassifier，本移植未接入，因此不提供这两项。</p>
  */
-public class KissAutoAim
-extends Mod {
+public class AimAssistKissSubModule
+extends SubModule<AimAssist> {
     private static final int MAX_LOST_TICKS = 20;
     private static final int MAX_NEW_LOST_FRAMES = 30;
     private static final float MAX_TARGET_ANG_VEL = 540.0f;
@@ -78,10 +73,6 @@ extends Mod {
     private final NumberValue newFeedforward;
     private final NumberValue newPredict;
     private final NumberValue newDeadzone;
-    private final BooleanValue mouseDown;
-    private final BooleanValue breakBlock;
-    private final BooleanValue teamCheck;
-    private final BooleanValue npcCheck;
 
     private EntityLivingBase target;
     private Object lockedTargetObject;
@@ -114,10 +105,8 @@ extends Mod {
     private long lastNewFrameNanos;
     private float lastNewFrameDt;
 
-    private static final long MOD_ID = 7719236450942083457L;
-
-    public KissAutoAim() {
-        super("Kiss AutoAim", (int)MOD_ID, Category.KISS, "AutoAim logic ported from KissClient: New (spring + feedforward + predict) and Old (per-frame smoothing) controllers.");
+    public AimAssistKissSubModule(Mod parent, String name) {
+        super(parent, name);
         this.targetMode = ModeValue.create(this, "Target mode", "How Kiss AutoAim prioritizes targets", this.distanceMode, this.healthMode, this.distanceMode, this.singleMode);
         this.aimMode = ModeValue.create(this, "Aim mode", "New: spring-mass tracking with feedforward and prediction.\nOld: per-frame smoothing with adaptive pitch.", this.newMode, this.newMode, this.oldMode);
         this.aimX = NumberValue.create(this, "Aim X", "#.##", "", -0.5, 0.0, 0.5, 0.01);
@@ -135,14 +124,14 @@ extends Mod {
         this.newFeedforward = NumberValue.create(this, "New feedforward", "#.##", "", 0.0, 0.6, 1.0, 0.05);
         this.newPredict = NumberValue.create(this, "New predict", "#.#", "", 0.0, 1.0, 3.0, 0.1);
         this.newDeadzone = NumberValue.create(this, "New deadzone", "#.##", "°", 0.0, 0.1, 2.0, 0.05);
-        this.mouseDown = BooleanValue.create(this, "Mouse down", true);
-        this.breakBlock = BooleanValue.create(this, "Break Block", true);
-        this.teamCheck = BooleanValue.create(this, "Team Check", true);
-        this.npcCheck = BooleanValue.create(this, "NPC Check", true);
+        // Kiss AutoAim：New / Old 两套控制器各自只显示自己的调参项。
+        this.aimMode.addModeDependentValues((ModeOption)this.newMode, this.newResponse, this.newFeedforward,
+                this.newPredict, this.newDeadzone);
+        this.aimMode.addModeDependentValues((ModeOption)this.oldMode, this.smooth, this.pitchSmooth,
+                this.yPredict, this.yEmaAlpha, this.yDeadzone);
         this.addValue(this.targetMode, this.aimMode, this.aimX, this.aimY, this.aimZ, this.range, this.optimalRange,
                 this.fov, this.smooth, this.pitchSmooth, this.yPredict, this.yEmaAlpha, this.yDeadzone,
-                this.newResponse, this.newFeedforward, this.newPredict, this.newDeadzone, this.mouseDown,
-                this.breakBlock, this.teamCheck, this.npcCheck);
+                this.newResponse, this.newFeedforward, this.newPredict, this.newDeadzone);
     }
 
     @Override
@@ -176,8 +165,25 @@ extends Mod {
         this.lastNewFrameDt = 0.0f;
     }
 
+    private static int kissDebugTicks;
+
     @EventHandler
     public void onPreRenderTick(EventPreRenderTick event) {
+        if (kissDebugTicks++ % 20 == 0) {
+            boolean screenOpen = false;
+            try {
+                screenOpen = Minecraft.currentScreen().getObject() != null;
+            } catch (Throwable ignored) {
+            }
+            Vape.debugLog("[KISS] tick n=" + kissDebugTicks
+                    + " en=" + this.isEnabled()
+                    + " sel=" + this.isSelectedSubModule()
+                    + " screen=" + screenOpen
+                    + " canAim=" + this.getParent().canAim()
+                    + " input=" + ClientSettings.INSTANCE.inputEnabled
+                    + " mouseGate=" + this.getParent().getRequireMouseDown().getEffectiveValue()
+                    + " attack=" + gg.vape.config.ClientSettings.isAttackButtonDown());
+        }
         if (event.getWorld().isNull()) {
             return;
         }
@@ -185,12 +191,13 @@ extends Mod {
         if (player.isNull() || Minecraft.currentScreen().getObject() != null) {
             return;
         }
-        if (!ClientSettings.INSTANCE.inputEnabled) {
+        AimAssist aimAssist = this.getParent();
+        if (!aimAssist.canAim() || !ClientSettings.INSTANCE.inputEnabled) {
             this.resetState();
             return;
         }
         boolean attackDown = gg.vape.config.ClientSettings.isAttackButtonDown();
-        if (this.mouseDown.getEffectiveValue() && !attackDown) {
+        if (this.getParent().getRequireMouseDown().getEffectiveValue() && !attackDown) {
             this.wasAttackDown = false;
             this.target = null;
             this.resetState();
@@ -203,12 +210,12 @@ extends Mod {
             this.resetState();
         }
         this.wasAttackDown = attackDown;
-        if (!this.breakBlock.getEffectiveValue() && attackDown && this.isCrosshairOnBlock()) {
-            this.target = null;
-            return;
-        }
 
         EntityLivingBase found = this.findTarget(this.range.getValue(), this.fov.getValue());
+        if (kissDebugTicks % 20 == 0) {
+            Vape.debugLog("[KISS] findTarget found=" + (found == null ? "null" : "yes")
+                    + " range=" + this.range.getValue() + " fov=" + this.fov.getValue());
+        }
         if (found == null) {
             if (this.aimMode.getValue() == this.oldMode) {
                 this.handleTargetLost();
@@ -239,17 +246,37 @@ extends Mod {
 
     private EntityLivingBase findTarget(double maxRange, double fovDegrees) {
         EntityPlayerSP player = Minecraft.thePlayer();
+        AimAssist parent = this.getParent();
         List<EntityLivingBase> candidates = new ArrayList<EntityLivingBase>();
         for (Object object : new ArrayList<Object>(Minecraft.theWorld().z())) {
             Entity wrapper = new Entity(object);
-            if (wrapper.isNull() || !wrapper.isInstance(MappedClasses.Yl)) {
+            if (wrapper.isNull()) {
+                continue;
+            }
+            if (gg.vape.config.ClientSettings.IS_LEGACY_1_7 && wrapper.isInstance(MappedClasses.FT)) {
+                continue;
+            }
+            if (!wrapper.isInstance(MappedClasses.zm)) {
                 continue;
             }
             EntityLivingBase living = new EntityLivingBase(object);
-            if (living.equals(player) || !this.isValidTarget(living, maxRange)) {
+            if (living.isNull() || living.getObject() == player.getObject()) {
+                continue;
+            }
+            if (living.w$src$F$15l9epb() <= 0.0f || living.M$src$Z$ff28xj()) {
+                continue;
+            }
+            if (parent.isFriendTarget(living) || !parent.isTargetFiltered(living)) {
+                continue;
+            }
+            if (this.distanceTo(living, player) > maxRange) {
                 continue;
             }
             candidates.add(living);
+        }
+        if (kissDebugTicks % 40 == 0) {
+            Vape.debugLog("[KISS] scan candidates=" + candidates.size()
+                    + " entities=" + Minecraft.theWorld().z().size());
         }
         if (candidates.isEmpty()) {
             return null;
@@ -296,93 +323,7 @@ extends Mod {
         if (candidate.equals(Minecraft.thePlayer())) {
             return false;
         }
-        if (this.teamCheck.getEffectiveValue() && this.isSameTeam(candidate)) {
-            return false;
-        }
-        if (this.npcCheck.getEffectiveValue() && this.isNpc(candidate)) {
-            return false;
-        }
         return this.distanceTo(candidate, Minecraft.thePlayer()) <= maxRange;
-    }
-
-    /**
-     * Kiss 的 Break Block：关掉后，按住左键且准星指着方块（也就是在挖方块）时不介入瞄准。
-     */
-    private boolean isCrosshairOnBlock() {
-        try {
-            RayTraceResult hit = Minecraft.p$src$Lgg_vape_wrapper_impl_RayTraceResult_$5rw6n0();
-            return hit != null && !hit.isNull() && hit.isBlockHit();
-        } catch (Throwable throwable) {
-            return false;
-        }
-    }
-
-    /**
-     * Kiss 的 Team Check：两侧都在 scoreboard 里同一个 Team 时视为队友。
-     */
-    private boolean isSameTeam(EntityLivingBase candidate) {
-        try {
-            Object selfHandle = Minecraft.thePlayer().getObject();
-            if (candidate.getObject() == selfHandle) {
-                return false;
-            }
-            Team selfTeam = new EntityPlayer(selfHandle).J$src$Lgg_vape_wrapper_impl_Team_$1jrmnx4();
-            Team otherTeam = new EntityPlayer(candidate.getObject()).J$src$Lgg_vape_wrapper_impl_Team_$1jrmnx4();
-            if (selfTeam == null || selfTeam.isNull() || otherTeam == null || otherTeam.isNull()) {
-                return false;
-            }
-            return selfTeam.isSameTeam(otherTeam);
-        } catch (Throwable throwable) {
-            return false;
-        }
-    }
-
-    /**
-     * Kiss 的 NPC Check（STRICT）：显示名带 [NPC] 标记，或者 tab 列表里查不到这个名字。
-     */
-    private boolean isNpc(EntityLivingBase candidate) {
-        String name = this.displayNameOf(candidate);
-        String lower = name.toLowerCase(java.util.Locale.ROOT);
-        if (lower.contains("[npc]") || lower.contains("npc")) {
-            return true;
-        }
-        try {
-            Collection<?> entries = Minecraft.thePlayer().sendQueue().getPlayerInfoMap();
-            if (entries == null) {
-                return false;
-            }
-            for (Object entry : entries) {
-                PlayerInfo info = new PlayerInfo(entry);
-                GameProfile profile = info.v();
-                if (profile == null || profile.isNull()) {
-                    continue;
-                }
-                String profileName = profile.getName();
-                if (profileName != null && profileName.equalsIgnoreCase(name)) {
-                    return false;
-                }
-            }
-            return true;
-        } catch (Throwable throwable) {
-            return false;
-        }
-    }
-
-    private String displayNameOf(EntityLivingBase candidate) {
-        try {
-            String raw = candidate.getName();
-            if (raw == null) {
-                return "";
-            }
-            String cleaned = raw.replace("§", "");
-            int bracket = cleaned.lastIndexOf(93);
-            if (bracket >= 0 && bracket + 1 < cleaned.length()) {
-                cleaned = cleaned.substring(bracket + 1);
-            }
-            return cleaned.trim();
-        } catch (Throwable throwable) {
-            return "";
-        }
     }
 
     private double distanceTo(EntityLivingBase candidate, EntityPlayerSP player) {
@@ -601,7 +542,22 @@ extends Mod {
         float snappedYaw = Math.round(absoluteYaw / gcd) * gcd;
         float snappedPitch = Math.round(absolutePitch / gcd) * gcd;
         snappedPitch = MathUtil.clamp(snappedPitch, -90.0f, 90.0f);
-        PlayerMouseRotationApplier.setLocalPlayerRotation(snappedYaw, snappedPitch);
+        EntityPlayerSP player = Minecraft.thePlayer();
+        if (player == null) {
+            return;
+        }
+        // applyTrackedMouseDelta 会按 0.15 的系数换算成 yaw/pitch 增量，并同步上一帧渲染朝向，
+        // 相机才会真正跟着转；直接 setLocalPlayerRotation 只改逻辑朝向，看起来"没拽动视角"。
+        float currentYaw = RotationManager.getViewYaw(player);
+        float currentPitch = RotationManager.getViewPitch(player);
+        float yawDelta = wrapDegrees(snappedYaw - currentYaw) / 0.15f;
+        float pitchDelta = (currentPitch - snappedPitch) / 0.15f;
+        if (kissDebugTicks % 10 == 0) {
+            Vape.debugLog("[KISS] apply curYaw=" + currentYaw + " curPitch=" + currentPitch
+                    + " snappedYaw=" + snappedYaw + " snappedPitch=" + snappedPitch
+                    + " dYaw=" + yawDelta + " dPitch=" + pitchDelta);
+        }
+        PlayerMouseRotationApplier.applyTrackedMouseDelta(yawDelta, pitchDelta);
     }
 
     private float gcdStep() {

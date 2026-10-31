@@ -1,4 +1,4 @@
-package gg.vape.module.kiss;
+package gg.vape.module.combat.silentaura;
 
 import gg.vape.rotation.RotationManager;
 import gg.vape.utils.MathUtil;
@@ -50,11 +50,18 @@ public final class KissRotationEngine {
     /** 低通后的抖动偏移（度）。 */
     private float jitterYaw;
     private float jitterPitch;
+    /** 抖动幅度倍率（"Kiss jitter" 设置，1.0 = Kiss 原版 0.15° 基值）。 */
+    private float jitterScale = 1.0f;
     /** 三角分布样本（度）。 */
     private float targetJitterYaw;
     private float targetJitterPitch;
     private int jitterTicks;
     private Object jitterOwner;
+
+    /** "Kiss jitter" 设置：直接缩放抖动幅度（0 表示关掉抖动）。 */
+    public void setJitterScale(float scale) {
+        this.jitterScale = Math.max(0.0f, scale);
+    }
 
     public void reset() {
         this.phase = 0.0f;
@@ -159,7 +166,7 @@ public final class KissRotationEngine {
      */
     private void advanceJitter(double distance, double range) {
         float t = MathUtil.clamp((float)(distance / Math.max(range, 0.001)), 0.0f, 1.0f);
-        float amplitude = JITTER_BASE * (1.0f + 0.75f * t * t);
+        float amplitude = JITTER_BASE * this.jitterScale * (1.0f + 0.75f * t * t);
         if (--this.jitterTicks <= 0) {
             this.targetJitterYaw = triangle(amplitude);
             this.targetJitterPitch = triangle(amplitude * 0.65f);

@@ -15,6 +15,7 @@ import gg.vape.input.KeyBindingHelper;
 import gg.vape.mapping.MappedClasses;
 import gg.vape.module.Category;
 import gg.vape.module.Mod;
+import gg.vape.module.combat.silentaura.KissRotationEngine;
 import gg.vape.module.combat.silentaura.SilentAuraAimJitter;
 import gg.vape.module.combat.silentaura.SilentAuraClicker;
 import gg.vape.module.combat.silentaura.SilentAuraEntityIdComparator;
@@ -148,6 +149,10 @@ extends Mod {
     private final ModeValue rotationMode;
     private final NumberValue aiYawMultiplier;
     private final NumberValue aiPitchMultiplier;
+    private final ModeOption rotationKissMode;
+    private final NumberValue kissSpeed;
+    private final NumberValue kissJitter;
+    private final KissRotationEngine kissEngine;
 
     public EntityLivingBase getTarget() {
         return this.target;
@@ -163,6 +168,10 @@ extends Mod {
 
     public boolean isAiMode() {
         return this.rotationMode.getValue() == this.rotationAiMode;
+    }
+
+    public boolean isKissMode() {
+        return this.rotationMode.getValue() == this.rotationKissMode;
     }
 
     public RandomClickDelayValue getAttackRate() {
@@ -365,20 +374,31 @@ extends Mod {
         this.aiModel = ModeValue.create((Object)this, "AI Model", "Bundled LiquidBounce combat regression model.", (ModeSelection)this.aiModel21KC11KP, this.aiModel21KC11KP, this.aiModel19KC8KP);
         this.rotationPidMode = new ModeOption("PID");
         this.rotationAiMode = new ModeOption("AI");
-        this.rotationMode = ModeValue.create((Object)this, "Rotation Mode", "PID: Vape's original rotation engine.\nAI: LiquidBounce MLP combat regression model.", (ModeSelection)this.rotationPidMode, this.rotationPidMode, this.rotationAiMode);
+        this.rotationKissMode = new ModeOption("Kiss");
+        this.rotationMode = ModeValue.create((Object)this, "Rotation Mode", "PID: Vape's original rotation engine.\nAI: LiquidBounce MLP combat regression model.\nKiss: KissClient's Linear engine (speed breathing + triangular jitter + GCD quantise).", (ModeSelection)this.rotationPidMode, this.rotationPidMode, this.rotationAiMode, this.rotationKissMode);
         this.aiYawMultiplier = NumberValue.create(this, "AI yaw multiplier", "#.#", "", 0.5, 1.5, 2.0, 0.05, "Multiplier applied to the model's yaw output");
         this.aiPitchMultiplier = NumberValue.create(this, "AI pitch multiplier", "#.#", "", 0.5, 1.0, 2.0, 0.05, "Multiplier applied to the model's pitch output");
         // AI 旋转模式下 aim speed 与 target area 不适用（模型直接输出角度），
         // 仅在 PID 模式显示这两个设置。
         this.rotationMode.addModeDependentValues(this.rotationPidMode, this.aimSpeed, this.targetArea);
         this.rotationMode.addModeDependentValues(this.rotationAiMode, this.aiModel, this.aiYawMultiplier, this.aiPitchMultiplier);
+        this.kissSpeed = NumberValue.create(this, "Kiss speed", "#.#", "\u00b0", 5.0, 30.0, 90.0, 0.5, "Kiss rotation base speed in degrees per tick (Kiss KillAura default is 30).");
+        this.kissJitter = NumberValue.create(this, "Kiss jitter", "#.##", "", 0.0, 0.15, 1.0, 0.01, "Kiss rotation jitter amplitude multiplied onto the 0.15 degree base (0 disables jitter).");
+        this.kissEngine = new KissRotationEngine();
+        this.rotationMode.addModeDependentValues(this.rotationKissMode, this.kissSpeed, this.kissJitter);
         this.perfectSwing.whenEqualTo(false).applyTo(this.attackRate);
         // 1.7.10 attacks via attackEntity(target) directly and never rewrites
         // the outgoing packet view, so the silent aim speed is unused there.
         if (ForgeVersion.MC_1_7_10.L()) {
             this.aimSpeed.setHidden(true);
         }
-        this.addValue(this.targetFilter, this.rotationMode, this.aiModel, this.aiYawMultiplier, this.aiPitchMultiplier, this.aimSpeed, this.attackRate, this.extraSwingDistance, this.maxAngle, this.targetMode, this.targetArea, this.shieldCheck);
+        this.addValue(this.targetFilter, this.rotationMode, this.aiModel, this.aiYawMultiplier, this.aiPitchMultiplier, this.kissSpeed, this.kissJitter, this.aimSpeed, this.attackRate, this.extraSwingDistance, this.maxAngle, this.targetMode, this.targetArea, this.shieldCheck);
+
+        // 把模式选择放到设置列表最上方（子模块/依赖值会先被注册，导致下拉框被挤到下面）
+        java.util.List<gg.vape.value.Value<?, ?>> valueOrder = this.getValues();
+        valueOrder.remove(this.rotationMode);
+        valueOrder.add(0, this.rotationMode);
+
         this.showTarget.addDependentValues(this.targetColor, this.attackColor, this.renderType);
         this.breakBlocks.addDependentValues(this.breakBlocksDelay, this.breakBlocksWhitelist);
         this.breakBlocksWhitelist.addDependentValues(this.blockBreakItems);
@@ -682,6 +702,8 @@ extends Mod {
                 this.rotationController.setLinearAcceleration(false);
                 if (this.rotationMode.getValue() == this.rotationAiMode) {
                     this.updateAimAi(player, jitteredTargetX, jitteredTargetY, jitteredTargetZ, targetX, targetY, targetZ, distanceToTarget, horizontalTargetMotion);
+                } else if (this.rotationMode.getValue() == this.rotationKissMode) {
+                    this.updateAimKiss(player, jitteredTargetX, jitteredTargetY, jitteredTargetZ, targetX, targetY, targetZ, distanceToTarget);
                 } else {
                     RotationAngles desiredRotation = this.rotationController.calculateRotation(Vec3.create(jitteredTargetX, jitteredTargetY, jitteredTargetZ));
                 float targetPitch = (float)RotationUtil.h(player, targetX, jitteredTargetY, targetZ);
@@ -741,6 +763,19 @@ extends Mod {
      *  MLP combat regression model (21KC11KP / 19KC8KP) instead of Vape's PID
      *  controller. Input layout mirrors CombatSample:
      *  [yaw error, pitch error, yaw velocity, pitch velocity, player+target speed, distance]. */
+    /** Rotation Mode = Kiss：只输出每 tick 增量，绝对角由 RotationManager 维护，避免两套绝对角互相漂移。 */
+    private void updateAimKiss(EntityPlayerSP player, double jitteredTargetX, double jitteredTargetY, double jitteredTargetZ, double targetX, double targetY, double targetZ, double distanceToTarget) {
+        RotationAngles desiredRotation = this.rotationController.calculateRotation(Vec3.create(jitteredTargetX, jitteredTargetY, jitteredTargetZ));
+        float targetPitch = (float)RotationUtil.h(player, targetX, jitteredTargetY, targetZ);
+        float managedYaw = RotationManager.INSTANCE.getManagedYaw();
+        float managedPitch = RotationManager.INSTANCE.getManagedPitch();
+        this.kissEngine.setTarget(this.target);
+        this.kissEngine.setJitterScale(((Double)this.kissJitter.getValue()).floatValue());
+        float[] step = this.kissEngine.compute(desiredRotation.getYaw(), targetPitch, managedYaw, managedPitch,
+                ((Double)this.kissSpeed.getValue()).floatValue(), true, distanceToTarget, 6.0);
+        this.rotationController.applyAiRotationDelta(step[0], step[1]);
+    }
+
     private void updateAimAi(EntityPlayerSP player, double jitteredTargetX, double jitteredTargetY, double jitteredTargetZ, double targetX, double targetY, double targetZ, double distanceToTarget, double horizontalTargetMotion) {
         this.applyAiModelSelection();
         RotationAngles desiredRotation = this.rotationController.calculateRotation(Vec3.create(jitteredTargetX, jitteredTargetY, jitteredTargetZ));
