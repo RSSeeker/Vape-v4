@@ -492,6 +492,11 @@ extends Mod {
                     if (ClientSettings.suppressStoredCategoryFrameVisibility && frame instanceof ModuleCategoryFrame) {
                         frame.setVisible(false);
                     }
+                    // 后视镜（Rearview）叠加层只有 <1.16.5 的旧版本真正渲染（OnlinePlayerPreviewComponent.onPreRenderTick
+                    // 在 1.16.5+ 直接 return）。新版本加载旧版本配置时不要把 "visible": true 带过来，否则会留下一个空叠加层。
+                    if (ForgeVersion.MC_1_16_5.d() && "Rearview".equals(frame.getName())) {
+                        frame.setVisible(false);
+                    }
                 }
                 continue;
             }
@@ -699,6 +704,8 @@ extends Mod {
         ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.WORLD), mainStack);
         ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.INVENTORY), mainStack);
         ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.MINIGAMES), mainStack);
+        ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.KISS), mainStack);
+        ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.ZEN), mainStack);
         ClientSettings.registerFrame((Frame)new VisibleModuleListFrame(), mainStack);
         ClientSettings.registerFrame((Frame)new ProfilesSettingsFrame(), mainStack);
         ClientSettings.registerFrame((Frame)new FrameMacros(), mainStack);
