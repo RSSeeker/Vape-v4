@@ -18,10 +18,29 @@ import java.util.jar.JarFile;
  * Loads payload classes without delegating them back to Forge's routing loader.
  */
 public final class ForgePayloadClassLoader extends URLClassLoader {
-    private static final String PAYLOAD_CLASS_PREFIX = "gg.vape.";
+    /**
+     * Rewritten by the build-time obfuscation step to the random payload package.
+     */
+    private static final String RANDOM_CLASS_PREFIX = "gg.vape.";
+    private static final String RANDOM_ENTRY_PREFIX = "gg/vape/";
+    private static final String LEGACY_CLASS_PREFIX = legacyPrefix('.');
+    private static final String LEGACY_ENTRY_PREFIX = legacyPrefix('/');
     private static final String AUXILIARY_CLASS_PREFIX = "func.skidline.";
-    private static final String PAYLOAD_ENTRY_PREFIX = "gg/vape/";
     private static final String AUXILIARY_ENTRY_PREFIX = "func/skidline/";
+    private static final String[] PAYLOAD_CLASS_PREFIXES =
+            {RANDOM_CLASS_PREFIX, LEGACY_CLASS_PREFIX};
+    private static final String[] AUXILIARY_CLASS_PREFIXES = {AUXILIARY_CLASS_PREFIX};
+    private static final String[] PAYLOAD_ENTRY_PREFIXES =
+            {RANDOM_ENTRY_PREFIX, LEGACY_ENTRY_PREFIX};
+    private static final String[] AUXILIARY_ENTRY_PREFIXES = {AUXILIARY_ENTRY_PREFIX};
+
+    /**
+     * Built at runtime so constant folding cannot resurrect the obfuscated prefix.
+     */
+    private static String legacyPrefix(char separator) {
+        return new StringBuilder(8).append("gg").append(separator)
+                .append("vape").append(separator).toString();
+    }
 
     static {
         ClassLoader.registerAsParallelCapable();
@@ -96,8 +115,8 @@ public final class ForgePayloadClassLoader extends URLClassLoader {
             Enumeration<JarEntry> entries = jar.entries();
             while (entries.hasMoreElements()) {
                 String entryName = entries.nextElement().getName();
-                if ((!entryName.startsWith(PAYLOAD_ENTRY_PREFIX)
-                        && !entryName.startsWith(AUXILIARY_ENTRY_PREFIX))
+                if ((!startsWithAny(entryName, PAYLOAD_ENTRY_PREFIXES)
+                        && !startsWithAny(entryName, AUXILIARY_ENTRY_PREFIXES))
                         || !entryName.endsWith(".class")) {
                     continue;
                 }
@@ -109,8 +128,17 @@ public final class ForgePayloadClassLoader extends URLClassLoader {
         }
     }
 
+    private static boolean startsWithAny(String value, String[] prefixes) {
+        for (String prefix : prefixes) {
+            if (value.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean isPayloadClass(String name) {
-        return name.startsWith(PAYLOAD_CLASS_PREFIX)
-                || name.startsWith(AUXILIARY_CLASS_PREFIX);
+        return startsWithAny(name, PAYLOAD_CLASS_PREFIXES)
+                || startsWithAny(name, AUXILIARY_CLASS_PREFIXES);
     }
 }

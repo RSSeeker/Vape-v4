@@ -13,6 +13,11 @@ extends Wrapper {
         MPlayerControllerMP.attackEntity(PlayerControllerMP.vapeInstance.getMappingsMapperCompat().hj, this.I, entityPlayer.getObject(), entity.getObject());
     }
 
+    public boolean useItem(EntityPlayer entityPlayer, EnumHand enumHand) {
+        Object object = MPlayerControllerMP.useItem(PlayerControllerMP.vapeInstance.getMappingsMapperCompat().hj, this.I, entityPlayer.getObject(), enumHand.getObject());
+        return object != null;
+    }
+
     public void onStoppedUsingItem(EntityPlayer entityPlayer) {
         PlayerControllerMP.vapeInstance.getMappingsMapperCompat().hj.onStoppedUsingItem(this.I, entityPlayer.getObject());
     }

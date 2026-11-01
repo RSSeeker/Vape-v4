@@ -21,6 +21,7 @@ extends Mapping {
     private final MappingField A;
     public final MappingMethod f;
     public final MappingMethod L;
+    public final MappingMethod useItem;
 
     public Object S(Object object, int n, int n2, int n3, int n4, Object object2) {
         return this.I.invokeObject(object, n, n2, n3, n4, object2);
@@ -153,6 +154,7 @@ extends Mapping {
             MPlayerControllerMP mPlayerControllerMP = this;
             this.L = mPlayerControllerMP.Y(string, bl, clazz, classArray);
         }
+        this.useItem = this.Y("useItem", ForgeVersion.MC_1_17.d(), MappedClasses.Yn, MappedClasses.Yl, MappedClasses.Yf);
         Class<Boolean> clazz = Boolean.TYPE;
         boolean bl = true;
         String string = "isHittingBlock";
@@ -255,6 +257,10 @@ extends Mapping {
             return this.r.invokeObject(object, object2, object4, object5);
         }
         return this.r.invokeObject(object, object2, object3, object4, object5);
+    }
+
+    public static Object useItem(MPlayerControllerMP mPlayerControllerMP, Object object, Object object2, Object object3) {
+        return mPlayerControllerMP.useItem.invokeObject(object, object2, object3);
     }
 
     public static boolean K(MPlayerControllerMP mPlayerControllerMP, Object object) {

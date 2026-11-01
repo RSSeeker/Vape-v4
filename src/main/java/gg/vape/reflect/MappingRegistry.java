@@ -28,6 +28,9 @@ public final class MappingRegistry {
     private static final boolean FABRIC_12111_RUNTIME =
             VANILLA_MAPPING_VERSION == 61
                     && Fabric12111Mappings.isRuntimePresent();
+    private static final boolean FABRIC_12110_RUNTIME =
+            VANILLA_MAPPING_VERSION == 60
+                    && Fabric12110Mappings.isRuntimePresent();
 
     private MappingRegistry() {
     }
@@ -52,6 +55,8 @@ public final class MappingRegistry {
                 return "mappings/forge1206";
             case 61:
                 return "mappings/forge12111";
+            case 60:
+                return "mappings/forge12110";
             default:
                 return "mappings/forge189";
         }
@@ -122,6 +127,12 @@ public final class MappingRegistry {
             }
             return Vanilla12111Mappings.lookupMethodSrgName(method);
         }
+        if (VANILLA_MAPPING_VERSION == 60) {
+            if (FABRIC_12110_RUNTIME) {
+                return Fabric12110Mappings.lookupMethodSrgName(method);
+            }
+            return Vanilla12110Mappings.lookupMethodSrgName(method);
+        }
         return null;
     }
 
@@ -152,6 +163,12 @@ public final class MappingRegistry {
                 return Fabric12111Mappings.lookupFieldSrgName(field);
             }
             return Vanilla12111Mappings.lookupFieldSrgName(field);
+        }
+        if (VANILLA_MAPPING_VERSION == 60) {
+            if (FABRIC_12110_RUNTIME) {
+                return Fabric12110Mappings.lookupFieldSrgName(field);
+            }
+            return Vanilla12110Mappings.lookupFieldSrgName(field);
         }
         return null;
     }

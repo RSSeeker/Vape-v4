@@ -53,7 +53,11 @@ add_library(Vape421Native SHARED
         dllmain.c
         loader_bootstrap.c
         native_bridge.c
+        reflective_loader.c
         "${CMAKE_CURRENT_BINARY_DIR}/generated/payload.rc")
+# The reflective loader executes before its imports are resolved and must not
+# touch the CRT prologue that DllMainCRTStartup would have installed.
+set_source_files_properties(reflective_loader.c PROPERTIES COMPILE_OPTIONS "/GS-")
 target_include_directories(Vape421Native PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}"
         "${VAPE421_JNI_INCLUDE}"
@@ -96,7 +100,7 @@ target_link_libraries(Vape421LoaderGui PRIVATE
         shlwapi
         ws2_32
 )
-target_include_directories(Vape421LoaderGui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/loader_gui")
+target_include_directories(Vape421LoaderGui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/loader_gui" "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # Embed Vape421Native.dll into the GUI loader for single-file operation.
 # The loader extracts resource 422 (RCDATA) to a temp file when no DLL sits

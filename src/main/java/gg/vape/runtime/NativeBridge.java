@@ -2,6 +2,7 @@ package gg.vape.runtime;
 
 import gg.vape.Vape;
 import gg.vape.reflect.Badlion189Mappings;
+import gg.vape.reflect.Fabric12110Mappings;
 import gg.vape.reflect.Fabric12111Mappings;
 import gg.vape.reflect.Vanilla1165Mappings;
 import gg.vape.reflect.Fabric262Mappings;
@@ -10,6 +11,7 @@ import gg.vape.reflect.NeoForge1211Mappings;
 import gg.vape.reflect.Type;
 import gg.vape.reflect.Vanilla1122Mappings;
 import gg.vape.reflect.Vanilla1211Mappings;
+import gg.vape.reflect.Vanilla12110Mappings;
 import gg.vape.reflect.Vanilla1201Mappings;
 import gg.vape.reflect.Vanilla1206Mappings;
 import gg.vape.reflect.Vanilla12111Mappings;
@@ -45,6 +47,7 @@ public class NativeBridge {
     private static volatile int vanillaMappingVersion;
     private static volatile boolean badlion189Runtime;
     private static volatile boolean fabric12111Runtime;
+    private static volatile boolean fabric12110Runtime;
     private static volatile boolean neoForge1201Runtime;
     private static volatile boolean neoForge1211Runtime;
     private static volatile boolean fabric262Runtime;
@@ -689,6 +692,19 @@ public class NativeBridge {
             lastFailure = throwable;
         }
 
+        // Fallback for modern mojmap runtimes (NeoForge / 26.x) where the Forge
+        // metadata classes above are absent: read the human readable game version.
+        try {
+            int readableVersion = detectReadableGameVersion();
+            if (readableVersion != 0) {
+                return readableVersion;
+            }
+            lastFailure = new IllegalStateException("SharedConstants version text is not a known Minecraft version");
+        }
+        catch (Throwable throwable) {
+            lastFailure = throwable;
+        }
+
         int vanillaVersion = detectVanillaMappingVersion(
                 Thread.currentThread().getContextClassLoader(),
                 NativeBridge.class.getClassLoader());
@@ -714,11 +730,165 @@ public class NativeBridge {
         }
     }
 
+    /** Reads the human readable version text from a WorldVersion instance (name accessor varies by version). */
+    private static String readVersionName(Object worldVersion) throws Throwable {
+        String[] candidates = {"getName", "name", "getNameString", "toString"};
+        for (String candidate : candidates) {
+            try {
+                java.lang.reflect.Method method = worldVersion.getClass().getMethod(candidate);
+                if (method.getParameterCount() == 0) {
+                    Object value = method.invoke(worldVersion);
+                    if (value instanceof String) {
+                        return (String)value;
+                    }
+                }
+            }
+            catch (NoSuchMethodException ignored) {
+                // Try the next accessor name.
+            }
+        }
+        return null;
+    }
+
+    /** Maps the readable game version (NeoForge / 26.x runtimes) to a ForgeVersion id. */
+    private static int detectReadableGameVersion() throws Throwable {
+        ClassLoader gameLoader = resolveGameClassLoader();
+        Class<?> sharedConstants = Class.forName("net.minecraft.SharedConstants", false,
+                gameLoader == null ? NativeBridge.class.getClassLoader() : gameLoader);
+        Object currentVersion = sharedConstants.getMethod("getCurrentVersion").invoke(null);
+        return versionIdForVersionName(readVersionName(currentVersion));
+    }
+
+    /** Maps a readable Minecraft version string (optionally with a loader suffix) to its id. */
+    private static int versionIdForVersionName(String rawVersion) {
+        if (rawVersion == null) {
+            return 0;
+        }
+        String version = rawVersion.trim();
+        int suffix = version.indexOf('-');
+        if (suffix > 0) {
+            version = version.substring(0, suffix);
+        }
+        switch (version) {
+            case "1.7.10": return 13;
+            case "1.8.9": return 15;
+            case "1.12.2": return 23;
+            case "1.16.4":
+            case "1.16.5": return 36;
+            case "1.17": return 37;
+            case "1.20.1": return 47;
+            case "1.20.6": return 50;
+            case "1.21": return 51;
+            case "1.21.1": return 52;
+            case "1.21.4": return 54;
+            case "1.21.5": return 55;
+            case "1.21.6": return 56;
+            case "1.21.10": return 60;
+            case "1.21.11": return 61;
+            case "26.1":
+            case "26.1.1":
+            case "26.1.2":
+            case "26.1.3": return 100;
+            case "26.2": return 110;
+            default: return 0;
+        }
+    }
+
+    /**
+     * Reads the Minecraft version from loader metadata that is not obfuscated
+     * (FML {@code VersionInfo.mcVersion()}) or from the world version name.
+     * Used to break ties when several mapping anchors match at once, which is
+     * what happens between 1.21.10 and 1.21.11: their obfuscated class names
+     * overlap, so anchor presence alone cannot tell them apart.
+     */
+    private static int detectRuntimeVersionByMetadata() {
+        String[] loaderClassNames = {
+                "net.neoforged.fml.loading.FMLLoader",
+                "net.minecraftforge.fml.loading.FMLLoader"};
+        for (String loaderClassName : loaderClassNames) {
+            try {
+                Class<?> loaderClass = Class.forName(loaderClassName);
+                Object versionInfo = loaderClass.getMethod("versionInfo").invoke(null);
+                Object mcVersion = versionInfo.getClass().getMethod("mcVersion").invoke(versionInfo);
+                if (mcVersion instanceof String) {
+                    int versionId = versionIdForVersionName((String)mcVersion);
+                    if (versionId != 0) {
+                        NativeBridge.sce("Runtime metadata reports Minecraft " + mcVersion);
+                        return versionId;
+                    }
+                }
+            }
+            catch (Throwable ignored) {
+                // Try the next loader or the world version fallback.
+            }
+        }
+        try {
+            ClassLoader gameLoader = resolveGameClassLoader();
+            Class<?> sharedConstants = Class.forName("net.minecraft.SharedConstants", false,
+                    gameLoader == null ? NativeBridge.class.getClassLoader() : gameLoader);
+            Object currentVersion = sharedConstants.getMethod("getCurrentVersion").invoke(null);
+            int versionId = versionIdForVersionName(readVersionName(currentVersion));
+            if (versionId != 0) {
+                NativeBridge.sce("World version reports Minecraft " + readVersionName(currentVersion));
+                return versionId;
+            }
+        }
+        catch (Throwable ignored) {
+            // No readable metadata available.
+        }
+        return 0;
+    }
+
+    /** Reads the Minecraft version from Fabric Loader metadata (authoritative for Fabric runtimes). */
+    private static int detectFabricMinecraftVersion() {
+        try {
+            ClassLoader gameLoader = resolveGameClassLoader();
+            Class<?> loaderClass = Class.forName("net.fabricmc.loader.api.FabricLoader", false,
+                    gameLoader == null ? NativeBridge.class.getClassLoader() : gameLoader);
+            Object loaderInstance = loaderClass.getMethod("getInstance").invoke(null);
+            Object optional = loaderClass.getMethod("getModContainer", String.class)
+                    .invoke(loaderInstance, "minecraft");
+            Object container = optional.getClass().getMethod("get").invoke(optional);
+            Object metadata = container.getClass().getMethod("getMetadata").invoke(container);
+            Object modVersion = metadata.getClass().getMethod("getVersion").invoke(metadata);
+            Object friendly = modVersion.getClass().getMethod("getFriendlyString").invoke(modVersion);
+            if (friendly instanceof String) {
+                int version = versionIdForVersionName((String)friendly);
+                return version;
+            }
+        }
+        catch (Throwable throwable) {
+        }
+        try {
+            ClassLoader gameLoader = resolveGameClassLoader();
+            Class<?> implClass = Class.forName("net.fabricmc.loader.impl.FabricLoaderImpl", false,
+                    gameLoader == null ? NativeBridge.class.getClassLoader() : gameLoader);
+            Object loaderInstance = implClass.getMethod("getInstance").invoke(null);
+            Object provider = implClass.getMethod("getGameProvider").invoke(loaderInstance);
+            Object raw = provider.getClass().getMethod("getRawGameVersion").invoke(provider);
+            if (raw instanceof String) {
+                int providerVersion = versionIdForVersionName((String)raw);
+                return providerVersion;
+            }
+        }
+        catch (Throwable throwable) {
+        }
+        return 0;
+    }
+
     private static int detectVanillaMappingVersion(
             ClassLoader... preferredLoaders) {
         int detectedVersion = vanillaMappingVersion;
         if (detectedVersion != 0) {
             return detectedVersion;
+        }
+        int fabricVersion = detectFabricMinecraftVersion();
+        if (fabricVersion != 0) {
+            vanillaMappingVersion = fabricVersion;
+            fabric12110Runtime = fabricVersion == 60;
+            fabric12111Runtime = fabricVersion == 61;
+            fabric262Runtime = fabricVersion == 100 || fabricVersion == 110;
+            return fabricVersion;
         }
         boolean vanilla1710 = Vanilla1710Mappings.isRuntimePresent(preferredLoaders);
         boolean badlion189 = Badlion189Mappings.isRuntimePresent(preferredLoaders);
@@ -738,13 +908,15 @@ public class NativeBridge {
         boolean excludesModern = vanilla262 || fabric262;
         boolean vanilla12111 = Vanilla12111Mappings.isRuntimePresent(preferredLoaders);
         boolean fabric12111 = Fabric12111Mappings.isRuntimePresent(preferredLoaders);
+        boolean fabric12110 = Fabric12110Mappings.isRuntimePresent(preferredLoaders);
+        boolean vanilla12110 = Vanilla12110Mappings.isRuntimePresent(preferredLoaders);
         // 1.21.11 原版运行时是 Mojang 混淆名（gfj 等）；NeoForge 1.21.11 运行时
         // 加载官方可读名的 patched jar（net.minecraft.client.Minecraft），但其
         // "已认领"的混淆 jar 仍在 AppClassLoader 可见，导致混淆 1.21.11 探测也
         // 命中（v12111=true），且 NeoForge 1.20.1/1.21.1 mojmap 探测会误报。
         // 排除两个 mojmap 探测后唯一命中 v12111 → 61；类解析由
         // VanillaSrgMappings 先试规范名再试混淆名来适配两种运行时。
-        boolean obfuscated12111 = vanilla12111 || fabric12111;
+        boolean obfuscated12111 = vanilla12111 || fabric12111 || vanilla12110 || fabric12110;
         boolean neoForge1211 = neoForge1211Detected && !excludesModern && !obfuscated12111;
         // 1.20.1 and 1.21.1 share identical mojmap anchor classes, so a 1.21.1
         // runtime also matches the 1.20.1 probes; exclude it explicitly.
@@ -759,10 +931,13 @@ public class NativeBridge {
                 + (vanilla1211 || neoForge1211 ? 1 : 0)
                 + (vanilla1206 ? 1 : 0)
                 + (vanilla12111 || fabric12111 ? 1 : 0)
+                + (vanilla12110 ? 1 : 0)
+                + (fabric12110 ? 1 : 0)
                 + (vanilla262 || fabric262 ? 1 : 0);
         if (matchingVersions == 1) {
             badlion189Runtime = badlion189;
             fabric12111Runtime = fabric12111;
+            fabric12110Runtime = fabric12110;
             neoForge1201Runtime = neoForge1201;
             neoForge1211Runtime = neoForge1211;
             fabric262Runtime = fabric262;
@@ -782,11 +957,21 @@ public class NativeBridge {
                 detectedVersion = 50;
             } else if (vanilla12111 || fabric12111) {
                 detectedVersion = 61;
+            } else if (vanilla12110 || fabric12110) {
+                detectedVersion = 60;
             } else {
                 int modernProtocol = Vanilla262Mappings.protocolVersion(
                         preferredLoaders);
                 detectedVersion = modernProtocol != 0
                         ? modernProtocol : 110;
+            }
+        }
+        else {
+            // Several anchors matched. 1.21.10 and 1.21.11 share obfuscated
+            // class names, so prefer the loader metadata when it is readable.
+            int metadataVersion = detectRuntimeVersionByMetadata();
+            if (metadataVersion != 0) {
+                detectedVersion = metadataVersion;
             }
         }
         if (detectedVersion != 0) {
@@ -928,6 +1113,14 @@ public class NativeBridge {
                         internalName, contextLoader, bridgeLoader);
             }
             return Vanilla12111Mappings.resolveClass(
+                    internalName, contextLoader, bridgeLoader);
+        }
+        if (mappingVersion == 60) {
+            if (fabric12110Runtime) {
+                return Fabric12110Mappings.resolveClass(
+                        internalName, contextLoader, bridgeLoader);
+            }
+            return Vanilla12110Mappings.resolveClass(
                     internalName, contextLoader, bridgeLoader);
         }
         if (mappingVersion == 110 || mappingVersion == 100) {
