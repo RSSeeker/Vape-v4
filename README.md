@@ -209,15 +209,15 @@ Minecraft 1.16.5 及其他未列出的 1.16+ 版本兼容性仍然不佳。请�
 - 26.2 Forge：Forge 65.1.0（已验证）
 - 26.2 Fabric：Fabric Loader 0.19.3
 
-### 10. Release 里的类名为什么不是随机的？
-
-Release 发布包按原类名编译，**不做类名混淆**，方便核对与排查。想要每次构建都得到随机的包名与类名，请自行编译：本地执行 `gradlew.bat build verifyInjectionPayload prepareInjectionBundle` 时默认开启编译时混淆（所有自有的 `gg.vape.*` 类会重命名为随机 16 位名字，被 native 硬编码的三个类保留原名），每次构建结果都不同，映射表写入 `build/rename-mapping.txt`，用于反混淆崩溃日志。做法与 Zen（OpenZen）README 的「编译时类名混淆」一节一致。
-
 ### 9. 配置消失、保存失败、好友或小队（Party）状态异常
 
 VapeService 使用单个本地 JSON 文件保存账户与配置，数据路径相对于启动目录 —— 换目录启动会看起来像创建了全新账户。文件损坏、无写权限、磁盘已满、同时运行多个 Service 实例或异常退出都可能影响保存。同一账户的新 Zeus 连接会替换旧连接；Service 重启、系统休眠或网络切换后，高频在线状态也不会自动恢复。
 
 建议始终使用明确的 `--data-file` 路径并定期备份，同时避免两个 Service 实例写同一文件。当前 Service 是实验性兼容层：部分公共配置、评论、举报、标签和分页行为为简化实现，连接成功不等于所有原版 Online 功能完整可用。
+
+### 10. Release 里的类名为什么不是随机的？
+
+Release 发布包按原类名编译，**不做类名混淆**，方便核对与排查。想要每次构建都得到随机的包名与类名，请自行编译：本地执行 `gradlew.bat build verifyInjectionPayload prepareInjectionBundle` 时默认开启编译时混淆（所有自有的 `gg.vape.*` 类会重命名为随机 16 位名字，被 native 硬编码的三个类保留原名），每次构建结果都不同，映射表写入 `build/rename-mapping.txt`，用于反混淆崩溃日志。做法与 Zen（OpenZen）README 的「编译时类名混淆」一节一致。
 
 ## 内嵌服务配置
 

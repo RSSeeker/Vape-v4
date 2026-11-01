@@ -205,15 +205,15 @@ Compatibility for Minecraft 1.16.5 and other unlisted 1.16+ versions is still po
 - 26.2 Forge: Forge 65.1.0 (verified)
 - 26.2 Fabric: Fabric Loader 0.19.3
 
-### 10. Why are class names in the release not randomized?
-
-Release packages are compiled with the original class names and are **not obfuscated**, which keeps them easy to verify and debug. To get a random package and class name on every build, compile it yourself: a local `gradlew.bat build verifyInjectionPayload prepareInjectionBundle` enables build-time obfuscation by default (every owned `gg.vape.*` class is renamed to a random 16-character name, while the three classes hard-coded by the native layer keep their names). Each build differs, and the mapping is written to `build/rename-mapping.txt` for de-obfuscating crash logs. This matches the "build-time class name obfuscation" section of the Zen (OpenZen) README.
-
 ### 9. Configs disappear, saving fails, or friend / party state is wrong
 
 VapeService stores accounts and configs in a single local JSON file, and the data path is relative to the working directory — starting from another directory looks like a brand-new account. A corrupted file, missing write permission, a full disk, several Service instances running at once or an abnormal exit can all affect saving. A new Zeus connection for the same account replaces the old one, and high-frequency online state does not recover by itself after a Service restart, system sleep or network switch.
 
 Always pass an explicit `--data-file` path and keep regular backups, and never let two Service instances write the same file. The Service is an experimental compatibility layer: some public config, comment, report, tag and pagination behaviour is simplified, so a successful connection does not mean every original Online feature works.
+
+### 10. Why are class names in the release not randomized?
+
+Release packages are compiled with the original class names and are **not obfuscated**, which keeps them easy to verify and debug. To get a random package and class name on every build, compile it yourself: a local `gradlew.bat build verifyInjectionPayload prepareInjectionBundle` enables build-time obfuscation by default (every owned `gg.vape.*` class is renamed to a random 16-character name, while the three classes hard-coded by the native layer keep their names). Each build differs, and the mapping is written to `build/rename-mapping.txt` for de-obfuscating crash logs. This matches the "build-time class name obfuscation" section of the Zen (OpenZen) README.
 
 ## Embedded service config
 
