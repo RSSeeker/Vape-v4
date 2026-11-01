@@ -217,7 +217,7 @@ VapeService 使用单个本地 JSON 文件保存账户与配置，数据路径�
 
 ### 10. Release 里的类名为什么不是随机的？
 
-Release 发布包按原类名编译，**不做类名混淆**，方便核对与排查。想要每次构建都得到随机的包名与类名，请自行编译：本地执行 `gradlew.bat build verifyInjectionPayload prepareInjectionBundle` 时默认开启编译时混淆（所有自有的 `gg.vape.*` 类会重命名为随机 16 位名字，被 native 硬编码的三个类保留原名），每次构建结果都不同，映射表写入 `build/rename-mapping.txt`，用于反混淆崩溃日志。做法与 Zen（OpenZen）README 的「编译时类名混淆」一节一致。
+Release 发布包按原类名编译，**不做类名混淆**，方便核对与排查。想要每次构建都得到随机的包名与类名，请自行编译：本地执行 `gradlew.bat build verifyInjectionPayload prepareInjectionBundle` 时默认开启编译时混淆（所有自有的 `gg.vape.*` 类会重命名为随机 16 位名字，被 native 硬编码的三个类保留原名），每次构建结果都不同，映射表写入 `build/rename-mapping.txt`，用于反混淆崩溃日志。
 
 ## 内嵌服务配置
 

@@ -213,7 +213,7 @@ Always pass an explicit `--data-file` path and keep regular backups, and never l
 
 ### 10. Why are class names in the release not randomized?
 
-Release packages are compiled with the original class names and are **not obfuscated**, which keeps them easy to verify and debug. To get a random package and class name on every build, compile it yourself: a local `gradlew.bat build verifyInjectionPayload prepareInjectionBundle` enables build-time obfuscation by default (every owned `gg.vape.*` class is renamed to a random 16-character name, while the three classes hard-coded by the native layer keep their names). Each build differs, and the mapping is written to `build/rename-mapping.txt` for de-obfuscating crash logs. This matches the "build-time class name obfuscation" section of the Zen (OpenZen) README.
+Release packages are compiled with the original class names and are **not obfuscated**, which keeps them easy to verify and debug. To get a random package and class name on every build, compile it yourself: a local `gradlew.bat build verifyInjectionPayload prepareInjectionBundle` enables build-time obfuscation by default (every owned `gg.vape.*` class is renamed to a random 16-character name, while the three classes hard-coded by the native layer keep their names). Each build differs, and the mapping is written to `build/rename-mapping.txt` for de-obfuscating crash logs.
 
 ## Embedded service config
 
