@@ -1,5 +1,6 @@
 #include "vape421_native.h"
 #include "loader_bootstrap.h"
+#include "manual_map.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -7,16 +8,35 @@
 #include <wchar.h>
 
 static volatile LONG g_loaded_by_jni = 0;
+/* Manual-map (reflective loader) overrides: when these are set the DLL was
+ * mapped by the injector instead of LoadLibraryW, so it has no loader module
+ * entry and cannot use GetModuleFileNameW/FindResourceW/FreeLibrary. */
+static HMODULE g_manual_map_module = NULL;
+static wchar_t g_manual_map_install_dir[MAX_PATH];
+static wchar_t g_manual_map_jar_path[MAX_PATH];
 static wchar_t g_log_file[MAX_PATH];
 static LONG g_log_path_ready = 0;
 
+/* Staged by the reflective loader inside the mapped image before the entry
+ * point runs: DllMain cannot receive parameters from a manual map, so it reads
+ * them from these exported globals on DLL_PROCESS_ATTACH. */
+__declspec(dllexport) Vape421ManualMapParams g_vape_manual_map_params;
+__declspec(dllexport) volatile LONG g_vape_manual_map_params_ready = 0;
+
 #define VAPE421_PRODUCT_JAR_RESOURCE_ID 421
 
+/* Loader-free breadcrumbs for manual mapping: written before the normal log
+ * path exists, so a broken module/DLL path cannot hide where the bootstrap
+ * stopped. */
 static int module_directory(wchar_t *output, size_t capacity) {
     DWORD length;
     wchar_t *separator;
     if (output == NULL || capacity == 0 || g_module == NULL) {
         return 0;
+    }
+    if (g_manual_map_install_dir[0] != L'\0') {
+        return wcsncpy_s(output, capacity, g_manual_map_install_dir,
+                _TRUNCATE) == 0;
     }
     length = GetModuleFileNameW(g_module, output, (DWORD)capacity);
     if (length == 0 || length >= capacity) {
@@ -249,6 +269,15 @@ static jstring new_wide_string(JNIEnv *env, const wchar_t *value) {
 static int materialize_embedded_product_jar(
         wchar_t *jar_path, size_t jar_capacity) {
     HRSRC resource;
+    if (g_manual_map_jar_path[0] != L'\0') {
+        if (wcsncpy_s(jar_path, jar_capacity, g_manual_map_jar_path,
+                _TRUNCATE) != 0) {
+            return 0;
+        }
+        vape_log(L"using product JAR supplied by the manual-map injector: %ls",
+                jar_path);
+        return 1;
+    }
     HGLOBAL loaded_resource;
     const unsigned char *bytes;
     DWORD size;
@@ -930,6 +959,11 @@ static int set_current_context_class_loader(JNIEnv *env, jobject loader) {
 
 static int pin_native_module(void) {
     HMODULE pinned = NULL;
+    if (g_manual_map_module != NULL) {
+        /* A manually mapped image is not a loader module, so pinning it is
+         * meaningless (and GetModuleHandleExW would fail anyway). */
+        return 1;
+    }
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
                     | GET_MODULE_HANDLE_EX_FLAG_PIN,
             (LPCWSTR)(const void *)&g_module, &pinned)) {
@@ -1072,7 +1106,7 @@ cleanup:
     if (attached) {
         (*vm)->DetachCurrentThread(vm);
     }
-    if (!registered && worker_module != NULL) {
+    if (!registered && worker_module != NULL && g_manual_map_module == NULL) {
         vape_log(L"bootstrap failed before native registration; unloading DLL");
         FreeLibraryAndExitThread(worker_module, exit_code);
     }
@@ -1080,6 +1114,28 @@ cleanup:
         vape_log(L"bootstrap did not complete; DLL remains loaded because natives may be registered");
     }
     return exit_code;
+}
+
+int vape_manual_map_attach(HMODULE module, const wchar_t *install_dir,
+        const wchar_t *jar_path) {
+    HANDLE thread;
+    if (module == NULL || install_dir == NULL || jar_path == NULL) {
+        return 0;
+    }
+    if (wcsncpy_s(g_manual_map_install_dir, MAX_PATH, install_dir,
+                _TRUNCATE) != 0
+            || wcsncpy_s(g_manual_map_jar_path, MAX_PATH, jar_path,
+                _TRUNCATE) != 0) {
+        return 0;
+    }
+    g_manual_map_module = module;
+    g_module = module;
+    thread = CreateThread(NULL, 0, bootstrap_thread, module, 0, NULL);
+    if (thread == NULL) {
+        return 0;
+    }
+    CloseHandle(thread);
+    return 1;
 }
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
@@ -1123,9 +1179,18 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
     if (reason == DLL_PROCESS_ATTACH) {
         g_module = instance;
         DisableThreadLibraryCalls(instance);
+        if (InterlockedCompareExchange(&g_vape_manual_map_params_ready, 1, 1) != 0) {
+            g_manual_map_module = instance;
+            wcsncpy_s(g_manual_map_install_dir, MAX_PATH,
+                    g_vape_manual_map_params.install_dir, _TRUNCATE);
+            wcsncpy_s(g_manual_map_jar_path, MAX_PATH,
+                    g_vape_manual_map_params.jar_path, _TRUNCATE);
+        } else {
+        }
         thread = CreateThread(NULL, 0, bootstrap_thread, instance, 0, NULL);
         if (thread != NULL) {
             CloseHandle(thread);
+        } else {
         }
     } else if (reason == DLL_PROCESS_DETACH) {
         vape_loader_bootstrap_clear();

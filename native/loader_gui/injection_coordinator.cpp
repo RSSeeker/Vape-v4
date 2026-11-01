@@ -1,6 +1,7 @@
 #include "injection_coordinator.h"
 #include "loader_bootstrap.h"
 #include "loader_strings.h"
+#include "manual_map.h"
 
 #include <windows.h>
 
@@ -101,7 +102,183 @@ DWORD reflectiveLoaderRva(const std::vector<unsigned char>& image) {
     }
     return 0;
 }
+
+// Resolves one named export from the file image. The reflective loader runs
+// from the file layout and therefore cannot rely on its own string literals, so
+// the injector hands the staging-symbol RVAs over in the parameter block.
+DWORD exportedSymbolRva(const std::vector<unsigned char>& image, const char* wanted) {
+    if (image.size() < sizeof(IMAGE_DOS_HEADER)) return 0;
+    const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(image.data());
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0 ||
+        static_cast<std::size_t>(dos->e_lfanew) + sizeof(IMAGE_NT_HEADERS64) > image.size()) return 0;
+    const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(image.data() + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE || nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC)
+        return 0;
+    const auto directory = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+    const auto* exports = reinterpret_cast<const IMAGE_EXPORT_DIRECTORY*>(
+        rvaPointer(image, nt, directory.VirtualAddress));
+    if (!exports) return 0;
+    const auto* names = reinterpret_cast<const DWORD*>(rvaPointer(image, nt, exports->AddressOfNames));
+    const auto* ordinals = reinterpret_cast<const WORD*>(rvaPointer(image, nt, exports->AddressOfNameOrdinals));
+    const auto* functions = reinterpret_cast<const DWORD*>(rvaPointer(image, nt, exports->AddressOfFunctions));
+    if (!names || !ordinals || !functions) return 0;
+    for (DWORD index = 0; index < exports->NumberOfNames; ++index) {
+        const auto* name = reinterpret_cast<const char*>(rvaPointer(image, nt, names[index]));
+        if (name != nullptr && strcmp(name, wanted) == 0) return functions[ordinals[index]];
+    }
+    return 0;
 }
+
+// The injector writes the DLL *file* image into the target, so the entry
+// point must be addressed by file offset, not by RVA: code at RVA 0x76b0 lives
+// at PointerToRawData + (RVA - VirtualAddress) in that byte image.
+std::size_t rvaToFileOffset(const std::vector<unsigned char>& image, DWORD rva) {
+    if (image.size() < sizeof(IMAGE_DOS_HEADER)) return 0;
+    const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(image.data());
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0) return 0;
+    const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(image.data() + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE) return 0;
+    const auto* section = IMAGE_FIRST_SECTION(nt);
+    for (WORD index = 0; index < nt->FileHeader.NumberOfSections; ++index, ++section) {
+        const DWORD span = section->Misc.VirtualSize != 0
+            ? section->Misc.VirtualSize : section->SizeOfRawData;
+        if (rva >= section->VirtualAddress && rva < section->VirtualAddress + span) {
+            const std::size_t offset = static_cast<std::size_t>(rva - section->VirtualAddress)
+                + section->PointerToRawData;
+            return offset < image.size() ? offset : 0;
+        }
+    }
+    return 0;
+}
+
+std::wstring parentDirectory(const std::wstring& path) {
+    const auto separator = path.find_last_of(L"\\/");
+    return separator == std::wstring::npos ? std::wstring() : path.substr(0, separator);
+}
+
+bool readFileBytes(const std::wstring& path, std::vector<unsigned char>& bytes) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) return false;
+    bytes.assign(std::istreambuf_iterator<char>(input), {});
+    return !bytes.empty();
+}
+
+bool writeFileBytes(const std::wstring& path, const unsigned char* data, std::size_t size) {
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    if (!output) return false;
+    output.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(size));
+    return output.good();
+}
+
+bool writeTextFile(const std::wstring& path, const std::wstring& text) {
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    if (!output) return false;
+    const std::string narrow(text.begin(), text.end());
+    output.write(narrow.data(), static_cast<std::streamsize>(narrow.size()));
+    return output.good();
+}
+
+/* Always-writable fallback for diagnosing which injection code ran: %TEMP% is
+ * available even when the loader runs in a restricted directory context. */
+/* One marker per injection so the user can tell which injection path was taken
+ * without opening a process viewer: manual-map-ok.txt versus
+ * manual-map-fallback.txt. Written twice (inside the recovery directory and in
+ * <client root>\.vapeclient) so a marker survives a hidden-folder surprise. */
+void writeInjectionMarker(const std::wstring& installDirectory, bool manualMapped,
+        const std::wstring& manualMapError, std::uint32_t processId) {
+    const std::wstring marker = L"\\.vapeclient\\";
+    const std::wstring fileName = manualMapped ? L"manual-map-ok.txt"
+                                               : L"manual-map-fallback.txt";
+    const std::wstring otherName = manualMapped ? L"manual-map-fallback.txt"
+                                                : L"manual-map-ok.txt";
+    std::vector<std::wstring> directories;
+    directories.push_back(installDirectory);
+    const auto position = installDirectory.rfind(marker);
+    if (position != std::wstring::npos) {
+        directories.push_back(installDirectory.substr(0, position) + marker);
+    }
+    SYSTEMTIME now{};
+    GetLocalTime(&now);
+    wchar_t stamp[64]{};
+    swprintf_s(stamp, L"%04u-%02u-%02u %02u:%02u:%02u", now.wYear, now.wMonth,
+        now.wDay, now.wHour, now.wMinute, now.wSecond);
+    std::wstring body = std::wstring(L"time=") + stamp + L"\r\npid=" +
+        (manualMapped ? L"manual-map" : L"loadlibrary-fallback") + L"\r\n";
+    if (!manualMapped && !manualMapError.empty()) {
+        body += L"reason=" + manualMapError + L"\r\n";
+    }
+    for (const auto& directory : directories) {
+        if (directory.empty()) continue;
+        DeleteFileW((directory + otherName).c_str());
+        writeTextFile(directory + fileName, body);
+    }
+}
+
+/* Manual map: the DLL never reaches LoadLibraryW, so it cannot extract its own
+ * embedded product JAR (FindResourceW needs a loader module). The injector
+ * extracts RCDATA 421 from the DLL file and hands the path to the loader. */
+bool extractEmbeddedJar(const std::wstring& dllPath, const std::wstring& jarPath) {
+    /* The product JAR is stored as `421 RCDATA "<file>"`: the resource TYPE is
+     * RT_RCDATA (10) and 421 is the resource NAME, which mirrors the DLL's
+     * FindResourceW(g_module, MAKEINTRESOURCEW(421), RT_RCDATA) lookup. */
+    constexpr WORD kProductJarResourceName = 421;
+    constexpr WORD kProductJarResourceType = 10; /* RT_RCDATA */
+    std::vector<unsigned char> image;
+    if (!readFileBytes(dllPath, image)) return false;
+    if (image.size() < sizeof(IMAGE_DOS_HEADER)) return false;
+    const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(image.data());
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0) return false;
+    if (static_cast<std::size_t>(dos->e_lfanew) + sizeof(IMAGE_NT_HEADERS64) > image.size())
+        return false;
+    const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(image.data() + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE ||
+            nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC) return false;
+    const IMAGE_DATA_DIRECTORY& resources =
+        nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_RESOURCE];
+    if (!resources.Size || !resources.VirtualAddress) return false;
+    const auto* types = reinterpret_cast<const IMAGE_RESOURCE_DIRECTORY*>(
+        rvaPointer(image, nt, resources.VirtualAddress));
+    if (!types) return false;
+    const auto* typeEntry = reinterpret_cast<const IMAGE_RESOURCE_DIRECTORY_ENTRY*>(types + 1);
+    const IMAGE_RESOURCE_DIRECTORY_ENTRY* match = nullptr;
+    for (WORD index = 0;
+            index < types->NumberOfIdEntries + types->NumberOfNamedEntries; ++index) {
+        if (!typeEntry[index].NameIsString &&
+                typeEntry[index].Id == kProductJarResourceType) {
+            match = &typeEntry[index];
+            break;
+        }
+    }
+    if (!match || !match->DataIsDirectory) return false;
+    const auto* names = reinterpret_cast<const IMAGE_RESOURCE_DIRECTORY*>(
+        rvaPointer(image, nt, resources.VirtualAddress + match->OffsetToDirectory));
+    if (!names || names->NumberOfIdEntries + names->NumberOfNamedEntries == 0) return false;
+    const auto* nameEntry = reinterpret_cast<const IMAGE_RESOURCE_DIRECTORY_ENTRY*>(names + 1);
+    const IMAGE_RESOURCE_DIRECTORY_ENTRY* nameMatch = nullptr;
+    for (WORD index = 0;
+            index < names->NumberOfIdEntries + names->NumberOfNamedEntries; ++index) {
+        if (!nameEntry[index].NameIsString &&
+                nameEntry[index].Id == kProductJarResourceName) {
+            nameMatch = &nameEntry[index];
+            break;
+        }
+    }
+    if (!nameMatch || !nameMatch->DataIsDirectory) return false;
+    const auto* languages = reinterpret_cast<const IMAGE_RESOURCE_DIRECTORY*>(
+        rvaPointer(image, nt, resources.VirtualAddress + nameMatch->OffsetToDirectory));
+    if (!languages || languages->NumberOfIdEntries + languages->NumberOfNamedEntries == 0)
+        return false;
+    const auto* languageEntry =
+        reinterpret_cast<const IMAGE_RESOURCE_DIRECTORY_ENTRY*>(languages + 1);
+    const auto* dataEntry = reinterpret_cast<const IMAGE_RESOURCE_DATA_ENTRY*>(
+        rvaPointer(image, nt, resources.VirtualAddress + languageEntry->OffsetToData));
+    if (!dataEntry || dataEntry->OffsetToData == 0 || dataEntry->Size == 0) return false;
+    const unsigned char* payload = rvaPointer(image, nt, dataEntry->OffsetToData);
+    if (!payload || payload + dataEntry->Size > image.data() + image.size()) return false;
+    return writeFileBytes(jarPath, payload, dataEntry->Size);
+}
+
+}  // namespace
 
 bool InjectionCoordinator::injectProductDll(std::uint32_t processId,
     const std::wstring& dllPath, std::uint16_t controllerPort,
@@ -125,6 +302,7 @@ bool InjectionCoordinator::injectProductDll(std::uint32_t processId,
         error = ls(Ls::NativeDllNotFoundBesideLoader);
         return false;
     }
+
 
     const std::wstring mappingName = bootstrapObjectName(L"Bootstrap", processId);
     const std::wstring ackName = bootstrapObjectName(L"BootstrapAck", processId);
@@ -159,6 +337,22 @@ bool InjectionCoordinator::injectProductDll(std::uint32_t processId,
     block->serviceZeusPort = serviceZeusPort;
     block->status = VAPE421_BOOTSTRAP_STATUS_CREATED;
 
+    /* Prefer manual mapping: the product DLL never appears in the target
+     * process module list. Fall back to the LoadLibraryW loader when the
+     * reflective loader is unavailable or refuses the image. */
+    const std::wstring installDirectory = parentDirectory(dllPath);
+    const std::wstring manualJarPath = installDirectory + L"\\Vape-v4.21-product-" +
+        std::to_wstring(processId) + L".jar";
+    bool manualMapped = false;
+    std::wstring manualMapError;
+    if (extractEmbeddedJar(dllPath, manualJarPath)) {
+        manualMapped = injectReflectiveDll(processId, dllPath, installDirectory,
+            manualJarPath, manualMapError);
+    } else {
+        manualMapError = L"embedded product JAR extraction failed";
+    }
+    writeInjectionMarker(installDirectory, manualMapped, manualMapError, processId);
+
     bool success = false;
     HANDLE process = nullptr;
     HANDLE remoteThread = nullptr;
@@ -168,6 +362,7 @@ bool InjectionCoordinator::injectProductDll(std::uint32_t processId,
     HMODULE kernel32 = nullptr;
     FARPROC loadLibrary = nullptr;
     bool remoteThreadCompleted = false;
+    if (!manualMapped) {
     enableDebugPrivilege();
     process = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION |
         PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ, FALSE, processId);
@@ -200,6 +395,7 @@ bool InjectionCoordinator::injectProductDll(std::uint32_t processId,
         goto cleanup;
     }
     remoteThreadCompleted = true;
+    }
     if (WaitForSingleObject(ack, 30000) != WAIT_OBJECT_0) {
         error = ls(Ls::ProductDllNoAck);
         goto cleanup;
@@ -223,8 +419,14 @@ cleanup:
     return success;
 }
 
+namespace {
+
+
+}  // namespace
+
 bool InjectionCoordinator::injectReflectiveDll(std::uint32_t processId,
-    const std::wstring& dllPath, std::uint16_t controllerPort, std::wstring& error) {
+    const std::wstring& dllPath, const std::wstring& installDirectory,
+    const std::wstring& jarPath, std::wstring& error) {
     std::ifstream input(dllPath, std::ios::binary);
     if (!input) {
         error = ls(Ls::VapeV4DllNotFound);
@@ -253,10 +455,48 @@ bool InjectionCoordinator::injectReflectiveDll(std::uint32_t processId,
         CloseHandle(process);
         return false;
     }
+    Vape421ManualMapParams params{};
+    wcsncpy_s(params.install_dir, MAX_PATH, installDirectory.c_str(), _TRUNCATE);
+    wcsncpy_s(params.jar_path, MAX_PATH, jarPath.c_str(), _TRUNCATE);
+    params.api.virtual_alloc = &VirtualAlloc;
+    params.api.virtual_protect = &VirtualProtect;
+    params.api.load_library_a = &LoadLibraryA;
+    params.api.get_proc_address = &GetProcAddress;
+    params.api.mem_copy = &memcpy;
+    params.api.mem_set = &memset;
+    params.image_size = image.size();
+    params.raw_image = remote;
+    params.staging_rva = exportedSymbolRva(image, "g_vape_manual_map_params");
+    params.ready_rva = exportedSymbolRva(image, "g_vape_manual_map_params_ready");
+    if (params.staging_rva == 0 || params.ready_rva == 0) {
+        error = ls(Ls::ReflectionExportNotFound);
+        VirtualFreeEx(process, remote, 0, MEM_RELEASE);
+        CloseHandle(process);
+        return false;
+    }
+    void* remoteParams = VirtualAllocEx(process, nullptr, sizeof(params),
+        MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    SIZE_T paramsWritten = 0;
+    if (!remoteParams || !WriteProcessMemory(process, remoteParams, &params,
+            sizeof(params), &paramsWritten) || paramsWritten != sizeof(params)) {
+        error = ls(Ls::CannotWriteReflectionImage);
+        if (remoteParams) VirtualFreeEx(process, remoteParams, 0, MEM_RELEASE);
+        if (remote) VirtualFreeEx(process, remote, 0, MEM_RELEASE);
+        CloseHandle(process);
+        return false;
+    }
+    const std::size_t loaderOffset = rvaToFileOffset(image, loaderRva);
+    if (!loaderOffset) {
+        error = ls(Ls::ReflectionExportNotFound);
+        VirtualFreeEx(process, remoteParams, 0, MEM_RELEASE);
+        VirtualFreeEx(process, remote, 0, MEM_RELEASE);
+        CloseHandle(process);
+        return false;
+    }
     auto start = reinterpret_cast<LPTHREAD_START_ROUTINE>(
-        static_cast<std::byte*>(remote) + loaderRva);
+        static_cast<std::byte*>(remote) + loaderOffset);
     HANDLE thread = CreateRemoteThread(process, nullptr, 0, start,
-        reinterpret_cast<void*>(static_cast<std::uintptr_t>(controllerPort)), 0, nullptr);
+        remoteParams, 0, nullptr);
     if (!thread) {
         error = ls(Ls::ReflectionLoaderStartFailed);
         VirtualFreeEx(process, remote, 0, MEM_RELEASE);
@@ -267,10 +507,19 @@ bool InjectionCoordinator::injectReflectiveDll(std::uint32_t processId,
     DWORD exitCode = 0;
     GetExitCodeThread(thread, &exitCode);
     CloseHandle(thread);
+    Vape421ManualMapParams observed{};
+    ReadProcessMemory(process, remoteParams, &observed, sizeof(observed), nullptr);
+    const LONG loaderStage = observed.stage;
+    VirtualFreeEx(process, remoteParams, 0, MEM_RELEASE);
     VirtualFreeEx(process, remote, 0, MEM_RELEASE);
     CloseHandle(process);
-    if (exitCode == 0) {
-        error = ls(Ls::ReflectionLoaderFailed);
+    if (exitCode != 1) {
+        wchar_t detail[64];
+        swprintf_s(detail, L" [loader exit 0x%08lX stage=%ld]",
+            static_cast<unsigned long>(exitCode),
+            static_cast<long>(loaderStage));
+        error.assign(ls(Ls::ReflectionLoaderFailed));
+        error.append(detail);
         return false;
     }
     return true;

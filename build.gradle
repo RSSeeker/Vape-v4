@@ -1,3 +1,13 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.ow2.asm:asm:9.7.1'
+        classpath 'org.ow2.asm:asm-commons:9.7.1'
+    }
+}
+
 plugins {
     id 'java'
     id 'idea'
@@ -307,11 +317,148 @@ def resolveVsGenerator() {
     return System.getenv('CMAKE_GENERATOR')
 }
 
+// ===== Build-time class-name obfuscation =====
+// Every build renames the recovered product classes to a fresh random package and
+// random 16-character class names. Only class names are touched (methods/fields keep
+// their names), so reflection on Minecraft members and the SRG mappings stay valid.
+// bootstrap classes referenced by name from the native DLL are whitelisted.
+def obfuscatedPayloadJar = layout.buildDirectory.file("obfuscated-payload/payload.jar")
+def obfuscationMappingFile = layout.buildDirectory.file("rename-mapping.txt")
+
+tasks.register('obfuscatePayload') {
+    group = 'injection'
+    description = 'Renames product classes to random package/class names (class names only).'
+    dependsOn(tasks.named('injectionJar'))
+    def payloadInput = tasks.named('injectionJar', Jar).flatMap { it.archiveFile }
+    inputs.file(payloadInput)
+    outputs.file(obfuscatedPayloadJar)
+    outputs.file(obfuscationMappingFile)
+    doLast {
+        def source = payloadInput.get().asFile
+        def target = obfuscatedPayloadJar.get().asFile
+        target.parentFile.mkdirs()
+        def random = new java.security.SecureRandom()
+        def letters = 'abcdefghijklmnopqrstuvwxyz' as char[]
+        def alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789' as char[]
+        def randomName = { char[] head, int length ->
+            StringBuilder builder = new StringBuilder(length)
+            builder.append(head[random.nextInt(head.length)])
+            for (int i = 1; i < length; i++) {
+                builder.append(alphabet[random.nextInt(alphabet.length)])
+            }
+            builder.toString()
+        }
+        String packagePrefix = randomName(letters, 16)
+        Set<String> whitelist = [
+                'gg/vape/runtime/NativeBridge',
+                'gg/vape/runtime/ForgePayloadClassLoader',
+                'gg/vape/event/impl/EventRenderWorldPassExecutorDrain'
+        ] as Set
+        def zip = new java.util.zip.ZipFile(source)
+        Set<String> existing = new HashSet<String>()
+        zip.entries().each { entry ->
+            if (entry.name.endsWith('.class')) {
+                existing.add(entry.name.substring(0, entry.name.length() - 6))
+            }
+        }
+        Map<String, String> mapping = [:]
+        Set<String> generated = new HashSet<String>()
+        zip.entries().each { entry ->
+            if (!entry.name.endsWith('.class')) {
+                return
+            }
+            String internal = entry.name.substring(0, entry.name.length() - 6)
+            if (!internal.startsWith('gg/vape/') || internal.startsWith('gg/vape/shaded/')) {
+                return
+            }
+            if (whitelist.contains(internal)) {
+                return
+            }
+            String candidate
+            do {
+                candidate = packagePrefix + '/' + randomName(letters, 16)
+            } while (existing.contains(candidate) || generated.contains(candidate))
+            generated.add(candidate)
+            mapping.put(internal, candidate)
+        }
+        def remapper = new org.objectweb.asm.commons.Remapper() {
+            @Override
+            String map(String internalName) {
+                String replacement = mapping.get(internalName)
+                return replacement == null ? internalName : replacement
+            }
+
+            @Override
+            Object mapValue(Object value) {
+                if (value instanceof String) {
+                    String text = (String) value
+                    String replacement = mapping.get(text)
+                    if (replacement != null) {
+                        return replacement
+                    }
+                    if (text == 'gg.vape.') {
+                        return packagePrefix + '.'
+                    }
+                    if (text == 'gg/vape/') {
+                        return packagePrefix + '/'
+                    }
+                }
+                return super.mapValue(value)
+            }
+        }
+        def output = new java.util.jar.JarOutputStream(new java.io.FileOutputStream(target))
+        try {
+            zip.entries().each { entry ->
+                byte[] bytes = zip.getInputStream(entry).bytes
+                String newName = entry.name
+                if (entry.name.endsWith('.class')) {
+                    String internal = entry.name.substring(0, entry.name.length() - 6)
+                    if (mapping.containsKey(internal)) {
+                        newName = mapping.get(internal) + '.class'
+                    }
+                    def reader = new org.objectweb.asm.ClassReader(bytes)
+                    def writer = new org.objectweb.asm.ClassWriter(reader, 0)
+                    def classRemapper = new org.objectweb.asm.commons.ClassRemapper(writer, remapper) {
+                        @Override
+                        org.objectweb.asm.FieldVisitor visitField(int access, String name,
+                                String descriptor, String signature, Object value) {
+                            return super.visitField(access, name, descriptor, signature,
+                                    remapper.mapValue(value))
+                        }
+                    }
+                    reader.accept(classRemapper, 0)
+                    bytes = writer.toByteArray()
+                }
+                output.putNextEntry(new java.util.zip.ZipEntry(newName))
+                output.write(bytes)
+                output.closeEntry()
+            }
+        } finally {
+            output.close()
+            zip.close()
+        }
+        def mappingFile = obfuscationMappingFile.get().asFile
+        mappingFile.parentFile.mkdirs()
+        StringBuilder mappingText = new StringBuilder()
+        mapping.entrySet().sort { it.key }.each { entry ->
+            mappingText.append(entry.key).append(' -> ').append(entry.value).append('\n')
+        }
+        mappingText.append('gg.vape. -> ').append(packagePrefix).append('.\n')
+        mappingText.append('gg/vape/ -> ').append(packagePrefix).append('/\n')
+        mappingFile.setText(mappingText.toString(), 'UTF-8')
+        logger.lifecycle("obfuscatePayload: renamed " + mapping.size()
+                + " classes into random package '" + packagePrefix + "'")
+    }
+}
+
+def embeddedProductJar = obfuscatedPayloadJar
+
 tasks.register('configureNative', Exec) {
     group = 'injection'
     description = 'Configures the x64 self-contained native injection DLL.'
     dependsOn(tasks.named('verifyInjectionPayload'))
-    inputs.file(recoveredProductJar)
+    dependsOn(tasks.named('obfuscatePayload'))
+    inputs.file(embeddedProductJar)
     inputs.files(fileTree(nativeSourceDirectory) {
         include 'CMakeLists.txt', '**/*.c', '**/*.h', '**/*.cpp', '**/*.rc.in'
         exclude 'legacy_*'
@@ -324,7 +471,7 @@ tasks.register('configureNative', Exec) {
                 '-B', nativeBuildDirectory.get().asFile.absolutePath,
                 '-A', 'x64',
                 "-DVAPE421_JAVA_HOME=${nativeJavaHome.get()}",
-                "-DVAPE421_PRODUCT_JAR=${recoveredProductJar.get().asFile.absolutePath}",
+                "-DVAPE421_PRODUCT_JAR=${embeddedProductJar.get().asFile.absolutePath}",
                 "-DVAPE421_VERSION=${project.version}"
         ]
         def generator = resolveVsGenerator()
@@ -339,7 +486,7 @@ tasks.register('buildNative', Exec) {
     group = 'injection'
     description = 'Builds the DLL containing the recovered Java product and its injector.'
     dependsOn(tasks.named('configureNative'))
-    inputs.file(recoveredProductJar)
+    inputs.file(embeddedProductJar)
     inputs.files(fileTree(nativeSourceDirectory) {
         include 'CMakeLists.txt', '**/*.c', '**/*.h', '**/*.cpp', '**/*.rc.in'
         exclude 'legacy_*'
