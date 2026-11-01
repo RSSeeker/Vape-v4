@@ -58,6 +58,12 @@ The safety of any "Vape"-related program published through other GitHub reposito
 - Window title "Vape v4", icon consistent with the product
 - All dropped files are kept inside the hidden `.vapeclient` directory next to the exe (extracted DLL/JAR, logs, config, service data, texture cache)
 
+**Injection**
+
+- Uses **manual map** injection by default: the injector writes the DLL image into the target process and performs section mapping, relocations, import resolution and section protection itself before calling the entry point. The DLL is **never loaded through `LoadLibrary`**, so it does not appear in the Minecraft process module list (Process Explorer and `EnumProcessModules` cannot see it) and leaves no image-load trace
+- **Automatic fallback**: if any manual-map step fails, injection falls back to the classic `CreateRemoteThread` + `LoadLibraryW` path so availability comes first. Both paths load the same DLL, so in-game behavior, performance and version compatibility are identical
+- Pairs with build-time class-name obfuscation (on by default when compiling yourself): injection trace plus randomized class names make signature-based detection harder. Release packages are not obfuscated — see FAQ 10
+
 **Motion Blur (MotionBlur)**
 
 - **HUD module "Motion Blur"** (Display/Game group, same area as block colored borders): frame-blend post-processing that produces a motion-trail afterimage based on view movement
