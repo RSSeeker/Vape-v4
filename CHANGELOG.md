@@ -1,5 +1,28 @@
 # 更新日志
 
+## v4.21.47 (2026-11-01)
+
+**新增：Minecraft 1.21.10 原版（Vanilla）实验性支持；修复 1.21.10 原版打开 GUI 崩溃**
+
+### 新增
+
+- **Minecraft 1.21.10 原版（实验性）**：补齐 1.21.10 的官方映射数据 —— 修正生成器漏掉「无行号」接口方法（`HolderLookup.listElements` / `listTags` 等）的问题，`vanilla12110/joined.srg` 由 137,602 行增至 140,435 行；为 1.21.10 中搬到 `com.mojang.blaze3d.opengl` 的 `GlStateManager` 状态类（`TextureState` / `BlendState` / `BooleanState` 等）补类别名与字段映射。原版 1.21.10 仍属实验性：部分字段（天气、容器图标、物品栏贴图等）尚未映射，功能可能不完整，欢迎反馈日志。
+
+### 修复
+
+- **1.21.10 原版按右 Shift 打开 GUI 崩溃**：日志中为 `GlStateManager.bindTexture` / `enableBlend` 取字段时抛 `NullPointerException`（1.21.10 把这些状态类搬到了 blaze3d 包、映射缺失）。现在所有基本类型字段读写入口在映射缺失时返回零值/忽略写入，不再抛异常；并把 `GlStateManager` 状态类按 1.21.10 的实际内部类（`GlStateManager$a`…`$i`）重新挂上别名。
+- **构建链签名失效**：Gradle 调用 `scripts/sign-native.ps1` 时 PowerShell 的 `Cert:` 驱动器缺失（`DriveNotFoundException`），导致「证书不存在，跳过签名」。改为用 .NET `X509Store` 直接读当前用户个人存储，本地构建恢复自动签名。
+
+### 说明
+
+- 代码签名与 4.21.46 相同：exe 与 DLL 使用 `CN=OpenVape` 自签名证书签名（SHA-256 摘要 + RFC3161 时间戳），使用前请先运行 `OpenVape-Cert.exe` 安装证书。
+
+### 已知问题
+
+- 1.21.10 原版为实验性适配，部分映射仍缺失（`rainLevel`、`INVENTORY_LOCATION`、`FACING`、`openCount`、`ITEMS` 等字段在 1.21.10 改名/搬家），相关视觉或功能可能降级。
+- 1.21.10 Fabric 不在支持范围（版本识别未完成；1.20.1 Fabric 同样不支持）。
+- 26.1.2 上「显示目标」仍然不显示（保持 4.21.43 行为）。
+
 ## v4.21.46 (2026-11-01)
 
 **新增：Minecraft 1.21.10（Forge / NeoForge）支持、manual map 注入、编译时类名混淆（仅自行编译）**

@@ -114,12 +114,12 @@ The safety of any "Vape"-related program published through other GitHub reposito
 | 1.16.5 | △ Experimental | - | - |
 | 1.20.1 | △ Experimental | △ Experimental | - |
 | 1.21.1 | △ Experimental | △ Experimental | - |
-| 1.21.10 | - | ✓ | - |
+| 1.21.10 | △ Experimental | ✓ | - |
 | 1.21.11 | ✓ | ✓ | ✓ |
 | 26.1.2 | ✓ | ✓ | ✓ |
 | 26.2 | △ Experimental | △ Experimental | △ Experimental |
 
-**1.21.10 is supported on Forge 60.x and NeoForge only (NeoForge shares the Forge row); Vanilla and Fabric are not supported**.
+**1.21.10 is supported on Forge 60.x and NeoForge (NeoForge shares the Forge row); Vanilla 1.21.10 is an experimental port with possible gaps; Fabric is not supported**.
 
 **1.16.5 is an experimental adaptation and may have the following issues**:
 
@@ -166,7 +166,7 @@ All target instances must use a 64-bit JVM.
 
 The loader finds the game through the Java process and its visible window title, so only processes whose window title contains `Minecraft`, `Lunar` or `Feather` are listed.
 
-Wait until the game reaches the main menu, make sure it runs on a 64-bit JVM, and double-check the selected PID, game version and runtime. Supported: 1.7.10, 1.8.9, 1.12.2, 1.21.11 and 26.2 Vanilla, 1.21.10 Forge / NeoForge, plus 1.21.11 / 26.2 Fabric. Do not inject into similarly titled launcher helper JVMs or other Java programs.
+Wait until the game reaches the main menu, make sure it runs on a 64-bit JVM, and double-check the selected PID, game version and runtime. Supported: 1.7.10, 1.8.9, 1.12.2, 1.21.11 and 26.2 Vanilla, 1.21.10 Forge / NeoForge (Vanilla 1.21.10 is experimental), plus 1.21.11 / 26.2 Fabric. Do not inject into similarly titled launcher helper JVMs or other Java programs.
 
 ### 2. The loader hangs after the game process is picked
 
@@ -180,7 +180,7 @@ That message refers to `Vape-v4.21Native.dll` in the loader's directory (the opt
 
 ### 4. The loader reports "Product DLL did not acknowledge…" or "Unexpected…"
 
-Vape 4.21 supports 1.7.10, 1.8.9, 1.12.2, 1.21.11 and 26.2 Vanilla, 1.21.10 Forge / NeoForge, plus 1.21.11 / 26.2 Fabric; other Fabric versions, and 1.21.10 Vanilla / Fabric, are outside the current support scope.
+Vape 4.21 supports 1.7.10, 1.8.9, 1.12.2, 1.21.11 and 26.2 Vanilla, 1.21.10 Forge / NeoForge (Vanilla 1.21.10 is experimental), plus 1.21.11 / 26.2 Fabric; other Fabric versions, and 1.21.10 Vanilla / Fabric, are outside the current support scope.
 
 This status means the injection failed: check that Minecraft is a supported version, restart the game and inject again. If the problem persists, inspect `vape421-native.log` and report the issue.
 

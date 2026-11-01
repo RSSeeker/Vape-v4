@@ -149,9 +149,20 @@ extends Wrapper {
         if (activeTextureState == null && (objectArray = MGlStateManager.e(GlStateManager.vapeInstance.getMappings().Dt)) != null && objectArray.length > 0 && (object = objectArray[0]) != null) {
             activeTextureState = new GlStateManager$TextureState(object);
         }
-        if (activeTextureState != null && n != activeTextureState.getTextureName()) {
-            activeTextureState.setTextureName(n);
-            GL11.glBindTexture((int)3553, (int)n);
+        if (activeTextureState != null) {
+            try {
+                if (n != activeTextureState.getTextureName()) {
+                    activeTextureState.setTextureName(n);
+                    GL11.glBindTexture((int)3553, (int)n);
+                }
+            }
+            catch (Throwable throwable) {
+                // Some versions (for example vanilla 1.21.10) do not expose the
+                // texture-state field the mapping expects; fall back to a raw
+                // GL bind instead of throwing on the render thread.
+                activeTextureState = null;
+                GL11.glBindTexture((int)3553, (int)n);
+            }
         }
     }
 

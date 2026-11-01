@@ -46,10 +46,15 @@ if (-not $signtool) {
 # Locate the code-signing certificate in the current user's personal store.
 # NOTE: Get-ChildItem's -CodeSigningCert switch only exists in PowerShell 7+, so the
 # certificate is looked up by subject + private key to stay PS 5.1 compatible.
-$cert = Get-ChildItem Cert:\CurrentUser\My -ErrorAction SilentlyContinue |
+# The Cert: PowerShell drive is not always available in non-interactive hosts
+# (DriveNotFoundException), so read the personal store through .NET directly.
+$store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My", "CurrentUser")
+$store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)
+$cert = $store.Certificates |
     Where-Object { $_.Subject -eq $Subject -and $_.HasPrivateKey } |
     Sort-Object NotAfter -Descending |
     Select-Object -First 1
+$store.Close()
 if (-not $cert) {
     Write-Step "code signing certificate '$Subject' not present; skipping Authenticode signing"
     exit 0

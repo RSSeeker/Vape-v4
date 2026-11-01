@@ -103,20 +103,36 @@ public class NativeMappedMemberInvoker {
     }
 
     public static boolean getBooleanField(int id, Object instance) throws Exception {
-        return Reflections.FIELDS_BY_ID.get(id).getBoolean(instance);
+        java.lang.reflect.Field field = NativeMappedMemberInvoker.fieldOrNull(id);
+        if (field == null) {
+            return false;
+        }
+        return field.getBoolean(instance);
     }
 
     public static char getCharField(int id, Object instance) throws Exception {
-        return Reflections.FIELDS_BY_ID.get(id).getChar(instance);
+        java.lang.reflect.Field field = NativeMappedMemberInvoker.fieldOrNull(id);
+        if (field == null) {
+            return '\0';
+        }
+        return field.getChar(instance);
     }
 
     public static short getShortField(int id, Object instance) throws Exception {
-        return Reflections.FIELDS_BY_ID.get(id).getShort(instance);
+        java.lang.reflect.Field field = NativeMappedMemberInvoker.fieldOrNull(id);
+        if (field == null) {
+            return 0;
+        }
+        return field.getShort(instance);
     }
 
     public static int getIntField(int id, Object instance) {
+        java.lang.reflect.Field field = NativeMappedMemberInvoker.fieldOrNull(id);
+        if (field == null) {
+            return 0;
+        }
         try {
-            return Reflections.FIELDS_BY_ID.get(id).getInt(instance);
+            return field.getInt(instance);
         }
         catch (IllegalAccessException exception) {
             return NativeMappedMemberInvoker.<RuntimeException, Integer>sneakyThrow(exception);
@@ -124,20 +140,35 @@ public class NativeMappedMemberInvoker {
     }
 
     public static long getLongField(int id, Object instance) throws Exception {
-        return Reflections.FIELDS_BY_ID.get(id).getLong(instance);
+        java.lang.reflect.Field field = NativeMappedMemberInvoker.fieldOrNull(id);
+        if (field == null) {
+            return 0L;
+        }
+        return field.getLong(instance);
     }
 
     public static float getFloatField(int id, Object instance) throws Exception {
-        Field field = Reflections.FIELDS_BY_ID.get(id);
+        java.lang.reflect.Field field = NativeMappedMemberInvoker.fieldOrNull(id);
+        if (field == null) {
+            return 0.0f;
+        }
         return field.getType() == Float.TYPE ? field.getFloat(instance) : (float)field.getDouble(instance);
     }
 
     public static double getDoubleField(int id, Object instance) throws Exception {
-        return Reflections.FIELDS_BY_ID.get(id).getDouble(instance);
+        java.lang.reflect.Field field = NativeMappedMemberInvoker.fieldOrNull(id);
+        if (field == null) {
+            return 0.0d;
+        }
+        return field.getDouble(instance);
     }
 
     public static byte getByteField(int id, Object instance) throws Exception {
-        return Reflections.FIELDS_BY_ID.get(id).getByte(instance);
+        java.lang.reflect.Field field = NativeMappedMemberInvoker.fieldOrNull(id);
+        if (field == null) {
+            return 0;
+        }
+        return field.getByte(instance);
     }
 
     public static Object getObjectField(int id, Object instance) {
@@ -181,32 +212,60 @@ public class NativeMappedMemberInvoker {
     }
 
     public static void setBooleanField(int id, Object instance, boolean value) throws Exception {
-        Reflections.FIELDS_BY_ID.get(id).setBoolean(instance, value);
+        java.lang.reflect.Field field = NativeMappedMemberInvoker.fieldOrNull(id);
+        if (field == null) {
+            return;
+        }
+        field.setBoolean(instance, value);
     }
 
     public static void setCharField(int id, Object instance, char value) throws Exception {
-        Reflections.FIELDS_BY_ID.get(id).setChar(instance, value);
+        java.lang.reflect.Field field = NativeMappedMemberInvoker.fieldOrNull(id);
+        if (field == null) {
+            return;
+        }
+        field.setChar(instance, value);
     }
 
     public static void setShortField(int id, Object instance, short value) throws Exception {
-        Reflections.FIELDS_BY_ID.get(id).setShort(instance, value);
+        java.lang.reflect.Field field = NativeMappedMemberInvoker.fieldOrNull(id);
+        if (field == null) {
+            return;
+        }
+        field.setShort(instance, value);
     }
 
     public static void setIntField(int id, Object instance, int value) throws Exception {
-        Reflections.FIELDS_BY_ID.get(id).setInt(instance, value);
+        java.lang.reflect.Field field = NativeMappedMemberInvoker.fieldOrNull(id);
+        if (field == null) {
+            return;
+        }
+        field.setInt(instance, value);
     }
 
     public static void setLongField(int id, Object instance, long value) throws Exception {
-        Reflections.FIELDS_BY_ID.get(id).setLong(instance, value);
+        java.lang.reflect.Field field = NativeMappedMemberInvoker.fieldOrNull(id);
+        if (field == null) {
+            return;
+        }
+        field.setLong(instance, value);
     }
 
     public static void setFloatField(int id, Object instance, float value) throws Exception {
-        Reflections.FIELDS_BY_ID.get(id).setFloat(instance, value);
+        java.lang.reflect.Field field = NativeMappedMemberInvoker.fieldOrNull(id);
+        if (field == null) {
+            return;
+        }
+        field.setFloat(instance, value);
     }
 
     public static void setDoubleField(int id, Object instance, double value) {
+        java.lang.reflect.Field field = NativeMappedMemberInvoker.fieldOrNull(id);
+        if (field == null) {
+            return;
+        }
         try {
-            Reflections.FIELDS_BY_ID.get(id).setDouble(instance, value);
+            field.setDouble(instance, value);
         }
         catch (IllegalAccessException exception) {
             NativeMappedMemberInvoker.<RuntimeException, Void>sneakyThrow(exception);
@@ -214,7 +273,11 @@ public class NativeMappedMemberInvoker {
     }
 
     public static void setByteField(int id, Object instance, byte value) throws Exception {
-        Reflections.FIELDS_BY_ID.get(id).setByte(instance, value);
+        java.lang.reflect.Field field = NativeMappedMemberInvoker.fieldOrNull(id);
+        if (field == null) {
+            return;
+        }
+        field.setByte(instance, value);
     }
 
     public static void setObjectField(int id, Object instance, Object value) throws Exception {
@@ -263,7 +326,7 @@ public class NativeMappedMemberInvoker {
     }
 
     public static String getFieldName(int id) {
-        return Reflections.FIELDS_BY_ID.get(id).getName();
+        return NativeMappedMemberInvoker.fieldOrNull(id).getName();
     }
 
     public static String getMethodName(int id) {
@@ -277,5 +340,9 @@ public class NativeMappedMemberInvoker {
     @SuppressWarnings("unchecked")
     private static <E extends Throwable, T> T sneakyThrow(Throwable throwable) throws E {
         throw (E)throwable;
+    }
+
+    private static java.lang.reflect.Field fieldOrNull(int id) {
+        return Reflections.FIELDS_BY_ID.get(id);
     }
 }
