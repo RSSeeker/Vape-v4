@@ -15,7 +15,7 @@ plugins {
 }
 
 group = 'gg.vape.recovery'
-version = '4.21.45'
+version = '4.21.46'
 
 java {
     toolchain {
@@ -451,13 +451,16 @@ tasks.register('obfuscatePayload') {
     }
 }
 
-def embeddedProductJar = obfuscatedPayloadJar
+def payloadObfuscation = !project.hasProperty('noObfuscation')
+def embeddedProductJar = payloadObfuscation ? obfuscatedPayloadJar : recoveredProductJar
 
 tasks.register('configureNative', Exec) {
     group = 'injection'
     description = 'Configures the x64 self-contained native injection DLL.'
     dependsOn(tasks.named('verifyInjectionPayload'))
-    dependsOn(tasks.named('obfuscatePayload'))
+    if (payloadObfuscation) {
+        dependsOn(tasks.named('obfuscatePayload'))
+    }
     inputs.file(embeddedProductJar)
     inputs.files(fileTree(nativeSourceDirectory) {
         include 'CMakeLists.txt', '**/*.c', '**/*.h', '**/*.cpp', '**/*.rc.in'

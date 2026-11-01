@@ -1,5 +1,24 @@
 # 更新日志
 
+## v4.21.46 (2026-11-01)
+
+**新增：Minecraft 1.21.10（Forge / NeoForge）支持、manual map 注入、编译时类名混淆（仅自行编译）**
+
+### 新增
+
+- **Minecraft 1.21.10（Forge 60.x / NeoForge）**：新增 `mappings/forge12110`（MCP methods 46,516 行、fields 42,958 行）与 `mappings/vanilla12110/joined.srg`（137,602 行，由 MCPConfig `joined.tsrg` + Mojang 官方映射生成），接入 `MappingRegistry`（`case 60`）与 `Vanilla12110Mappings`；同时修复 NeoForge 1.21.10 的多探测命中导致「无法确定版本」的问题（改为优先读运行时元数据）。**1.21.10 的原版与 Fabric 不支持**（原版映射缺口导致 Enchantment 初始化失败，Fabric 版本识别未完成）。
+- **manual map 注入**：注入器不再用 `CreateRemoteThread` + `LoadLibraryW` 加载 DLL，而是把 DLL 文件写入目标进程，由内置反射加载器在目标内完成节映射、重定位、导入解析与节权限设置，最后调用入口点；DLL 因此不出现在目标进程的模块表里（`EnumProcessModules` 等枚举不到）。任一步失败会自动回退旧的 `LoadLibraryW` 路径，可用性优先。
+- **编译时类名混淆（仅自行编译）**：本地构建默认把自有 `gg.vape.*` 类重命名为随机包名 / 类名（每次构建都不同），被 native 硬编码的三个类（`NativeBridge`、`ForgePayloadClassLoader`、`EventRenderWorldPassExecutorDrain`）保留原名，映射写入 `build/rename-mapping.txt` 便于反混淆崩溃日志。**Release 发布包不混淆**（CI 用 `-PnoObfuscation`），需要随机类名请按 README 自行编译。
+
+### 说明
+
+- 代码签名与 4.21.45 相同：exe 与 DLL 使用 `CN=OpenVape` 自签名证书签名（SHA-256 摘要 + RFC3161 时间戳），使用前请先运行 `OpenVape-Cert.exe` 安装证书。
+
+### 已知问题
+
+- Minecraft 1.21.10 的原版与 Fabric 不在支持范围（1.20.1 Fabric 同样不支持）。
+- 26.1.2 上「显示目标」仍然不显示（保持 4.21.43 行为）。
+
 ## v4.21.45 (2026-10-31)
 
 **新增：静默杀戮 Kiss 旋转模式、自瞄 Kiss 模式；修复后视镜空框；安装包代码签名**

@@ -49,11 +49,11 @@ jobs:
 
       - name: 构建 Java 载荷并校验
         shell: pwsh
-        run: .\gradlew.bat build verifyInjectionPayload --stacktrace
+        run: .\gradlew.bat build verifyInjectionPayload -PnoObfuscation --stacktrace
 
       - name: 构建 Windows x64 单文件注入包（JDK 8 头文件）
         shell: pwsh
-        run: .\gradlew.bat prepareInjectionBundle -PtargetRelease=8 "-PnativeJavaHome=${{ steps.setup-jdk8.outputs.path }}" --stacktrace
+        run: .\gradlew.bat prepareInjectionBundle -PnoObfuscation -PtargetRelease=8 "-PnativeJavaHome=${{ steps.setup-jdk8.outputs.path }}" --stacktrace
 
       - name: 运行原生组件测试
         shell: pwsh

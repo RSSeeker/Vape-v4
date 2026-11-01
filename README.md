@@ -109,9 +109,12 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 | 1.16.5 | △ 实验性 | - | - |
 | 1.20.1 | △ 实验性 | △ 实验性 | - |
 | 1.21.1 | △ 实验性 | △ 实验性 | - |
+| 1.21.10 | - | ✓ | - |
 | 1.21.11 | ✓ | ✓ | ✓ |
 | 26.1.2 | ✓ | ✓ | ✓ |
 | 26.2 | △ 实验性 | △ 实验性 | △ 实验性 |
+
+**1.21.10 仅支持 Forge 60.x 与 NeoForge（NeoForge 与 Forge 同属一行），原版与 Fabric 不支持**。
 
 **1.16.5 为实验性适配，可能存在以下问题**：
 
@@ -161,7 +164,7 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 
 Loader 依赖 Java 进程和可见窗口标题来发现游戏，只有窗口标题包含 `Minecraft`、`Lunar` 或 `Feather` 的进程才会被列出。
 
-请等待游戏进入主菜单，确认使用 64 位 JVM，并核对所选 PID、游戏版本与运行环境。支持 1.7.10、1.8.9、1.12.2、1.21.11 和 26.2 的 Vanilla，以及 1.21.11 / 26.2 的 Fabric。不要向标题相似的启动器辅助 JVM 或其他 Java 程序注入。
+请等待游戏进入主菜单，确认使用 64 位 JVM，并核对所选 PID、游戏版本与运行环境。支持 1.7.10、1.8.9、1.12.2、1.21.11 和 26.2 的 Vanilla，1.21.10 的 Forge / NeoForge，以及 1.21.11 / 26.2 的 Fabric。不要向标题相似的启动器辅助 JVM 或其他 Java 程序注入。
 
 ### 2. Loader 选择游戏进程后卡死
 
@@ -175,7 +178,7 @@ Loader 依赖 Java 进程和可见窗口标题来发现游戏，只有窗口标�
 
 ### 4. Loader 提示 Product DLL did not acknowledge… 或 Unexpected…
 
-Vape 4.21 支持 1.7.10、1.8.9、1.12.2、1.21.11 和 26.2 的 Vanilla，以及 1.21.11 / 26.2 的 Fabric；其他 Fabric 版本不在当前支持范围。
+Vape 4.21 支持 1.7.10、1.8.9、1.12.2、1.21.11 和 26.2 的 Vanilla，1.21.10 的 Forge / NeoForge，以及 1.21.11 / 26.2 的 Fabric；其他 Fabric 版本、以及 1.21.10 的原版 / Fabric 不在当前支持范围。
 
 出现该提示说明 Vape 注入失败：请确认 Minecraft 是否为受支持的版本，重启游戏后重新注入。若问题依旧，请检查 `vape421-native.log` 并反馈问题。
 
@@ -199,6 +202,10 @@ Minecraft 1.16.5 及其他未列出的 1.16+ 版本兼容性仍然不佳。请�
 - 1.21.11 Fabric：Fabric Loader 0.19.3
 - 26.2 Forge：Forge 65.1.0（已验证）
 - 26.2 Fabric：Fabric Loader 0.19.3
+
+### 10. Release 里的类名为什么不是随机的？
+
+Release 发布包按原类名编译，**不做类名混淆**，方便核对与排查。想要每次构建都得到随机的包名与类名，请自行编译：本地执行 `gradlew.bat build verifyInjectionPayload prepareInjectionBundle` 时默认开启编译时混淆（所有自有的 `gg.vape.*` 类会重命名为随机 16 位名字，被 native 硬编码的三个类保留原名），每次构建结果都不同，映射表写入 `build/rename-mapping.txt`，用于反混淆崩溃日志。做法与 Zen（OpenZen）README 的「编译时类名混淆」一节一致。
 
 ### 9. 配置消失、保存失败、好友或小队（Party）状态异常
 

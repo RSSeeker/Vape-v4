@@ -108,9 +108,12 @@ The safety of any "Vape"-related program published through other GitHub reposito
 | 1.16.5 | △ Experimental | - | - |
 | 1.20.1 | △ Experimental | △ Experimental | - |
 | 1.21.1 | △ Experimental | △ Experimental | - |
+| 1.21.10 | - | ✓ | - |
 | 1.21.11 | ✓ | ✓ | ✓ |
 | 26.1.2 | ✓ | ✓ | ✓ |
 | 26.2 | △ Experimental | △ Experimental | △ Experimental |
+
+**1.21.10 is supported on Forge 60.x and NeoForge only (NeoForge shares the Forge row); Vanilla and Fabric are not supported**.
 
 **1.16.5 is an experimental adaptation and may have the following issues**:
 
@@ -157,7 +160,7 @@ All target instances must use a 64-bit JVM.
 
 The loader finds the game through the Java process and its visible window title, so only processes whose window title contains `Minecraft`, `Lunar` or `Feather` are listed.
 
-Wait until the game reaches the main menu, make sure it runs on a 64-bit JVM, and double-check the selected PID, game version and runtime. Supported: 1.7.10, 1.8.9, 1.12.2, 1.21.11 and 26.2 Vanilla, plus 1.21.11 / 26.2 Fabric. Do not inject into similarly titled launcher helper JVMs or other Java programs.
+Wait until the game reaches the main menu, make sure it runs on a 64-bit JVM, and double-check the selected PID, game version and runtime. Supported: 1.7.10, 1.8.9, 1.12.2, 1.21.11 and 26.2 Vanilla, 1.21.10 Forge / NeoForge, plus 1.21.11 / 26.2 Fabric. Do not inject into similarly titled launcher helper JVMs or other Java programs.
 
 ### 2. The loader hangs after the game process is picked
 
@@ -171,7 +174,7 @@ That message refers to `Vape-v4.21Native.dll` in the loader's directory (the opt
 
 ### 4. The loader reports "Product DLL did not acknowledge…" or "Unexpected…"
 
-Vape 4.21 supports 1.7.10, 1.8.9, 1.12.2, 1.21.11 and 26.2 Vanilla, plus 1.21.11 / 26.2 Fabric; other Fabric versions are outside the current support scope.
+Vape 4.21 supports 1.7.10, 1.8.9, 1.12.2, 1.21.11 and 26.2 Vanilla, 1.21.10 Forge / NeoForge, plus 1.21.11 / 26.2 Fabric; other Fabric versions, and 1.21.10 Vanilla / Fabric, are outside the current support scope.
 
 This status means the injection failed: check that Minecraft is a supported version, restart the game and inject again. If the problem persists, inspect `vape421-native.log` and report the issue.
 
@@ -195,6 +198,10 @@ Compatibility for Minecraft 1.16.5 and other unlisted 1.16+ versions is still po
 - 1.21.11 Fabric: Fabric Loader 0.19.3
 - 26.2 Forge: Forge 65.1.0 (verified)
 - 26.2 Fabric: Fabric Loader 0.19.3
+
+### 10. Why are class names in the release not randomized?
+
+Release packages are compiled with the original class names and are **not obfuscated**, which keeps them easy to verify and debug. To get a random package and class name on every build, compile it yourself: a local `gradlew.bat build verifyInjectionPayload prepareInjectionBundle` enables build-time obfuscation by default (every owned `gg.vape.*` class is renamed to a random 16-character name, while the three classes hard-coded by the native layer keep their names). Each build differs, and the mapping is written to `build/rename-mapping.txt` for de-obfuscating crash logs. This matches the "build-time class name obfuscation" section of the Zen (OpenZen) README.
 
 ### 9. Configs disappear, saving fails, or friend / party state is wrong
 
