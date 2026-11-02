@@ -275,6 +275,13 @@ public class RenderBatchManager {
      * {@code glIsEnabled} 早退，正常情况下每帧只真正下发一次状态。
      */
     public static void ensureGuiBlendState() {
+        // 4.21.41 为修 1.20.1 图标黑底而加的"混合状态重申"。实测 1.8.9 上只有
+        // 从 4.21.41 起（也就是加了这段）打开物品栏时世界会被染蓝，4.21.40 正常；
+        // 旧后端本来就是立即模式、混合由原版各自的绘制函数自行设置，所以只对
+        // 批次后端生效。
+        if (!gg.vape.utils.render.GuiRenderPrimitives.d()) {
+            return;
+        }
         if (RenderBatchManager.guiBlendStateEnsured && GL11.glIsEnabled((int)3042)) {
             return;
         }
