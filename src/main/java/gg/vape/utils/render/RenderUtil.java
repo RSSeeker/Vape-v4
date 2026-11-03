@@ -651,6 +651,34 @@ public class RenderUtil {
         RenderUtil.x(searchResultData.F, searchResultData.O, searchResultData.D, 1.0, 1.0, 1.0, searchResultData.O(), d, d2, d3);
     }
 
+    /**
+     * Same as {@link #W(double, double, double)} but returns {@code null} when the point is
+     * behind the camera (clip-space w <= 0). Behind-camera points would otherwise be divided by
+     * a negative w, which mirrors them through the screen centre and makes ESP boxes appear on
+     * the opposite side of the world.
+     */
+    public static double[] WChecked(double d, double d2, double d3) {
+        if (GuiRenderPrimitives.d()) {
+            RenderVector4f renderVector4f = new RenderVector4f(d, d2, d3, 1.0);
+            RenderVector4f renderVector4f2 = new RenderVector4f(0.0f, 0.0f, 0.0f, 0.0f);
+            RenderMatrix4f renderMatrix4f = BufferedGuiRenderPrimitives.matrixStack.peek();
+            RenderMatrix4f renderMatrix4f2 = BufferedGuiRenderPrimitives.viewMatrix;
+            RenderMatrix4f renderMatrix4f3 = BufferedGuiRenderPrimitives.projectionMatrix;
+            renderMatrix4f.transform(renderVector4f, renderVector4f2);
+            renderMatrix4f2.transform(renderVector4f2, renderVector4f);
+            renderMatrix4f3.transform(renderVector4f, renderVector4f2);
+            if ((double)renderVector4f2.w <= 1.0E-6) {
+                return null;
+            }
+            renderVector4f2.w = 1.0f / renderVector4f2.w * 0.5f;
+            renderVector4f2.x = renderVector4f2.x * renderVector4f2.w + 0.5f;
+            renderVector4f2.y = renderVector4f2.y * renderVector4f2.w + 0.5f;
+            renderVector4f2.z = renderVector4f2.z * renderVector4f2.w + 0.5f;
+            return new double[]{renderVector4f2.x * (float)Minecraft.J(), renderVector4f2.y * (float)Minecraft.h(), renderVector4f2.z};
+        }
+        return NativeBridge.trn(d, d2, d3);
+    }
+
     public static double[] W(double d, double d2, double d3) {
         if (GuiRenderPrimitives.d()) {
             double[] dArray = new double[3];

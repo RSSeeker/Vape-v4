@@ -21,15 +21,17 @@ public class ProjectedEntityBounds {
         this.entity = entity;
         this.context = renderEntityContext;
         this.color = color;
-        double[] corner0 = RenderUtil.W(offsetX + axisAlignedBB.getMinX(), offsetY + axisAlignedBB.getMinY(), offsetZ + axisAlignedBB.getMinZ());
-        double[] corner1 = RenderUtil.W(offsetX + axisAlignedBB.getMaxX(), offsetY + axisAlignedBB.getMinY(), offsetZ + axisAlignedBB.getMinZ());
-        double[] corner2 = RenderUtil.W(offsetX + axisAlignedBB.getMaxX(), offsetY + axisAlignedBB.getMinY(), offsetZ + axisAlignedBB.getMaxZ());
-        double[] corner3 = RenderUtil.W(offsetX + axisAlignedBB.getMinX(), offsetY + axisAlignedBB.getMinY(), offsetZ + axisAlignedBB.getMaxZ());
-        double[] corner4 = RenderUtil.W(offsetX + axisAlignedBB.getMinX(), offsetY + axisAlignedBB.getMaxY(), offsetZ + axisAlignedBB.getMinZ());
-        double[] corner5 = RenderUtil.W(offsetX + axisAlignedBB.getMaxX(), offsetY + axisAlignedBB.getMaxY(), offsetZ + axisAlignedBB.getMinZ());
-        double[] corner6 = RenderUtil.W(offsetX + axisAlignedBB.getMaxX(), offsetY + axisAlignedBB.getMaxY(), offsetZ + axisAlignedBB.getMaxZ());
-        double[] corner7 = RenderUtil.W(offsetX + axisAlignedBB.getMinX(), offsetY + axisAlignedBB.getMaxY(), offsetZ + axisAlignedBB.getMaxZ());
-        this.onScreen = corner0 != null && corner0[2] >= 0.0 && corner0[2] < 1.0 && corner1[2] >= 0.0 && corner1[2] < 1.0 && corner2[2] >= 0.0 && corner2[2] < 1.0 && corner3[2] >= 0.0 && corner3[2] < 1.0 && corner4[2] >= 0.0 && corner4[2] < 1.0 && corner5[2] >= 0.0 && corner5[2] < 1.0 && corner6[2] >= 0.0 && corner6[2] < 1.0 && corner7[2] >= 0.0 && corner7[2] < 1.0;
+        double[] corner0 = RenderUtil.WChecked(offsetX + axisAlignedBB.getMinX(), offsetY + axisAlignedBB.getMinY(), offsetZ + axisAlignedBB.getMinZ());
+        double[] corner1 = RenderUtil.WChecked(offsetX + axisAlignedBB.getMaxX(), offsetY + axisAlignedBB.getMinY(), offsetZ + axisAlignedBB.getMinZ());
+        double[] corner2 = RenderUtil.WChecked(offsetX + axisAlignedBB.getMaxX(), offsetY + axisAlignedBB.getMinY(), offsetZ + axisAlignedBB.getMaxZ());
+        double[] corner3 = RenderUtil.WChecked(offsetX + axisAlignedBB.getMinX(), offsetY + axisAlignedBB.getMinY(), offsetZ + axisAlignedBB.getMaxZ());
+        double[] corner4 = RenderUtil.WChecked(offsetX + axisAlignedBB.getMinX(), offsetY + axisAlignedBB.getMaxY(), offsetZ + axisAlignedBB.getMinZ());
+        double[] corner5 = RenderUtil.WChecked(offsetX + axisAlignedBB.getMaxX(), offsetY + axisAlignedBB.getMaxY(), offsetZ + axisAlignedBB.getMinZ());
+        double[] corner6 = RenderUtil.WChecked(offsetX + axisAlignedBB.getMaxX(), offsetY + axisAlignedBB.getMaxY(), offsetZ + axisAlignedBB.getMaxZ());
+        double[] corner7 = RenderUtil.WChecked(offsetX + axisAlignedBB.getMinX(), offsetY + axisAlignedBB.getMaxY(), offsetZ + axisAlignedBB.getMaxZ());
+        this.onScreen = corner0 != null && corner1 != null && corner2 != null && corner3 != null
+                && corner4 != null && corner5 != null && corner6 != null && corner7 != null
+                && corner0[2] >= 0.0 && corner0[2] < 1.0 && corner1[2] >= 0.0 && corner1[2] < 1.0 && corner2[2] >= 0.0 && corner2[2] < 1.0 && corner3[2] >= 0.0 && corner3[2] < 1.0 && corner4[2] >= 0.0 && corner4[2] < 1.0 && corner5[2] >= 0.0 && corner5[2] < 1.0 && corner6[2] >= 0.0 && corner6[2] < 1.0 && corner7[2] >= 0.0 && corner7[2] < 1.0;
         if (!this.onScreen) {
             return;
         }
