@@ -46,6 +46,7 @@ public class RenderBatchManager {
     private int previousTargetFramebufferId = 0;
     private static RenderBatchManager instance;
     private static final long FRAMEBUFFER_REFRESH_INTERVAL_MS = 1000L;
+    private static long worldFlushDiagMillis;
     public RenderBatchBuffer batchBuffer;
     private int savedTextureId;
     private int savedProgramId;
@@ -432,8 +433,16 @@ public class RenderBatchManager {
         this.saveAndPrepareGlState();
         try {
             LocalPlayerRotationUtil.updateProjectionMatrix(partialTicks);
-            GL11.glViewport(0, 0, Minecraft.J(), Minecraft.h());
-            this.skipWorldFramebufferBind = !(ForgeVersion.MC_1_21_10.d() && !ForgeVersion.MC_26_1.d());
+            // 26.2 renders the world through a texture-backed render target that the
+            // batch pass must bind explicitly, otherwise overlays land in an unrelated
+            // framebuffer and become invisible. Older branches keep their behaviour.
+            boolean legacySkip = !(ForgeVersion.MC_1_21_10.d() && !ForgeVersion.MC_26_1.d());
+            if (ForgeVersion.MC_26_2.d()) {
+                this.skipWorldFramebufferBind = false;
+            } else {
+                this.skipWorldFramebufferBind = legacySkip;
+                GL11.glViewport(0, 0, Minecraft.J(), Minecraft.h());
+            }
             for (RenderBatch renderBatch : this.worldBatches) {
                 this.ensureBatchResourcesBound();
                 renderBatch.getCapabilityState().apply();
