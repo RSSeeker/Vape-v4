@@ -27,6 +27,9 @@ public class PlayerMouseRotationApplier {
     }
 
     private static void syncFreeLookRotation() {
+        if (FreeLookHudModule.isActive()) {
+            return;
+        }
         FreeLookHudModule freeLook = Vape.INSTANCE.getModManager().getMod(FreeLookHudModule.class);
         EntityPlayerSP player = Minecraft.thePlayer();
         freeLook.capturePlayerRotation(player.J(), player.V());

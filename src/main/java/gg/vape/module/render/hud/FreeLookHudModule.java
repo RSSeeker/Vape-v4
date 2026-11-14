@@ -49,6 +49,7 @@ extends HudModule {
     private static float originalPitch;
     private static float pitchOffset;
     private static float yawOffset;
+    private boolean mouseBaselinePending;
     private double mouseLastX;
     public final ModeValue activationMode = ModeValue.create((Object)this, "Activate Freelook", this.holdMode, this.holdMode, this.toggleMode);
     public final ModeValue perspectiveMode;
@@ -195,7 +196,7 @@ extends HudModule {
     }
 
     private void applyWorldRotation() {
-        if (!this.enabled) {
+        if (!this.enabled || !active) {
             return;
         }
         if (RotationManager.INSTANCE.hasAdaptiveController() && Vape.INSTANCE.getClientSettings().thirdPersonAimView.getEffectiveValue().booleanValue()) {
@@ -210,6 +211,9 @@ extends HudModule {
     }
 
     private void applyCameraRotation() {
+        if (!active) {
+            return;
+        }
         if (SharedModuleControlClaims.renderPass.isRenderBlocked()) {
             return;
         }
@@ -249,6 +253,16 @@ extends HudModule {
     }
 
     private void updateMouseDelta() {
+        if (this.mouseBaselinePending) {
+            this.mouseBaselinePending = false;
+            this.mouseDX = 0.0;
+            this.mouseDY = 0.0;
+            if (ForgeVersion.MC_1_16_5.d()) {
+                this.mouseLastX = Minecraft.s().R();
+                this.mouseLastY = Minecraft.s().b();
+            }
+            return;
+        }
         if (ForgeVersion.MC_1_16_5.d()) {
             this.mouseDX = this.mouseLastX - Minecraft.s().R();
             this.mouseDY = this.mouseLastY - Minecraft.s().b();
@@ -275,6 +289,7 @@ extends HudModule {
             pitchOffset = 0.0f;
             this.mouseDX = 0.0;
             this.mouseDY = 0.0;
+            this.mouseBaselinePending = true;
             renderPitch = originalPitch;
             renderYaw = originalYaw;
             savedYaw = originalYaw;
@@ -290,6 +305,7 @@ extends HudModule {
             yawOffset = 0.0f;
             pitchOffset = 0.0f;
             this.mouseDX = this.mouseDY = (double)0.0f;
+            this.mouseBaselinePending = true;
         }
         this.updateMouseDelta();
         double yawDelta = this.mouseDX * this.getSensitivity() * 0.15;
