@@ -169,25 +169,8 @@ extends SubModule<AimAssist> {
         this.lastNewFrameDt = 0.0f;
     }
 
-    private static int kissDebugTicks;
-
     @EventHandler
     public void onPreRenderTick(EventPreRenderTick event) {
-        if (kissDebugTicks++ % 20 == 0) {
-            boolean screenOpen = false;
-            try {
-                screenOpen = Minecraft.currentScreen().getObject() != null;
-            } catch (Throwable ignored) {
-            }
-            Vape.debugLog("[KISS] tick n=" + kissDebugTicks
-                    + " en=" + this.isEnabled()
-                    + " sel=" + this.isSelectedSubModule()
-                    + " screen=" + screenOpen
-                    + " canAim=" + this.getParent().canAim()
-                    + " input=" + ClientSettings.INSTANCE.inputEnabled
-                    + " mouseGate=" + this.getParent().getRequireMouseDown().getEffectiveValue()
-                    + " attack=" + gg.vape.config.ClientSettings.isAttackButtonDown());
-        }
         if (event.getWorld().isNull()) {
             return;
         }
@@ -216,10 +199,6 @@ extends SubModule<AimAssist> {
         this.wasAttackDown = attackDown;
 
         EntityLivingBase found = this.findTarget(this.range.getValue(), this.fov.getValue());
-        if (kissDebugTicks % 20 == 0) {
-            Vape.debugLog("[KISS] findTarget found=" + (found == null ? "null" : "yes")
-                    + " range=" + this.range.getValue() + " fov=" + this.fov.getValue());
-        }
         if (found == null) {
             if (this.aimMode.getValue() == this.oldMode) {
                 this.handleTargetLost();
@@ -277,10 +256,6 @@ extends SubModule<AimAssist> {
                 continue;
             }
             candidates.add(living);
-        }
-        if (kissDebugTicks % 40 == 0) {
-            Vape.debugLog("[KISS] scan candidates=" + candidates.size()
-                    + " entities=" + Minecraft.theWorld().z().size());
         }
         if (candidates.isEmpty()) {
             return null;
@@ -557,11 +532,6 @@ extends SubModule<AimAssist> {
         float currentPitch = RotationManager.getViewPitch(player);
         float yawDelta = SensitivityUtil.degreesToMouseDelta(wrapDegrees(snappedYaw - currentYaw));
         float pitchDelta = SensitivityUtil.degreesToMouseDelta(currentPitch - snappedPitch);
-        if (kissDebugTicks % 10 == 0) {
-            Vape.debugLog("[KISS] apply curYaw=" + currentYaw + " curPitch=" + currentPitch
-                    + " snappedYaw=" + snappedYaw + " snappedPitch=" + snappedPitch
-                    + " dYaw=" + yawDelta + " dPitch=" + pitchDelta);
-        }
         PlayerMouseRotationApplier.applyTrackedMouseDelta(yawDelta, pitchDelta);
     }
 
