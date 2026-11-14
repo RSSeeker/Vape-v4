@@ -20,6 +20,8 @@ import gg.vape.module.control.PhysicalAttackCancellationAdapter;
 import gg.vape.module.control.SharedModuleControlClaims;
 import gg.vape.module.control.SyntheticAttackCancellationAdapter;
 import gg.vape.module.none.ClientSettings;
+import gg.vape.wrapper.impl.EnumHand;
+import gg.vape.wrapper.impl.ForgeVersion;
 import gg.vape.rotation.RotationControlClaim;
 import gg.vape.rotation.RotationManager;
 import gg.vape.unmap.ItemLimitData;
@@ -531,7 +533,6 @@ public class AutoMace extends Mod {
         if (target == null) {
             return true;
         }
-
         this.armorOriginalSlot = inventory.v();
         this.armorTargetSlot = chestplateSlot;
         this.armorSwapToElytra = false;
@@ -700,7 +701,13 @@ public class AutoMace extends Mod {
     private void useSelectedItem() {
         SharedModuleControlClaims.rightClickUse.blockUse();
         try {
-            Minecraft.F$src$V$aoypvc();
+            // 1.21.10 起原版把右键拆成 Minecraft.startUseItem → PlayerController.useItem，
+            // 26.x 上 startUseItem 的行为已不保证（会静默什么都不做），直接调控制器更可靠。
+            if (ForgeVersion.MC_1_21_10.d()) {
+                Minecraft.playerController().useItem(Minecraft.thePlayer(), EnumHand.mainHand());
+            } else {
+                Minecraft.F$src$V$aoypvc();
+            }
         } finally {
             SharedModuleControlClaims.rightClickUse.clearClaimed();
         }

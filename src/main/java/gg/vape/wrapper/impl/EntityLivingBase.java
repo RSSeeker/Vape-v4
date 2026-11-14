@@ -2,10 +2,14 @@ package gg.vape.wrapper.impl;
 
 import gg.vape.mapping.mappings.MEntityLivingBase;
 
+import java.lang.reflect.Method;
 import java.util.Collection;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class EntityLivingBase
 extends Entity {
+    private static final Map<Class<?>, Method> FLYING_METHODS = new ConcurrentHashMap<Class<?>, Method>();
     private static String[] x;
 
     public void P$src$V$14ztfy0() {
@@ -416,8 +420,29 @@ extends Entity {
         return EntityLivingBase.vapeInstance.getMappings().hx.X(this.I, f);
     }
 
+    /**
+     * 1.21.10 起原版把 isElytraFlying 改名为 isFallFlying，映射表在 1.21.10/1.21.11 上工作正常。
+     * 26.x 的运行时类命名与映射资源不一致，映射解析会静默失败并恒返回 false（滑翔中 AutoMace 因此
+     * 认为玩家没在滑翔，不会卸鞘翅）。这里在映射结果为 false 时用反射直查对象的 isFallFlying 兜底，
+     * 只有在原版方法确实存在（26.x）时才可能改变结果，其它版本行为不变。
+     */
     public boolean Y$src$Z$154rldp() {
-        return MEntityLivingBase.c(EntityLivingBase.vapeInstance.getMappings().hx, this.I);
+        boolean mapped = MEntityLivingBase.c(EntityLivingBase.vapeInstance.getMappings().hx, this.I);
+        if (mapped || !ForgeVersion.MC_1_20_6.d() || this.I == null) {
+            return mapped;
+        }
+        try {
+            Class<?> type = this.I.getClass();
+            Method method = FLYING_METHODS.get(type);
+            if (method == null) {
+                method = type.getMethod("isFallFlying");
+                method.setAccessible(true);
+                FLYING_METHODS.put(type, method);
+            }
+            return (Boolean) method.invoke(this.I);
+        } catch (Throwable throwable) {
+            return mapped;
+        }
     }
 
     public PotionEffect b(PotionEntry potionEntry) {

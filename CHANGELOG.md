@@ -1,5 +1,25 @@
 # 更新日志
 
+## v4.21.50 (2026-11-14)
+
+**新增：反作弊绕过（Disabler）与旋转加固，修复 26.x 自动重锤鞘翅**
+
+- **新增模块「反作弊绕过」**（其他分类，默认隐藏，右键可显示）：出站包统一管线 + 引擎预设（Grim / ACA / Themis / 全部），规则包括
+  Grim 重复切槽、ACA 快速切槽补中间槽、ACA 容器关闭节流与容器顺序（先关后点）、
+  Grim 旋转去重（90ms 内相同视角包丢弃）、应答节流（仅 Pong，绝不动 confirmation 事务包）、
+  Themis 入站心跳扣留（默认关闭）。引擎选择可按服务器记住（`.vapeclient/anticheat-profiles.json`）。
+- **旋转 GCD 量化收口**：新增 `SensitivityUtil`，静默杀戮 Kiss 旋转、自瞄 Kiss 模式、自瞄基础平滑全部走同一套
+  `灵敏度 → 每像素角度 → GCD` 公式，行为与之前完全一致，便于统一维护。
+- **旋转非网格抖动**：静默杀戮（Kiss 旋转）、自瞄（Kiss 模式）新增 `非网格抖动` 选项，默认 0（关闭 = 原行为），
+  可在 GCD 网格上叠加随机偏移，降低 `AimModulo360` 一类校验的规整度。
+- **Pong / KeepAlive 免疫延迟队列**：闪现（Blink）与假延迟（FakeLag）不再扣留 Pong / KeepAlive，
+  修复服务端 `duplicatepong`、`TransactionOrder`、`skipped` 与心跳超时踢人。
+- **修复 26.1.2 / 26.2 自动重锤不卸鞘翅**：26.x 上滑翔状态映射（`isElytraFlying → isFallFlying`）静默失效，改为反射兜底；
+  卸鞘翅时的右键改用 `PlayerController.useItem`，装备动作真正生效。
+- **修复重复注入**：native 侧加单实例互斥（同一进程重复注入会跳过并记录），并把物品语义表加载失败降级为日志，不再中断初始化。
+
+> 4.21.49 及更早版本的所有修复均保留；本版未改动 README 的支持版本列表。
+
 ## v4.21.49 (2026-11-03)
 
 **修复：26.2 Fabric 世界叠加物不显示、ESP 2D 出现「镜像分身」**
