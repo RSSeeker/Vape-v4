@@ -66,6 +66,36 @@ extends UtilityMod {
         }
     }
 
+    /** True when the player is currently able to eat food (vanilla Player#canEat(false)). */
+    private boolean canConsumeFood() {
+        Object handle;
+        try {
+            handle = Minecraft.thePlayer().getObject();
+        } catch (Throwable throwable) {
+            return true;
+        }
+        if (handle == null) {
+            return true;
+        }
+        try {
+            Class<?> type = handle.getClass();
+            while (type != null) {
+                for (java.lang.reflect.Method candidate : type.getDeclaredMethods()) {
+                    if (!candidate.getName().equals("canEat") || candidate.getParameterCount() != 1
+                            || candidate.getParameterTypes()[0] != Boolean.TYPE) {
+                        continue;
+                    }
+                    candidate.setAccessible(true);
+                    return (Boolean)candidate.invoke(handle, Boolean.FALSE);
+                }
+                type = type.getSuperclass();
+            }
+        } catch (Throwable throwable) {
+            return true;
+        }
+        return true;
+    }
+
     private boolean collectHealingItems() {
         ArrayList<Integer> hotbarSlots = new ArrayList<Integer>();
         for (int hotbarSlot = 0; hotbarSlot < 9; ++hotbarSlot) {
@@ -82,7 +112,7 @@ extends UtilityMod {
             if (itemStack.isNull() || (item = itemStack.getItem()).isNull()) continue;
             boolean soupEnabled = ((ModeSelection)this.typeValue.getValue()).equals(this.soupOption) || ((ModeSelection)this.typeValue.getValue()).equals(this.bothOption);
             boolean potsEnabled = ((ModeSelection)this.typeValue.getValue()).equals(this.potsOption) || ((ModeSelection)this.typeValue.getValue()).equals(this.bothOption);
-            if (ItemStackScoreUtil.v(item) && soupEnabled) {
+            if (ItemStackScoreUtil.v(item) && soupEnabled && this.canConsumeFood()) {
                 if (((ModeSelection)this.modeValue.getValue()).equals(this.singleOption)) {
                     this.itemsToThrow.add(new ItemStackData(hotbarSlot, itemStack));
                     break;
@@ -125,10 +155,20 @@ extends UtilityMod {
                     Thread.sleep(51L);
                     restoreUseKey = true;
                 }
-                KeyBindingHelper.setPressedAndTick(useKey, true);
-                Thread.sleep(51L);
-                KeyBindingHelper.updateKeyBinding(useKey, false, false);
-                if (this.throwBowls.getEffectiveValue().booleanValue() && ItemStackScoreUtil.v(itemToThrow.getItemStack().getItem())) {
+                boolean soup = ItemStackScoreUtil.v(itemToThrow.getItemStack().getItem());
+                if (soup && !this.canConsumeFood()) {
+                    continue;
+                }
+                if (soup) {
+                    KeyBindingHelper.updateKeyBinding(useKey, true, true);
+                    this.waitForSoupConsumed(itemToThrow.getSlot(), itemToThrow.getItemStack());
+                    KeyBindingHelper.updateKeyBinding(useKey, false, false);
+                } else {
+                    KeyBindingHelper.setPressedAndTick(useKey, true);
+                    Thread.sleep(51L);
+                    KeyBindingHelper.updateKeyBinding(useKey, false, false);
+                }
+                if (this.throwBowls.getEffectiveValue().booleanValue() && soup) {
                     KeyBindingHelper.setPressedAndTick(dropKey, true);
                     Thread.sleep(51L);
                     KeyBindingHelper.updateKeyBinding(dropKey, false, false);
@@ -152,6 +192,34 @@ extends UtilityMod {
         if (!this.active && this.isEnabled()) {
             this.setEnabled(false);
         }
+    }
+
+    private boolean waitForSoupConsumed(int slot, ItemStack before) {
+        long deadline = System.currentTimeMillis() + 2500L;
+        String beforeName = before.getItem().isNull() ? "" : before.getItem().A();
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(25L);
+            }
+            catch (InterruptedException ignored) {
+            }
+            Object[] contents = Minecraft.thePlayer().V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().M();
+            if (contents == null || slot < 0 || slot >= contents.length) {
+                return false;
+            }
+            ItemStack current = new ItemStack(contents[slot]);
+            if (current.isNull()) {
+                return true;
+            }
+            Item item = current.getItem();
+            if (item.isNull()) {
+                return true;
+            }
+            if (!item.A().equals(beforeName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void selectHotbarSlot(int targetSlot) {
