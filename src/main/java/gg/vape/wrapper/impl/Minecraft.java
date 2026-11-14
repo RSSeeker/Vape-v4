@@ -263,8 +263,33 @@ extends Wrapper {
         return new TextureManager(Minecraft.vapeInstance.getMappings().U.c(Minecraft.i()));
     }
 
+    /**
+     * Ixeris（以及任何把事件轮询/渲染拆到不同线程的模组）下，Win32 窗口消息回调可能跑在
+     * 非游戏线程上；此时直接调用 vanilla 的鼠标释放/抓取会触发 RenderSystem 的线程断言
+     * （IllegalStateException: Rendersystem called from wrong thread，随后 mouseGrabbed 与真实
+     * cursor mode 不一致：视角不动但按键仍有效）。检测到线程不一致就改由游戏线程延迟执行。
+     */
+    public static boolean isOnGameThread() {
+        try {
+            Thread owner = gg.vape.event.impl.EventTickBase.PRE_TICK_EXECUTOR.getOwnerThread();
+            return owner == null || owner == Thread.currentThread();
+        } catch (Throwable throwable) {
+            return true;
+        }
+    }
+
     public static void R() {
-        MMinecraft.b(Minecraft.vapeInstance.getMappings().U, Minecraft.i());
+        if (!Minecraft.isOnGameThread()) {
+            Vape.debugLog((String)("[GUI-STATE] deferred mouse release on " + Thread.currentThread().getName()));
+            Minecraft.v(Minecraft::R);
+            return;
+        }
+        try {
+            MMinecraft.b(Minecraft.vapeInstance.getMappings().U, Minecraft.i());
+        } catch (IllegalStateException illegalStateException) {
+            Vape.debugLog((String)("[GUI-STATE] mouse release retried on game thread: " + illegalStateException.getMessage()));
+            Minecraft.v(Minecraft::R);
+        }
     }
 
     public static void r(EntityLivingBase entityLivingBase) {
@@ -305,9 +330,19 @@ extends Wrapper {
     }
 
     public static void F$src$V$aoypvc() {
-        Minecraft.vapeInstance.getMappings().U.V$src$V$9672l7(Minecraft.i());
-        if (ForgeVersion.MC_1_16_5.d()) {
-            Minecraft.s().u();
+        if (!Minecraft.isOnGameThread()) {
+            Vape.debugLog((String)("[GUI-STATE] deferred mouse grab on " + Thread.currentThread().getName()));
+            Minecraft.v(Minecraft::F$src$V$aoypvc);
+            return;
+        }
+        try {
+            Minecraft.vapeInstance.getMappings().U.V$src$V$9672l7(Minecraft.i());
+            if (ForgeVersion.MC_1_16_5.d()) {
+                Minecraft.s().u();
+            }
+        } catch (IllegalStateException illegalStateException) {
+            Vape.debugLog((String)("[GUI-STATE] mouse grab retried on game thread: " + illegalStateException.getMessage()));
+            Minecraft.v(Minecraft::F$src$V$aoypvc);
         }
     }
 
