@@ -66,6 +66,7 @@ extends Mod {
     public Disabler() {
         super("Disabler", (int)MODULE_ID, Category.OTHER,
                 "Packet-level patches for specific server anticheats");
+        this.setDefaultVisibility(false);
         this.anticheat.addModeDependentValues(this.grimMode, this.duplicateSlot);
         this.anticheat.addModeDependentValues(this.acaMode, this.fastSwitch, this.inventoryFrequency, this.inventoryDelay, this.containerOrder);
         this.anticheat.addModeDependentValues(this.grimMode, this.rotationGuard);
