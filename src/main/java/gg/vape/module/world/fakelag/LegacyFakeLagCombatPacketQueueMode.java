@@ -6,6 +6,7 @@ import gg.vape.event.impl.EventPacketSend;
 import gg.vape.event.impl.EventPreTick;
 import gg.vape.event.impl.EventTickBase;
 import gg.vape.mapping.MappedClasses;
+import gg.vape.utils.network.ImmediateResponsePackets;
 import gg.vape.module.Mod;
 import gg.vape.module.SubModule;
 import gg.vape.combat.AttackPacketTimingTracker;
@@ -88,6 +89,10 @@ extends SubModule<FakeLag> {
         }
         Packet packet = eventPacketSend.getPacket();
         if (this.dispatchGuard.R(packet)) {
+            return;
+        }
+        // KeepAlive/pong 不进队列，否则服务端会记 skipped 并判定异常。
+        if (ImmediateResponsePackets.isImmediateResponse(packet)) {
             return;
         }
         while (this.flushing.get()) {

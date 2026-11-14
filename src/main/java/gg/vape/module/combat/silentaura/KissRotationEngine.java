@@ -2,6 +2,7 @@ package gg.vape.module.combat.silentaura;
 
 import gg.vape.rotation.RotationManager;
 import gg.vape.utils.MathUtil;
+import gg.vape.utils.SensitivityUtil;
 import java.util.Random;
 
 /**
@@ -133,15 +134,20 @@ public final class KissRotationEngine {
         return new float[]{appliedYaw, appliedPitch};
     }
 
+    private static volatile float offGridJitter = 0.0f;
+
+    /** 非网格抖动系数（0 = 关闭）：每 tick 在 GCD 吸附结果上叠加 ±factor*gcd 的随机偏移。 */
+    public static void setOffGridJitter(float value) {
+        offGridJitter = Math.max(0.0f, Math.min(1.0f, value));
+    }
+
     /** Kiss {@code mu379()} / {@code mv194()}：原版鼠标灵敏度对应的每像素角度，默认 0.15°。 */
     public static float perPixelAngle() {
-        float sensitivity = RotationManager.INSTANCE.getMouseSensitivity();
-        float base = sensitivity * 0.6f + 0.2f;
-        return base * base * base * 8.0f * 0.15f;
+        return SensitivityUtil.gcdDegrees(RotationManager.INSTANCE.getMouseSensitivity());
     }
 
     private static float quantiseDelta(float delta, float gcd) {
-        return delta == 0.0f ? 0.0f : Math.round(delta / gcd) * gcd;
+        return SensitivityUtil.snapDelta(delta, gcd) + SensitivityUtil.gcdJitter(gcd, offGridJitter);
     }
 
     /** Kiss {@code mx337()}：每 tick 让 {@code mc45()} 的呼吸相位随机前进 0.45~1.15 rad（mod 2π）。 */

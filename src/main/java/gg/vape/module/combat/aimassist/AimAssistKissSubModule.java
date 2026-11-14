@@ -13,6 +13,7 @@ import gg.vape.rotation.RotationManager;
 import gg.vape.unmap.ModeOption;
 import gg.vape.unmap.ModeSelection;
 import gg.vape.utils.MathUtil;
+import gg.vape.utils.SensitivityUtil;
 import gg.vape.utils.Vec3d;
 import gg.vape.value.BooleanValue;
 import gg.vape.value.ModeValue;
@@ -73,6 +74,7 @@ extends SubModule<AimAssist> {
     private final NumberValue newFeedforward;
     private final NumberValue newPredict;
     private final NumberValue newDeadzone;
+    private final NumberValue offGridJitter;
 
     private EntityLivingBase target;
     private Object lockedTargetObject;
@@ -129,9 +131,11 @@ extends SubModule<AimAssist> {
                 this.newPredict, this.newDeadzone);
         this.aimMode.addModeDependentValues((ModeOption)this.oldMode, this.smooth, this.pitchSmooth,
                 this.yPredict, this.yEmaAlpha, this.yDeadzone);
+        this.offGridJitter = NumberValue.create(this, "Off-grid jitter", "#.##", "", 0.0, 0.0, 1.0, 0.05,
+                "Adds a small random offset on top of the GCD grid so aim steps are not perfectly aligned. 0 = off.");
         this.addValue(this.targetMode, this.aimMode, this.aimX, this.aimY, this.aimZ, this.range, this.optimalRange,
                 this.fov, this.smooth, this.pitchSmooth, this.yPredict, this.yEmaAlpha, this.yDeadzone,
-                this.newResponse, this.newFeedforward, this.newPredict, this.newDeadzone);
+                this.newResponse, this.newFeedforward, this.newPredict, this.newDeadzone, this.offGridJitter);
     }
 
     @Override
@@ -538,9 +542,10 @@ extends SubModule<AimAssist> {
     }
 
     private void applyRotation(float absoluteYaw, float absolutePitch) {
-        float gcd = this.gcdStep();
-        float snappedYaw = Math.round(absoluteYaw / gcd) * gcd;
-        float snappedPitch = Math.round(absolutePitch / gcd) * gcd;
+        float gcd = SensitivityUtil.gcdDegrees();
+        double jitterFactor = this.offGridJitter == null ? 0.0 : (double)this.offGridJitter.getValue();
+        float snappedYaw = SensitivityUtil.snapAngle(absoluteYaw, gcd) + SensitivityUtil.gcdJitter(gcd, jitterFactor);
+        float snappedPitch = SensitivityUtil.snapAngle(absolutePitch, gcd) + SensitivityUtil.gcdJitter(gcd, jitterFactor);
         snappedPitch = MathUtil.clamp(snappedPitch, -90.0f, 90.0f);
         EntityPlayerSP player = Minecraft.thePlayer();
         if (player == null) {
@@ -550,8 +555,8 @@ extends SubModule<AimAssist> {
         // 相机才会真正跟着转；直接 setLocalPlayerRotation 只改逻辑朝向，看起来"没拽动视角"。
         float currentYaw = RotationManager.getViewYaw(player);
         float currentPitch = RotationManager.getViewPitch(player);
-        float yawDelta = wrapDegrees(snappedYaw - currentYaw) / 0.15f;
-        float pitchDelta = (currentPitch - snappedPitch) / 0.15f;
+        float yawDelta = SensitivityUtil.degreesToMouseDelta(wrapDegrees(snappedYaw - currentYaw));
+        float pitchDelta = SensitivityUtil.degreesToMouseDelta(currentPitch - snappedPitch);
         if (kissDebugTicks % 10 == 0) {
             Vape.debugLog("[KISS] apply curYaw=" + currentYaw + " curPitch=" + currentPitch
                     + " snappedYaw=" + snappedYaw + " snappedPitch=" + snappedPitch
@@ -561,9 +566,7 @@ extends SubModule<AimAssist> {
     }
 
     private float gcdStep() {
-        float sensitivity = Minecraft.gameSettings().y();
-        float base = sensitivity * 0.6f + 0.2f;
-        return base * base * base * 8.0f * 0.15f;
+        return SensitivityUtil.gcdDegrees();
     }
 
     private static float wrapDegrees(float degrees) {

@@ -2828,3 +2828,19 @@ aimassist_kiss.new_deadzone=新算法死区
 aimassist_kiss.mouse_down=按住鼠标
 silentaura.kiss_speed.tooltip=Kiss 旋转基础速度（度/游戏刻，Kiss 杀戮光环默认 30）
 silentaura.kiss_jitter.tooltip=Kiss 旋转抖动幅度（以 0.15° 为基准的倍率，0 为关闭）
+disabler.module=反作弊绕过
+disabler.anticheat=反作弊引擎
+disabler.duplicate_slot=Grim 重复切槽
+disabler.fast_switch=ACA 快速切槽
+disabler.anticheat.tooltip=目标服务器的反作弊引擎。只启用所选引擎对应的规则，避免把针对 Grim 的补丁打到 ACA 服务器上。
+disabler.module.tooltip=针对特定服务端反作弊的封包层补丁
+disabler.inventory_frequency=ACA 库存频率
+disabler.inventory_delay=ACA 库存延迟
+blink.spread_release=分散释放
+blink.release_per_tick=每刻释放
+blink.spread_release.tooltip=解除 Blink 时按每 tick 固定数量放行被封的包，而不是一次性全放，避免服务端看到不可能的封包簇。
+silentaura.kiss_off_grid_jitter=Kiss 非网格抖动
+aimassist_kiss.off_grid_jitter=非网格抖动
+silentaura.kiss_off_grid_jitter.tooltip=在 GCD 吸附结果上叠加一个不超过一格的小随机偏移，让 Kiss 旋转不再精确落在网格上（0 = 关闭）。
+aimassist_kiss.off_grid_jitter.tooltip=在 GCD 吸附结果上叠加一个不超过一格的小随机偏移，让自瞄步进不再精确落在网格上（0 = 关闭）。
+disabler.remember_per_server=按服务器记住

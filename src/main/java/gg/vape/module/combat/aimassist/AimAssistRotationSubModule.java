@@ -10,6 +10,7 @@ import gg.vape.rotation.PlayerMouseRotationApplier;
 import gg.vape.rotation.RotationManager;
 import gg.vape.utils.MathUtil;
 import gg.vape.utils.RotationUtil;
+import gg.vape.utils.SensitivityUtil;
 import gg.vape.utils.Vec3d;
 import gg.vape.wrapper.impl.EntityLivingBase;
 import gg.vape.wrapper.impl.EntityPlayerSP;
@@ -116,9 +117,7 @@ extends SubModule<AimAssist> {
         if (Math.abs(verticalMouseSteps) == 0) {
             verticalMouseSteps = 0;
         }
-        float sensitivity = Minecraft.gameSettings().y();
-        float sensitivityBase = sensitivity * 0.6f + 0.2f;
-        float sensitivityScale = sensitivityBase * sensitivityBase * sensitivityBase * 8.0f;
+        float sensitivityScale = SensitivityUtil.degreesPerMouseStep();
         float horizontalDelta = (float)horizontalMouseSteps * sensitivityScale;
         float verticalDelta = (float)verticalMouseSteps * sensitivityScale;
         PlayerMouseRotationApplier.applyTrackedMouseDelta(horizontalDelta, -verticalDelta);

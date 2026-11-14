@@ -8,6 +8,9 @@
 #include <wchar.h>
 
 static volatile LONG g_loaded_by_jni = 0;
+/* 单实例守卫：同一进程被注入两次时第二个 DLL 副本会与第一份抢共享状态
+ * （重复注入曾导致 initializeManagers 读产品 JAR 失败并崩溃）。 */
+static HANDLE g_single_instance_mutex = NULL;
 /* Manual-map (reflective loader) overrides: when these are set the DLL was
  * mapped by the injector instead of LoadLibraryW, so it has no loader module
  * entry and cannot use GetModuleFileNameW/FindResourceW/FreeLibrary. */
@@ -987,6 +990,25 @@ static int call_bridge_start(JNIEnv *env, jclass bridge_class) {
     return 1;
 }
 
+static int vape_acquire_single_instance(void) {
+    wchar_t name[64];
+    HANDLE mutex;
+    swprintf_s(name, 64, L"Local\vape421-native-%lu",
+            (unsigned long)GetCurrentProcessId());
+    mutex = CreateMutexW(NULL, FALSE, name);
+    if (mutex == NULL) {
+        /* 守卫本身出错时宁可继续注入。 */
+        return 1;
+    }
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        CloseHandle(mutex);
+        vape_log(L"another Vape instance is already attached to this process; skipping injection");
+        return 0;
+    }
+    g_single_instance_mutex = mutex;
+    return 1;
+}
+
 static DWORD WINAPI bootstrap_thread(LPVOID parameter) {
     HMODULE jvm_module;
     FARPROC created_vms_address;
@@ -1008,6 +1030,10 @@ static DWORD WINAPI bootstrap_thread(LPVOID parameter) {
     if (!vape_loader_bootstrap_initialize()) {
         vape_log(L"Loader token bootstrap is invalid");
         exit_code = 6;
+        goto cleanup;
+    }
+    if (!vape_acquire_single_instance()) {
+        exit_code = 7;
         goto cleanup;
     }
     Sleep(150);

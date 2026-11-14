@@ -152,6 +152,7 @@ extends Mod {
     private final ModeOption rotationKissMode;
     private final NumberValue kissSpeed;
     private final NumberValue kissJitter;
+    private final NumberValue kissOffGridJitter;
     private final KissRotationEngine kissEngine;
 
     public EntityLivingBase getTarget() {
@@ -385,14 +386,15 @@ extends Mod {
         this.kissSpeed = NumberValue.create(this, "Kiss speed", "#.#", "\u00b0", 5.0, 30.0, 90.0, 0.5, "Kiss rotation base speed in degrees per tick (Kiss KillAura default is 30).");
         this.kissJitter = NumberValue.create(this, "Kiss jitter", "#.##", "", 0.0, 0.15, 1.0, 0.01, "Kiss rotation jitter amplitude multiplied onto the 0.15 degree base (0 disables jitter).");
         this.kissEngine = new KissRotationEngine();
-        this.rotationMode.addModeDependentValues(this.rotationKissMode, this.kissSpeed, this.kissJitter);
+        this.kissOffGridJitter = NumberValue.create(this, "Kiss off-grid jitter", "#.##", "", 0.0, 0.0, 1.0, 0.05, "Adds a small random offset on top of the GCD grid so Kiss rotation steps are not perfectly aligned (0 disables).");
+        this.rotationMode.addModeDependentValues(this.rotationKissMode, this.kissSpeed, this.kissJitter, this.kissOffGridJitter);
         this.perfectSwing.whenEqualTo(false).applyTo(this.attackRate);
         // 1.7.10 attacks via attackEntity(target) directly and never rewrites
         // the outgoing packet view, so the silent aim speed is unused there.
         if (ForgeVersion.MC_1_7_10.L()) {
             this.aimSpeed.setHidden(true);
         }
-        this.addValue(this.targetFilter, this.rotationMode, this.aiModel, this.aiYawMultiplier, this.aiPitchMultiplier, this.kissSpeed, this.kissJitter, this.aimSpeed, this.attackRate, this.extraSwingDistance, this.maxAngle, this.targetMode, this.targetArea, this.shieldCheck);
+        this.addValue(this.targetFilter, this.rotationMode, this.aiModel, this.aiYawMultiplier, this.aiPitchMultiplier, this.kissSpeed, this.kissJitter, this.kissOffGridJitter, this.aimSpeed, this.attackRate, this.extraSwingDistance, this.maxAngle, this.targetMode, this.targetArea, this.shieldCheck);
 
         // 把模式选择放到设置列表最上方（子模块/依赖值会先被注册，导致下拉框被挤到下面）
         java.util.List<gg.vape.value.Value<?, ?>> valueOrder = this.getValues();
@@ -771,6 +773,7 @@ extends Mod {
         float managedPitch = RotationManager.INSTANCE.getManagedPitch();
         this.kissEngine.setTarget(this.target);
         this.kissEngine.setJitterScale(((Double)this.kissJitter.getValue()).floatValue());
+        KissRotationEngine.setOffGridJitter(((Double)this.kissOffGridJitter.getValue()).floatValue());
         float[] step = this.kissEngine.compute(desiredRotation.getYaw(), targetPitch, managedYaw, managedPitch,
                 ((Double)this.kissSpeed.getValue()).floatValue(), true, distanceToTarget, 6.0);
         this.rotationController.applyAiRotationDelta(step[0], step[1]);

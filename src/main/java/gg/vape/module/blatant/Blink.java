@@ -17,6 +17,7 @@ import gg.vape.unmap.ModeSelection;
 import gg.vape.utils.TimerUtil;
 import gg.vape.utils.Vec3d;
 import gg.vape.utils.network.PacketDispatchGuard;
+import gg.vape.utils.network.ImmediateResponsePackets;
 import gg.vape.utils.render.GuiRenderPrimitives;
 import gg.vape.utils.render.OpenGlBackendHolder;
 import gg.vape.utils.render.RenderUtil;
@@ -61,6 +62,9 @@ extends Mod {
     private final BooleanValue spawnFake;
     private final ModeOption outgoingOnlyMode = new ModeOption("Outgoing only");
     private int chokeCount = 0;
+    private final BooleanValue spreadRelease;
+    private final NumberValue releasePerTick;
+    private final Queue<PacketSendDispatchGuardCallback> releaseQueue;
 
     @Override
     public void setEnabled(boolean enabled, boolean bypassVisibilityCheck) {
@@ -78,6 +82,15 @@ extends Mod {
 
     @Override
     public void onDisable() {
+        while (!this.releaseQueue.isEmpty()) {
+            PacketSendDispatchGuardCallback callback = this.releaseQueue.poll();
+            try {
+                callback.dispatch(this.dispatchGuard);
+            }
+            catch (Exception exception) {
+                Vape.logThrowable(exception);
+            }
+        }
         this.breadcrumbTrail.clear();
         if (Minecraft.thePlayer().isNull() || Minecraft.theWorld().isNull()) {
             this.fakePlayer = null;
@@ -100,10 +113,19 @@ extends Mod {
     }
 
     private void flushPackets() {
+        if (!this.releaseQueue.isEmpty()) {
+            return;
+        }
         this.threadRunning = false;
         this.fakePlayerTimer.reset();
         this.stopped = false;
         this.chokeCount = 0;
+        int perTick = (int)(double)this.releasePerTick.getValue();
+        if (this.spreadRelease.getEffectiveValue().booleanValue() && this.pendingCallbacks.size() > perTick) {
+            this.releaseQueue.addAll(this.pendingCallbacks);
+            this.pendingCallbacks.clear();
+            return;
+        }
         for (PacketSendDispatchGuardCallback packetSendDispatchGuardCallback : this.pendingCallbacks) {
             try {
                 packetSendDispatchGuardCallback.dispatch(this.dispatchGuard);
@@ -114,6 +136,26 @@ extends Mod {
         }
         this.pendingCallbacks.clear();
         if (this.pendingReEnable) {
+            super.setEnabled(false, true);
+            this.pendingReEnable = false;
+        }
+    }
+
+    private void drainReleaseQueue() {
+        int perTick = (int)(double)this.releasePerTick.getValue();
+        for (int index = 0; index < perTick && !this.releaseQueue.isEmpty(); ++index) {
+            PacketSendDispatchGuardCallback callback = this.releaseQueue.poll();
+            if (callback == null) {
+                return;
+            }
+            try {
+                callback.dispatch(this.dispatchGuard);
+            }
+            catch (Exception exception) {
+                Vape.logThrowable(exception);
+            }
+        }
+        if (this.releaseQueue.isEmpty() && this.pendingReEnable) {
             super.setEnabled(false, true);
             this.pendingReEnable = false;
         }
@@ -170,6 +212,7 @@ extends Mod {
         if (player.isNull() || Minecraft.theWorld().isNull()) {
             this.threadRunning = false;
             this.pendingCallbacks.clear();
+            this.releaseQueue.clear();
             this.breadcrumbTrail.clear();
             this.chokeCount = 0;
             this.stopped = false;
@@ -197,7 +240,11 @@ extends Mod {
             this.stopped = true;
         }
         if (this.stopped) {
-            this.flushPackets();
+            if (!this.releaseQueue.isEmpty()) {
+                this.drainReleaseQueue();
+            } else {
+                this.flushPackets();
+            }
         }
     }
 
@@ -209,13 +256,19 @@ extends Mod {
         this.spawnFake = BooleanValue.create(this, "Spawn fake", false, "Spawns a fake player where you started/are on the servers side.");
         this.autoSend = BooleanValue.create(this, "Auto send", false, "Automatically sends packets after a limit is reached");
         this.sendThreshold = NumberValue.create(this, "Send threshold", "#", "", 0.0, 50.0, 100.0, 1.0, "Allows you to choke your packets for a custom set limit.\nAfter the limit is reached, all packets will be sent.\nNOTE: 0 = No Limit");
+        this.spreadRelease = BooleanValue.create(this, "Spread Release", true,
+                "Releases the choked packets a few per tick instead of one burst, so the server does not see an impossible packet cluster.");
+        this.releasePerTick = NumberValue.create(this, "Release Per Tick", "#", "", 1.0, 2.0, 10.0, 1.0);
+        this.spreadRelease.addDependentValues(this.releasePerTick);
         this.dispatchGuard = PacketDispatchGuard.b;
         this.pendingCallbacks = new ConcurrentLinkedQueue<PacketSendDispatchGuardCallback>();
+        this.releaseQueue = new ConcurrentLinkedQueue<PacketSendDispatchGuardCallback>();
         this.breadcrumbTrail = new CopyOnWriteArrayList<Vec3d>();
         this.fakePlayerTimer = new TimerUtil();
         this.fakePlayerTask = this::fakePlayerLoop;
         this.autoSend.addDependentValues(this.sendThreshold);
-        this.addValue(this.directionMode, this.breadcrumbs, this.spawnFake, this.autoSend, this.sendThreshold);
+        this.addValue(this.directionMode, this.breadcrumbs, this.spawnFake, this.autoSend, this.sendThreshold,
+                this.spreadRelease, this.releasePerTick);
     }
 
     @EventHandler(priority=EventPriority.LOWEREST)
@@ -228,6 +281,10 @@ extends Mod {
         }
         Packet packet = eventPacketSend.getPacket();
         if (this.dispatchGuard.R(packet)) {
+            return;
+        }
+        // KeepAlive/pong 这类应答包压进 Blink 队列会让服务端记 skipped，直接放行。
+        if (ImmediateResponsePackets.isImmediateResponse(packet)) {
             return;
         }
         ++this.chokeCount;
