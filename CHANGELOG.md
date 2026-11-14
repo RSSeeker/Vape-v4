@@ -1,5 +1,15 @@
 # 更新日志
 
+## v4.21.51 (2026-11-14)
+
+**修复：使用 Ixeris 等拆分线程的模组时，开关 GUI 后视角无法转动**
+
+- 现象：装了 Ixeris（把 GLFW 事件轮询与渲染拆到两个线程）后，打开 Vape 界面再关闭，视角不再转动、暂停菜单按钮点不动，但左右键仍有效。
+- 根因：Ixeris 下我们的窗口消息回调跑在非游戏线程，关闭界面时调用原版 `MouseHandler.grabMouse()` 触发 `RenderSystem` 线程断言（`Rendersystem called from wrong thread`）：`mouseGrabbed` 已被置为 true，但真正的 `glfwSetInputMode` 从未执行 → Minecraft 以为鼠标已抓取、实际光标仍在自由状态。
+- 修复：鼠标释放/抓取统一判断当前线程，非游戏线程时通过 `Minecraft.addScheduledTask` 排到游戏线程执行，并捕获取线程断言后重试；原版（无 Ixeris）路径与行为完全不变。
+
+> 4.21.50 及更早版本的所有修复均保留。
+
 ## v4.21.50 (2026-11-14)
 
 **新增：反作弊绕过（Disabler）与旋转加固，修复 26.x 自动重锤鞘翅**
