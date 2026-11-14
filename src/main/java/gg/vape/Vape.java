@@ -81,6 +81,7 @@ import gg.vape.unmap.ItemHelper;
 import gg.vape.utils.AttackCooldownUtil;
 import gg.vape.utils.Base64Util;
 import gg.vape.utils.TimerUtil;
+import gg.vape.utils.network.InboundPingQueue;
 import gg.vape.utils.network.OutboundPacketPipeline;
 import gg.vape.utils.network.PacketDispatchGuard;
 import gg.vape.utils.render.GuiRenderPrimitives;
@@ -619,6 +620,7 @@ public class Vape {
         EventBus.getInstance().registerListener(AttackPacketTimingTracker.INSTANCE, new Predicate[0]);
         EventBus.getInstance().registerListener(PingManager.INSTANCE, new Predicate[0]);
         EventBus.getInstance().registerListener(new OutboundPacketPipeline(), new Predicate[0]);
+        EventBus.getInstance().registerListener(new InboundPingQueue(), new Predicate[0]);
         EventBus.getInstance().registerListener(RotationManager.INSTANCE, new Predicate[0]);
         EventBus.getInstance().registerListener(PlayerMovementTaskManager.INSTANCE, new Predicate[0]);
         EventBus.getInstance().registerListener(OnlineFriendActivityListener.INSTANCE, new Predicate[0]);

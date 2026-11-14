@@ -2828,3 +2828,11 @@ aimassist_kiss.off_grid_jitter=Off-grid jitter
 silentaura.kiss_off_grid_jitter.tooltip=Adds a small random offset on top of the GCD grid so Kiss rotation steps are not perfectly aligned (0 disables).
 aimassist_kiss.off_grid_jitter.tooltip=Adds a small random offset on top of the GCD grid so aim steps are not perfectly aligned. 0 = off.
 disabler.remember_per_server=Remember per server
+disabler.rotation_guard=Grim Rotation Guard
+disabler.response_throttle=Response Throttle
+disabler.container_order=ACA Container Order
+disabler.hold_keepalive=Themis Hold KeepAlive
+disabler.rotation_guard.tooltip=Drops duplicate pure look packets inside 90ms so Grim does not flag duplicate aim.
+disabler.response_throttle.tooltip=Drops duplicate pong / transaction responses so Themis and ACA do not flag replayed replies.
+disabler.container_order.tooltip=Drops container clicks right after a close packet was delayed, keeping the close/click order.
+disabler.hold_keepalive.tooltip=Holds inbound heartbeats for up to 500ms while packing is choked, so the server sees one uniform delay instead of a frozen client.

@@ -4,12 +4,16 @@ import gg.vape.event.EventHandler;
 import gg.vape.event.impl.EventPreTick;
 import gg.vape.module.Category;
 import gg.vape.module.Mod;
+import gg.vape.module.blatant.disabler.ContainerOrderRule;
 import gg.vape.module.blatant.disabler.DuplicateSlotRule;
+import gg.vape.module.blatant.disabler.ResponseThrottleRule;
+import gg.vape.module.blatant.disabler.RotationGuardRule;
 import gg.vape.module.blatant.disabler.FastSwitchRule;
 import gg.vape.module.blatant.disabler.InventoryFrequencyRule;
 import gg.vape.unmap.ModeOption;
 import gg.vape.unmap.ModeSelection;
 import gg.vape.utils.network.AnticheatProfile;
+import gg.vape.utils.network.InboundPingQueue;
 import gg.vape.utils.network.ServerAnticheatProfiles;
 import gg.vape.wrapper.impl.Minecraft;
 import gg.vape.wrapper.impl.ServerData;
@@ -42,6 +46,10 @@ extends Mod {
     private final BooleanValue duplicateSlot = new BooleanValue(this, "Grim Duplicate Slot", true);
     private final BooleanValue fastSwitch = new BooleanValue(this, "ACA Fast Switch", true);
     private final BooleanValue inventoryFrequency = new BooleanValue(this, "ACA Inventory Frequency", true);
+    private final BooleanValue rotationGuard = new BooleanValue(this, "Grim Rotation Guard", true);
+    private final BooleanValue responseThrottle = new BooleanValue(this, "Response Throttle", true);
+    private final BooleanValue containerOrder = new BooleanValue(this, "ACA Container Order", true);
+    private final BooleanValue holdKeepAlive = new BooleanValue(this, "Themis Hold KeepAlive", false);
     private final BooleanValue rememberPerServer = new BooleanValue(this, "Remember per server", true);
     private String lastServerIp;
     private String lastEngineName;
@@ -51,15 +59,22 @@ extends Mod {
     private final DuplicateSlotRule duplicateSlotRule = new DuplicateSlotRule();
     private final FastSwitchRule fastSwitchRule = new FastSwitchRule();
     private final InventoryFrequencyRule inventoryFrequencyRule = new InventoryFrequencyRule(this.inventoryDelay);
+    private final RotationGuardRule rotationGuardRule = new RotationGuardRule();
+    private final ResponseThrottleRule responseThrottleRule = new ResponseThrottleRule();
+    private final ContainerOrderRule containerOrderRule = new ContainerOrderRule();
 
     public Disabler() {
         super("Disabler", (int)MODULE_ID, Category.OTHER,
                 "Packet-level patches for specific server anticheats");
         this.anticheat.addModeDependentValues(this.grimMode, this.duplicateSlot);
-        this.anticheat.addModeDependentValues(this.acaMode, this.fastSwitch, this.inventoryFrequency, this.inventoryDelay);
+        this.anticheat.addModeDependentValues(this.acaMode, this.fastSwitch, this.inventoryFrequency, this.inventoryDelay, this.containerOrder);
+        this.anticheat.addModeDependentValues(this.grimMode, this.rotationGuard);
+        this.anticheat.addModeDependentValues(this.themisMode, this.responseThrottle, this.holdKeepAlive);
+        this.anticheat.addModeDependentValues(this.allMode, this.rotationGuard, this.responseThrottle, this.containerOrder, this.holdKeepAlive);
         this.inventoryFrequency.addDependentValues(this.inventoryDelay);
         this.addValue(this.anticheat, this.duplicateSlot, this.fastSwitch,
-                this.inventoryFrequency, this.inventoryDelay, this.rememberPerServer);
+                this.inventoryFrequency, this.inventoryDelay, this.containerOrder,
+                this.rotationGuard, this.responseThrottle, this.holdKeepAlive, this.rememberPerServer);
     }
 
     @Override
@@ -71,6 +86,9 @@ extends Mod {
     public void onEnable() {
         this.duplicateSlotRule.reset();
         this.fastSwitchRule.reset();
+        this.rotationGuardRule.reset();
+        this.responseThrottleRule.reset();
+        this.containerOrderRule.reset();
         this.syncRules();
     }
 
@@ -79,6 +97,11 @@ extends Mod {
         OutboundPacketPipeline.unregister(this.duplicateSlotRule);
         OutboundPacketPipeline.unregister(this.fastSwitchRule);
         OutboundPacketPipeline.unregister(this.inventoryFrequencyRule);
+        OutboundPacketPipeline.unregister(this.rotationGuardRule);
+        OutboundPacketPipeline.unregister(this.responseThrottleRule);
+        OutboundPacketPipeline.unregister(this.containerOrderRule);
+        InboundPingQueue.setEnabled(false);
+        InboundPingQueue.flush();
     }
 
     @EventHandler
@@ -164,6 +187,10 @@ extends Mod {
         this.setRuleEnabled(this.duplicateSlotRule, this.duplicateSlot.getEffectiveValue().booleanValue());
         this.setRuleEnabled(this.fastSwitchRule, this.fastSwitch.getEffectiveValue().booleanValue());
         this.setRuleEnabled(this.inventoryFrequencyRule, this.inventoryFrequency.getEffectiveValue().booleanValue());
+        this.setRuleEnabled(this.rotationGuardRule, this.rotationGuard.getEffectiveValue().booleanValue());
+        this.setRuleEnabled(this.responseThrottleRule, this.responseThrottle.getEffectiveValue().booleanValue());
+        this.setRuleEnabled(this.containerOrderRule, this.containerOrder.getEffectiveValue().booleanValue());
+        InboundPingQueue.setEnabled(this.holdKeepAlive.getEffectiveValue().booleanValue());
     }
 
     private void setRuleEnabled(gg.vape.utils.network.OutboundPacketRule rule, boolean enabled) {

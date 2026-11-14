@@ -2844,3 +2844,11 @@ aimassist_kiss.off_grid_jitter=非网格抖动
 silentaura.kiss_off_grid_jitter.tooltip=在 GCD 吸附结果上叠加一个不超过一格的小随机偏移，让 Kiss 旋转不再精确落在网格上（0 = 关闭）。
 aimassist_kiss.off_grid_jitter.tooltip=在 GCD 吸附结果上叠加一个不超过一格的小随机偏移，让自瞄步进不再精确落在网格上（0 = 关闭）。
 disabler.remember_per_server=按服务器记住
+disabler.rotation_guard=Grim 旋转去重
+disabler.response_throttle=应答去重
+disabler.container_order=ACA 容器顺序
+disabler.hold_keepalive=Themis 扣留心跳
+disabler.rotation_guard.tooltip=90 毫秒内重复的纯视角包直接丢弃，避免 Grim 判定重复瞄准。
+disabler.response_throttle.tooltip=pong / 交易确认应答在 60 毫秒内重复时丢弃多余的那条，避免被判重放。
+disabler.container_order.tooltip=关闭容器包被延后时，紧跟的容器点击包直接丢弃，保证服务端看到的是先关后点。
+disabler.hold_keepalive.tooltip=出站被压包时把入站心跳最多扣留 500 毫秒，让服务端看到的是整条链路的统一延迟，而不是客户端卡死。
