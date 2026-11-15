@@ -269,27 +269,80 @@ extends Wrapper {
      * （IllegalStateException: Rendersystem called from wrong thread，随后 mouseGrabbed 与真实
      * cursor mode 不一致：视角不动但按键仍有效）。检测到线程不一致就改由游戏线程延迟执行。
      */
+    private static volatile Thread gameThread;
+    private static final java.util.Queue<Runnable> PENDING_GAME_THREAD_TASKS = new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
+
+    /**
+     * 把任务排到渲染/客户端线程执行。Minecraft.execute 的映射只在 1.20.6 以前注册过，
+     * 新版本上 MMinecraft.m(...) 返回 null（直接调用会 NPE），所以这里自己维护队列，
+     * 由 EventRender2D 每帧在渲染线程上排空。
+     */
+    public static void runPendingGameThreadTasks() {
+        Runnable runnable;
+        while ((runnable = PENDING_GAME_THREAD_TASKS.poll()) != null) {
+            try {
+                runnable.run();
+            } catch (Throwable throwable) {
+                gg.vape.Vape.debugLog("[GUI-STATE] game-thread task failed: " + throwable);
+            }
+        }
+    }
+
+    /**
+     * 由渲染 2D 钩子每帧调用，记录真正的客户端/渲染线程。
+     * 比线程名或 PRE_TICK_EXECUTOR 的 ownerThread 都可靠：
+     * Ixeris 等模组会把事件轮询拆到独立线程，ownerThread 记录的是轮询线程。
+     */
+    public static void markGameThread() {
+        gameThread = Thread.currentThread();
+    }
+
+    public static Thread getGameThread() {
+        return gameThread;
+    }
+
     public static boolean isOnGameThread() {
+        Thread captured = gameThread;
+        if (captured != null) {
+            return captured == Thread.currentThread();
+        }
+        // 注意：不能用 EventTickBase.PRE_TICK_EXECUTOR.getOwnerThread() 判断。
+        // 该线程由第一次 runPending() 的线程设置；Ixeris 等把事件轮询拆到独立线程的模组下，
+        // 它记录的是 "Ixeris Event Polling Thread"，不是客户端线程。用它判断会出现：
+        // 轮询线程上判 true → 直调 vanilla 抛 IllegalStateException → catch 后 post 到客户端线程
+        // → 客户端线程上判 false → 再 post（execute 在客户端线程立即执行）→ 无限递归 StackOverflowError。
         try {
-            Thread owner = gg.vape.event.impl.EventTickBase.PRE_TICK_EXECUTOR.getOwnerThread();
-            return owner == null || owner == Thread.currentThread();
+            String name = Thread.currentThread().getName();
+            if ("Render thread".equals(name) || "Client thread".equals(name)) {
+                return true;
+            }
+            if (name != null) {
+                return false;
+            }
         } catch (Throwable throwable) {
             return true;
+        }
+        Thread owner = gg.vape.event.impl.EventTickBase.PRE_TICK_EXECUTOR.getOwnerThread();
+        return owner == null || owner == Thread.currentThread();
+    }
+
+    /**
+     * 真正的鼠标释放调用。只能从客户端线程调用；调用方负责保证线程正确。
+     */
+    private static void releaseMouseDirect() {
+        try {
+            MMinecraft.b(Minecraft.vapeInstance.getMappings().U, Minecraft.i());
+        } catch (IllegalStateException illegalStateException) {
+            Minecraft.v(Minecraft::releaseMouseDirect);
         }
     }
 
     public static void R() {
         if (!Minecraft.isOnGameThread()) {
-            Vape.debugLog((String)("[GUI-STATE] deferred mouse release on " + Thread.currentThread().getName()));
-            Minecraft.v(Minecraft::R);
+            Minecraft.v(Minecraft::releaseMouseDirect);
             return;
         }
-        try {
-            MMinecraft.b(Minecraft.vapeInstance.getMappings().U, Minecraft.i());
-        } catch (IllegalStateException illegalStateException) {
-            Vape.debugLog((String)("[GUI-STATE] mouse release retried on game thread: " + illegalStateException.getMessage()));
-            Minecraft.v(Minecraft::R);
-        }
+        Minecraft.releaseMouseDirect();
     }
 
     public static void r(EntityLivingBase entityLivingBase) {
@@ -314,7 +367,12 @@ extends Wrapper {
     }
 
     public static void v(Runnable runnable) {
-        MMinecraft.m(Minecraft.vapeInstance.getMappings().U).invokeVoid(Minecraft.i(), runnable);
+        gg.vape.mapping.MappingMethod execute = MMinecraft.m(Minecraft.vapeInstance.getMappings().U);
+        if (execute != null) {
+            execute.invokeVoid(Minecraft.i(), runnable);
+            return;
+        }
+        PENDING_GAME_THREAD_TASKS.add(runnable);
     }
 
     public static ServerData H() {
@@ -329,21 +387,23 @@ extends Wrapper {
         return new RenderGlobal(MMinecraft.N(Minecraft.vapeInstance.getMappings().U, Minecraft.i()));
     }
 
-    public static void F$src$V$aoypvc() {
-        if (!Minecraft.isOnGameThread()) {
-            Vape.debugLog((String)("[GUI-STATE] deferred mouse grab on " + Thread.currentThread().getName()));
-            Minecraft.v(Minecraft::F$src$V$aoypvc);
-            return;
-        }
+    private static void grabMouseDirect() {
         try {
             Minecraft.vapeInstance.getMappings().U.V$src$V$9672l7(Minecraft.i());
             if (ForgeVersion.MC_1_16_5.d()) {
                 Minecraft.s().u();
             }
         } catch (IllegalStateException illegalStateException) {
-            Vape.debugLog((String)("[GUI-STATE] mouse grab retried on game thread: " + illegalStateException.getMessage()));
-            Minecraft.v(Minecraft::F$src$V$aoypvc);
+            Minecraft.v(Minecraft::grabMouseDirect);
         }
+    }
+
+    public static void F$src$V$aoypvc() {
+        if (!Minecraft.isOnGameThread()) {
+            Minecraft.v(Minecraft::grabMouseDirect);
+            return;
+        }
+        Minecraft.grabMouseDirect();
     }
 
     public static void X(int n) {

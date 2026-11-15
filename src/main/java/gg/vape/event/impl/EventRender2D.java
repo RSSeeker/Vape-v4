@@ -25,6 +25,8 @@ extends Event {
     }
 
     public static void create() {
+        Minecraft.markGameThread();
+        Minecraft.runPendingGameThreadTasks();
         if (OffscreenRenderContext.isRenderingOffscreen()) {
             return;
         }
