@@ -20,6 +20,7 @@ import gg.vape.module.control.PhysicalAttackCancellationAdapter;
 import gg.vape.module.control.SharedModuleControlClaims;
 import gg.vape.module.control.SyntheticAttackCancellationAdapter;
 import gg.vape.module.none.ClientSettings;
+import gg.vape.wrapper.impl.CPacketHeldItemChange;
 import gg.vape.wrapper.impl.EnumHand;
 import gg.vape.wrapper.impl.ForgeVersion;
 import gg.vape.rotation.RotationControlClaim;
@@ -62,6 +63,12 @@ public class AutoMace extends Mod {
      * 滑翔起点到落点可能跨很高落差：20 tick 只能覆盖约 10 格的下落，
      * 高空接近目标时落点预测会全部失败（impactPass=0）。放宽到 40 tick（约 2 秒）。
      */
+    /**
+     * 1.21.10+/Fabric 上原版 isFallFlying 的映射（以及 InventoryPlayer 护甲槽）不可靠，
+     * 下面这些针对 Fabric 的行为只在 Fabric 运行时生效；Forge/NeoForge（含 26.x）沿用改动前的参数，
+     * 避免影响本来正常的版本。
+     */
+    private static final boolean FABRIC_RUNTIME = gg.vape.runtime.NativeBridge.isFabricRuntime();
     private static final int PREDICTION_TICKS = 40;
     private static final int MAX_AIM_IMPACT_TICK = 6;
     private static final int MIN_ELYTRA_IMPACT_TICK = 3;
@@ -438,7 +445,7 @@ public class AutoMace extends Mod {
         float fallDistance = player.getFallDistance();
         double previousY = simulatedPlayer.N();
         boolean glideEnded = !startsFallFlying;
-        for (int tick = 1; tick <= PREDICTION_TICKS; ++tick) {
+        for (int tick = 1; tick <= predictionTicks(); ++tick) {
             if (!glideEnded && simulatedPlayer.Y$src$Z$154rldp()) {
                 if (simulatedPlayer.q() > -0.5 && fallDistance > 1.0f) {
                     fallDistance = 1.0f;
@@ -510,7 +517,8 @@ public class AutoMace extends Mod {
         if (player.Y$src$Z$154rldp()) {
             return true;
         }
-        if (!ForgeVersion.MC_1_21_10.d() || player.h$src$Z$ftwoya() || !this.isElytraEquipped(player)) {
+        if (!FABRIC_RUNTIME || !ForgeVersion.MC_1_21_10.d()
+                || player.h$src$Z$ftwoya() || !this.isElytraEquipped(player)) {
             return false;
         }
         // 滑翔时原版会把 fallDistance 重置掉，单看 fallDistance 会漏判；垂直速度为负（下落）同样算滑翔。
@@ -530,12 +538,34 @@ public class AutoMace extends Mod {
                 }
             }
         } catch (Throwable throwable) {
-            // 映射缺失时按未穿着处理。
+            // 映射缺失时退回旧路径。
+        }
+        try {
+            Object[] objectArray = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().i();
+            for (Object object : objectArray) {
+                if (object != null && this.isElytra(new ItemStack(object))) {
+                    return true;
+                }
+            }
+        } catch (Throwable throwable) {
+            // 两条路径都不可用时按未穿着处理。
         }
         return false;
     }
 
-private boolean updateElytraState(EntityPlayerSP player, WorldClient world) {
+    private static int predictionTicks() {
+        return FABRIC_RUNTIME ? PREDICTION_TICKS : 20;
+    }
+
+    private static int maxElytraImpactTick() {
+        return FABRIC_RUNTIME ? MAX_ELYTRA_IMPACT_TICK : Integer.MAX_VALUE;
+    }
+
+    private static long elytraSwapCooldownMillis() {
+        return FABRIC_RUNTIME ? ELYTRA_SWAP_COOLDOWN_MILLIS : 0L;
+    }
+
+    private boolean updateElytraState(EntityPlayerSP player, WorldClient world) {
         if (!this.autoUnequipElytra.getEffectiveValue().booleanValue()) {
             this.restoreArmorSlot(player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6());
             this.resetElytraFlightState(true);
@@ -596,7 +626,7 @@ private boolean updateElytraState(EntityPlayerSP player, WorldClient world) {
             return true;
         }
         long now = System.currentTimeMillis();
-        if (now - this.lastElytraSwapMillis < ELYTRA_SWAP_COOLDOWN_MILLIS) {
+        if (now - this.lastElytraSwapMillis < elytraSwapCooldownMillis()) {
             return true;
         }
         this.lastElytraSwapMillis = now;
@@ -745,8 +775,8 @@ private boolean updateElytraState(EntityPlayerSP player, WorldClient world) {
             if (!immediateImpact.valid || !delayedImpact.valid
                     || immediateImpact.tick < MIN_ELYTRA_IMPACT_TICK
                     || delayedImpact.tick < MIN_ELYTRA_IMPACT_TICK
-                    || immediateImpact.tick > MAX_ELYTRA_IMPACT_TICK
-                    || delayedImpact.tick > MAX_ELYTRA_IMPACT_TICK) {
+                    || immediateImpact.tick > maxElytraImpactTick()
+                    || delayedImpact.tick > maxElytraImpactTick()) {
                 continue;
             }
             ++impactPass;
@@ -830,6 +860,13 @@ private boolean updateElytraState(EntityPlayerSP player, WorldClient world) {
         // 自动补发一次；自己再发一遍会让服务端收到重复的手持槽位变化，Grim 会记 BadPacketsA(slot=...)。
         if (inventory.v() != slot) {
             inventory.g(slot);
+        }
+        if (!FABRIC_RUNTIME) {
+            try {
+                player.sendQueue().addToSendQueue(CPacketHeldItemChange.create(slot));
+            } catch (Throwable throwable) {
+                // 旧平台上的行为保持不变：本地切槽后补发一次 C09。
+            }
         }
     }
 
