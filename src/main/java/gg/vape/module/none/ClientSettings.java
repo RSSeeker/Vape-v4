@@ -820,6 +820,11 @@ extends Mod {
     public void renderGui() {
         try {
             GuiRenderPrimitives.Y();
+            // 其它模组（如 Jade）在 HUD 阶段可能残留 scissor / 深度测试状态，
+            // 打开 GUI 时会把我们的面板裁成一小条；这里强制复位再画。
+            org.lwjgl.opengl.GL11.glDisable(3089);
+            org.lwjgl.opengl.GL11.glDisable(2929);
+            gg.vape.utils.render.BufferedGuiRenderPrimitives.scissorRect = null;
             RenderUtils.g();
             RenderUtils.C();
             if (!GuiRenderPrimitives.d()) {

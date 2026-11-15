@@ -1,5 +1,15 @@
 # 更新日志
 
+## v4.21.53 (2026-11-15)
+
+**修复：Ixeris 下按绑定键打不开 GUI、1.21.11 Fabric 自动卸下/装上鞘翅、Jade（玉）提示框导致 GUI 被裁切**
+
+- **Ixeris 等拆分线程模组下按绑定键打不开界面**：4.21.51 的线程守卫在需要把释放/抓取鼠标推迟到游戏线程时调用了 `Minecraft.execute`，而该映射只在 1.20.6 以下注册，1.20.6+ 上为 null → 空指针被事件总线吞掉，`toggle()` 走到一半中断，界面不显示但按键功能仍生效（症状即「按键有效、GUI 打不开」）。现在 `Minecraft.v(Runnable)` 在映射缺失时把任务放进待执行队列，由 `EventRender2D` 每帧在游戏线程排空；`isOnGameThread()` 改用线程名判断（1.13+ `Render thread`、1.12- `Client thread`），不再依赖事件轮询线程的 owner。
+- **1.21.11 Fabric 自动卸下/装上鞘翅失效**：`isFallFlying` 在 Fabric 运行时的原版方法名是 intermediary（`method_6128`），我们的反射兜底只查 `isFallFlying`，兜底从未生效；mapped 调用也不稳定，导致「换装来回切却不装备」和「预测落点不对、卸了鞘翅也砸不到」。现在兜底依次尝试 `isFallFlying` / `method_6128` / `m_21255_`；切槽交给原版补发 C09，装备改用 `sendUseItem` 并在装备结果返回后再确认；这三项与 40 tick 预测窗口、1.5 秒换甲冷却都只在 Fabric 运行时生效，Forge/NeoForge（含 26.x）行为不变。
+- **Jade（玉）方块提示框显示时打开 GUI 只剩一条搜索栏**：Jade 画完提示框后在 GL 上残留了 scissor 裁剪矩形与深度测试状态，我们打开界面时沿用该状态，面板被裁到提示框那一小块。现在 GUI 渲染入口强制复位 `GL_SCISSOR_TEST` / `GL_DEPTH_TEST` 并清空裁剪缓存。
+
+> 4.21.52 及更早版本的所有修复均保留。
+
 ## v4.21.52 (2026-11-14)
 
 **修复：自由视角（Freelook）三个问题、投掷药水的汤逻辑**
