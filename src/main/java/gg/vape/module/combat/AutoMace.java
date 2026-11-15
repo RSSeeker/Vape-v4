@@ -58,9 +58,18 @@ import java.util.List;
 
 public class AutoMace extends Mod {
     private static final int MODULE_ID = -16732037;
-    private static final int PREDICTION_TICKS = 20;
+    /**
+     * 滑翔起点到落点可能跨很高落差：20 tick 只能覆盖约 10 格的下落，
+     * 高空接近目标时落点预测会全部失败（impactPass=0）。放宽到 40 tick（约 2 秒）。
+     */
+    private static final int PREDICTION_TICKS = 40;
     private static final int MAX_AIM_IMPACT_TICK = 6;
     private static final int MIN_ELYTRA_IMPACT_TICK = 3;
+    /** 落点预测窗口放宽到 40 tick 只用于「找得到落点」，但真正开始卸鞘翅仍要求 20 tick 内命中，
+     *  与 26.1.2 的手感保持一致（否则会在过高的位置提前卸下）。 */
+    private static final int MAX_ELYTRA_IMPACT_TICK = 20;
+    /** 两次换装之间的最小间隔，避免连续切槽刷包被反作弊判定为 BadPacketsA。 */
+    private static final long ELYTRA_SWAP_COOLDOWN_MILLIS = 1500L;
     private static final int ELYTRA_EXIT_TIMEOUT_TICKS = 8;
     private static final double REACH_MARGIN = 0.9;
 
@@ -489,11 +498,48 @@ public class AutoMace extends Mod {
         return result;
     }
 
-    private boolean updateElytraState(EntityPlayerSP player, WorldClient world) {
+    private long lastElytraSwapMillis;
+    private int elytraBlockerLogTicks;
+    private int elytraBlockerLogTicksTarget;
+
+/**
+     * 1.21.11 Fabric 上isFallFlying 的映射会偶发/持续返回 false（玩家实际滑翔时日志里 flying 仍为 false），
+     * 导致卸下/重新装备鞘翅完全失效。这里在映射为 false 时用「穿着鞘翅 + 空中 + 已下落一段距离」兜底。
+     */
+    private boolean isElytraGliding(EntityPlayerSP player) {
+        if (player.Y$src$Z$154rldp()) {
+            return true;
+        }
+        if (!ForgeVersion.MC_1_21_10.d() || player.h$src$Z$ftwoya() || !this.isElytraEquipped(player)) {
+            return false;
+        }
+        // 滑翔时原版会把 fallDistance 重置掉，单看 fallDistance 会漏判；垂直速度为负（下落）同样算滑翔。
+        return player.getFallDistance() > 1.0f || player.q() < -0.2;
+    }
+
+    private boolean isElytraEquipped(EntityPlayerSP player) {
+        // 1.21.6+ 上 InventoryPlayer.i() 走 InventoryListBridge.armor() + getStackInSlot(index)，
+        // 在 1.21.11 Fabric 上索引取到的是热栏物品（日志 armor=烟花火箭/重锤/风弹/末影珍珠），
+        // 恒判不到鞘翅。改用实体护甲槽列表（1.21.6+ 走 getEquipment 迭代器）。
+        try {
+            ArrayList<ItemStack> arrayList = new gg.vape.wrapper.impl.EntityLiving(player.getObject())
+                    .I$src$Ljava_util_ArrayList_$15zosdi();
+            for (ItemStack itemStack : arrayList) {
+                if (itemStack != null && this.isElytra(itemStack)) {
+                    return true;
+                }
+            }
+        } catch (Throwable throwable) {
+            // 映射缺失时按未穿着处理。
+        }
+        return false;
+    }
+
+private boolean updateElytraState(EntityPlayerSP player, WorldClient world) {
         if (!this.autoUnequipElytra.getEffectiveValue().booleanValue()) {
             this.restoreArmorSlot(player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6());
             this.resetElytraFlightState(true);
-            return player.Y$src$Z$154rldp();
+            return this.isElytraGliding(player);
         }
 
         InventoryPlayer inventory = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6();
@@ -502,10 +548,10 @@ public class AutoMace extends Mod {
         }
         if (this.isArmorSwapActive(true)) {
             this.updateElytraReequipSwap(player, inventory);
-            return player.Y$src$Z$154rldp();
+            return this.isElytraGliding(player);
         }
 
-        if (!player.Y$src$Z$154rldp()) {
+        if (!this.isElytraGliding(player)) {
             this.updateBounceReequip(player);
             this.resetElytraFlightState(false);
             return false;
@@ -516,12 +562,25 @@ public class AutoMace extends Mod {
             }
             return true;
         }
-        if (this.elytraFlightState == ElytraFlightState.ABORTED_THIS_FLIGHT || world.isNull()
-                || this.movementSnapshot == null || this.weaponSwapActive || this.releasePending
-                || player.l$src$Z$1io4duf() || player.b$src$Z$fqlxe4()
-                || player.f$src$Z$fst3rk() || player.h$src$Z$ftwoya() || player.S$src$Z$151gttj()
-                || player.C$src$Lgg_vape_wrapper_impl_ModelPlayer_$19uhx86().isFlying()
-                || !this.canOperate() || !ClientSettings.INSTANCE.isInputEnabled() || !this.hasMaceInHotbar()) {
+        StringBuilder blockers = new StringBuilder();
+        if (this.elytraFlightState == ElytraFlightState.ABORTED_THIS_FLIGHT) blockers.append("aborted ");
+        if (world.isNull()) blockers.append("worldNull ");
+        if (this.movementSnapshot == null) blockers.append("noSnapshot ");
+        if (this.weaponSwapActive) blockers.append("weaponSwap ");
+        if (this.releasePending) blockers.append("releasePending ");
+        if (player.l$src$Z$1io4duf()) blockers.append("usingItem ");
+        if (player.b$src$Z$fqlxe4()) blockers.append("sprint ");
+        if (player.f$src$Z$fst3rk()) blockers.append("fst3rk ");
+        if (player.h$src$Z$ftwoya()) blockers.append("onGround ");
+        if (player.S$src$Z$151gttj()) blockers.append("swim ");
+        if (player.C$src$Lgg_vape_wrapper_impl_ModelPlayer_$19uhx86().isFlying()) blockers.append("modelFlying ");
+        if (!this.canOperate()) blockers.append("cannotOperate ");
+        if (!ClientSettings.INSTANCE.isInputEnabled()) blockers.append("inputDisabled ");
+        if (!this.hasMaceInHotbar()) blockers.append("noMace ");
+        if (blockers.length() > 0) {
+            if (--this.elytraBlockerLogTicks <= 0) {
+                this.elytraBlockerLogTicks = 10;
+            }
             return true;
         }
 
@@ -531,13 +590,21 @@ public class AutoMace extends Mod {
         }
         ElytraTarget target = this.findElytraTarget(player, world, this.getMaceReach());
         if (target == null) {
+            if (--this.elytraBlockerLogTicksTarget <= 0) {
+                this.elytraBlockerLogTicksTarget = 10;
+            }
             return true;
         }
+        long now = System.currentTimeMillis();
+        if (now - this.lastElytraSwapMillis < ELYTRA_SWAP_COOLDOWN_MILLIS) {
+            return true;
+        }
+        this.lastElytraSwapMillis = now;
         this.armorOriginalSlot = inventory.v();
         this.armorTargetSlot = chestplateSlot;
         this.armorSwapToElytra = false;
         this.armorSwapTicks = 0;
-        inventory.g(chestplateSlot);
+        this.selectHotbarSlot(player, inventory, chestplateSlot);
         this.swappedItemWasElytra = false;
         return true;
     }
@@ -549,9 +616,9 @@ public class AutoMace extends Mod {
                     ? ElytraFlightState.WAITING_FOR_GLIDE_END
                     : ElytraFlightState.ABORTED_THIS_FLIGHT;
             this.elytraFlightStateTicks = 0;
-            return player.Y$src$Z$154rldp();
+            return this.isElytraGliding(player);
         }
-        if (!player.Y$src$Z$154rldp() && this.armorSwapTicks < 2) {
+        if (!this.isElytraGliding(player) && this.armorSwapTicks < 2) {
             this.restoreArmorSlot(inventory);
             this.resetElytraFlightState(false);
             return false;
@@ -561,22 +628,25 @@ public class AutoMace extends Mod {
             if (player.l$src$Z$1io4duf() || SharedModuleControlClaims.rightClickUse.isClaimed()) {
                 return true;
             }
-            this.useSelectedItem();
-            this.swappedItemWasElytra = this.isElytra(inventory.c(this.armorTargetSlot));
-            this.shouldReequipElytra = this.swappedItemWasElytra
-                    && this.reEquipElytra.getEffectiveValue().booleanValue();
+            this.selectHotbarSlot(player, inventory, this.armorTargetSlot);
             this.sawDownwardMotion = false;
+        } else if (ticks == 3) {
+            this.sendEquipUse(player, inventory, this.armorTargetSlot);
         }
         this.armorSwapTicks = ticks;
-        if (this.armorSwapTicks < 4) {
+        if (this.armorSwapTicks < 5) {
             return true;
         }
+        // 装备结果是服务端权威的，等 2 tick 再确认（本地槽位此时应已变成被换下的鞘翅）。
+        this.swappedItemWasElytra = this.isElytra(inventory.c(this.armorTargetSlot));
+        this.shouldReequipElytra = this.swappedItemWasElytra
+                && this.reEquipElytra.getEffectiveValue().booleanValue();
         this.restoreArmorSlot(inventory);
         this.elytraFlightState = this.swappedItemWasElytra
                 ? ElytraFlightState.WAITING_FOR_GLIDE_END
                 : ElytraFlightState.ABORTED_THIS_FLIGHT;
         this.elytraFlightStateTicks = 0;
-        if (!player.Y$src$Z$154rldp()) {
+        if (!this.isElytraGliding(player)) {
             this.resetElytraFlightState(false);
             return false;
         }
@@ -595,10 +665,12 @@ public class AutoMace extends Mod {
             if (player.l$src$Z$1io4duf() || SharedModuleControlClaims.rightClickUse.isClaimed()) {
                 return;
             }
-            this.useSelectedItem();
+            this.selectHotbarSlot(player, inventory, this.armorTargetSlot);
+        } else if (ticks == 3) {
+            this.sendEquipUse(player, inventory, this.armorTargetSlot);
         }
         this.armorSwapTicks = ticks;
-        if (this.armorSwapTicks < 4) {
+        if (this.armorSwapTicks < 5) {
             return;
         }
         this.restoreArmorSlot(inventory);
@@ -639,7 +711,7 @@ public class AutoMace extends Mod {
         this.armorTargetSlot = elytraSlot;
         this.armorSwapToElytra = true;
         this.armorSwapTicks = 0;
-        inventory.g(elytraSlot);
+        this.selectHotbarSlot(player, inventory, elytraSlot);
     }
 
     private ElytraTarget findElytraTarget(EntityPlayerSP player, WorldClient world, double reach) {
@@ -648,6 +720,9 @@ public class AutoMace extends Mod {
         if (immediateExit.isEmpty() || delayedExit.isEmpty()) {
             return null;
         }
+        int candidates = 0;
+        int rangePass = 0;
+        int impactPass = 0;
         ElytraTarget best = null;
         double horizontalRange = this.aimRange.getValue();
         for (Object entityObject : new ArrayList<Object>(world.z())) {
@@ -656,23 +731,71 @@ public class AutoMace extends Mod {
                 continue;
             }
             EntityLivingBase target = new EntityLivingBase(entityObject);
-            if (!this.isValidTarget(player, target)
-                    || !this.isWithinHorizontalRange(immediateExit, target, horizontalRange)
+            ++candidates;
+            if (!this.isValidTarget(player, target)) {
+                continue;
+            }
+            if (!this.isWithinHorizontalRange(immediateExit, target, horizontalRange)
                     && !this.isWithinHorizontalRange(delayedExit, target, horizontalRange)) {
                 continue;
             }
+            ++rangePass;
             ImpactPrediction immediateImpact = this.findImpact(immediateExit, target, reach);
             ImpactPrediction delayedImpact = this.findImpact(delayedExit, target, reach);
             if (!immediateImpact.valid || !delayedImpact.valid
                     || immediateImpact.tick < MIN_ELYTRA_IMPACT_TICK
-                    || delayedImpact.tick < MIN_ELYTRA_IMPACT_TICK) {
+                    || delayedImpact.tick < MIN_ELYTRA_IMPACT_TICK
+                    || immediateImpact.tick > MAX_ELYTRA_IMPACT_TICK
+                    || delayedImpact.tick > MAX_ELYTRA_IMPACT_TICK) {
                 continue;
             }
+            ++impactPass;
             int impactTick = Math.max(immediateImpact.tick, delayedImpact.tick);
             if (best != null && impactTick >= best.impactTick) {
                 continue;
             }
             best = new ElytraTarget(impactTick);
+        }
+        if (best == null) {
+            best = this.findFallbackElytraTarget(player, world, horizontalRange);
+            if (best != null) {
+            }
+        }
+        if (best == null) {
+        }
+        return best;
+    }
+
+    /**
+     * 落点预测失败（高空、距离远、目标移动快）时的兜底：只要目标在水平范围内、且玩家明显高于目标，
+     * 就直接开始卸鞘翅——重锤的实际瞄准由常规 aim 逻辑负责，不需要精确落点预测。
+     */
+    private ElytraTarget findFallbackElytraTarget(EntityPlayerSP player, WorldClient world, double horizontalRange) {
+        double playerY = player.N();
+        double bestDistance = Double.MAX_VALUE;
+        ElytraTarget best = null;
+        for (Object entityObject : new ArrayList<Object>(world.z())) {
+            Entity entity = new Entity(entityObject);
+            if (!entity.isInstance(MappedClasses.zm)) {
+                continue;
+            }
+            EntityLivingBase target = new EntityLivingBase(entityObject);
+            if (!this.isValidTarget(player, target)) {
+                continue;
+            }
+            double deltaX = target.z() - player.z();
+            double deltaZ = target.h() - player.h();
+            double horizontal = Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
+            if (horizontal > horizontalRange || horizontal < 1.0) {
+                continue;
+            }
+            if (playerY - target.N() < 2.5) {
+                continue;
+            }
+            if (horizontal < bestDistance) {
+                bestDistance = horizontal;
+                best = new ElytraTarget(MIN_ELYTRA_IMPACT_TICK);
+            }
         }
         return best;
     }
@@ -698,16 +821,50 @@ public class AutoMace extends Mod {
         return false;
     }
 
+    /**
+     * 只改客户端热栏选择不会通知服务端，服务端仍按旧槽位处理右键 → 装备/使用无效。
+     * 这里本地切槽后补发 C09 手持物品切换包（与 AutoHeal 的做法一致）。
+     */
+    private void selectHotbarSlot(EntityPlayerSP player, InventoryPlayer inventory, int slot) {
+        // 只改客户端选中槽位，C09 交给原版：控制器执行 UseItem 前会 ensureHasSentCarriedItem
+        // 自动补发一次；自己再发一遍会让服务端收到重复的手持槽位变化，Grim 会记 BadPacketsA(slot=...)。
+        if (inventory.v() != slot) {
+            inventory.g(slot);
+        }
+    }
+
+    /**
+     * 用控制器 sendUseItem 直接以指定槽位的物品发包（服务端权威），比
+     * "切槽 + useItem(空手)" 更可靠，1.21.11 上装备鞘翅/胸甲走这条路径。
+     */
+    private void useEquipItem(EntityPlayerSP player, InventoryPlayer inventory, int slot) {
+        this.selectHotbarSlot(player, inventory, slot);
+        this.sendEquipUse(player, inventory, slot);
+    }
+
+    /**
+     * 只发包使用当前选中槽位的物品，不再切槽——切槽包与使用包拆到相邻两 tick，
+     * 避免同一 tick 内「切槽 + 使用」被 Grim 判定为 BadPacketsA。
+     */
+    private void sendEquipUse(EntityPlayerSP player, InventoryPlayer inventory, int slot) {
+        try {
+            ItemStack itemStack = inventory.c(slot);
+            Minecraft.playerController().sendUseItem(player, player.getWorld(), itemStack);
+        } catch (Throwable throwable) {
+        }
+    }
+
     private void useSelectedItem() {
         SharedModuleControlClaims.rightClickUse.blockUse();
         try {
             // 1.21.10 起原版把右键拆成 Minecraft.startUseItem → PlayerController.useItem，
             // 26.x 上 startUseItem 的行为已不保证（会静默什么都不做），直接调控制器更可靠。
             if (ForgeVersion.MC_1_21_10.d()) {
-                Minecraft.playerController().useItem(Minecraft.thePlayer(), EnumHand.mainHand());
+                boolean result = Minecraft.playerController().useItem(Minecraft.thePlayer(), EnumHand.mainHand());
             } else {
                 Minecraft.F$src$V$aoypvc();
             }
+        } catch (Throwable throwable) {
         } finally {
             SharedModuleControlClaims.rightClickUse.clearClaimed();
         }
@@ -719,7 +876,7 @@ public class AutoMace extends Mod {
 
     private void restoreArmorSlot(InventoryPlayer inventory) {
         if (this.armorTargetSlot >= 0 && this.armorOriginalSlot >= 0 && inventory.v() == this.armorTargetSlot) {
-            inventory.g(this.armorOriginalSlot);
+            this.selectHotbarSlot(Minecraft.thePlayer(), inventory, this.armorOriginalSlot);
         }
         this.clearArmorSwapState();
     }

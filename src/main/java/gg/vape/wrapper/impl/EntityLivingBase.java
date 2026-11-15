@@ -9,6 +9,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class EntityLivingBase
 extends Entity {
+    private static final String[] FLYING_METHOD_NAMES = new String[]{"isFallFlying", "method_6128", "m_21255_"};
+    private static final java.util.Set<Class<?>> FLYING_METHODS_MISSING =
+            java.util.Collections.newSetFromMap(new ConcurrentHashMap<Class<?>, Boolean>());
     private static final Map<Class<?>, Method> FLYING_METHODS = new ConcurrentHashMap<Class<?>, Method>();
     private static String[] x;
 
@@ -433,10 +436,26 @@ extends Entity {
         }
         try {
             Class<?> type = this.I.getClass();
+            if (FLYING_METHODS_MISSING.contains(type)) {
+                return mapped;
+            }
             Method method = FLYING_METHODS.get(type);
             if (method == null) {
-                method = type.getMethod("isFallFlying");
-                method.setAccessible(true);
+                // Fabric 运行时里原版方法名是 intermediary（1.21.10/1.21.11 上是 method_6128），
+                // 不是 isFallFlying；几个名字依次尝试，找不到时记住，避免每 tick 反复反射。
+                for (String name : FLYING_METHOD_NAMES) {
+                    try {
+                        method = type.getMethod(name);
+                        method.setAccessible(true);
+                        break;
+                    } catch (NoSuchMethodException noSuchMethodException) {
+                        // 继续尝试下一个候选名
+                    }
+                }
+                if (method == null) {
+                    FLYING_METHODS_MISSING.add(type);
+                    return mapped;
+                }
                 FLYING_METHODS.put(type, method);
             }
             return (Boolean) method.invoke(this.I);
