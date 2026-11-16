@@ -293,8 +293,10 @@ LRESULT ControllerUi::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) 
         } else if (page == ControllerPage::LoadingComplete && hit(x, y, 356, 348, 112, 36)) {
             DestroyWindow(window_);
         } else if (page == ControllerPage::Error) {
-            if (hit(x, y, 356, 300, 112, 36)) {
-                const auto detail = model_.status();
+            if (hit(x, y, 356, 410, 112, 36)) {
+                // status() already carries the raw technical line above the
+                // localized explanation, so it is what support needs.
+                const std::wstring detail = model_.status();
                 const auto text = ls(Ls::Stage) + std::to_wstring(model_.loadingStage()) +
                     L"\r\nError start\r\n====================\r\n" + detail +
                     L"\r\n====================\r\nError end";
@@ -479,10 +481,98 @@ std::wstring ControllerUi::ellipsize(Gdiplus::Graphics& graphics,
     return text.substr(0, low) + ellipsis;
 }
 
+std::vector<std::wstring> ControllerUi::wrapLines(Gdiplus::Graphics& graphics,
+        const std::wstring& text, const Gdiplus::Font& font, float maxWidth) const {
+    std::vector<std::wstring> lines;
+    if (text.empty() || maxWidth <= 0.0f) {
+        lines.push_back(text);
+        return lines;
+    }
+
+    // Measure one string with the same font used for drawing.
+    const auto measure = [&](const std::wstring& value) {
+        Gdiplus::RectF bounds(0.0f, 0.0f, 0.0f, 0.0f);
+        graphics.MeasureString(value.c_str(), static_cast<INT>(value.size()),
+            &font, Gdiplus::PointF(0.0f, 0.0f), &bounds);
+        return bounds.Width;
+    };
+
+    // Characters that end a segment: CJK sentence punctuation, a few closing
+    // brackets, ASCII punctuation and whitespace. A break is only allowed right
+    // after one of them, so a sentence is never split in the middle of a word
+    // or phrase. Opening brackets/quotes are deliberately excluded so a line
+    // never ends right before the text they introduce.
+    const std::wstring breakChars = L"，。！？；：、）】》」』…—,.!?;: \t";
+    // When a line is broken at punctuation the trailing punctuation is dropped
+    // so the line does not end with a dangling ， 。 etc.
+    const std::wstring trimChars = L"，。！？；：、…—,.!?;: \t";
+    const auto trimLine = [&](std::wstring& value) {
+        while (!value.empty() && trimChars.find(value.back()) != std::wstring::npos) {
+            value.pop_back();
+        }
+    };
+
+    std::vector<std::wstring> paragraphs;
+    std::wstring current;
+    for (const wchar_t character : text) {
+        if (character == L'\r') continue;
+        if (character == L'\n') {
+            paragraphs.push_back(current);
+            current.clear();
+        } else {
+            current.push_back(character);
+        }
+    }
+    paragraphs.push_back(current);
+
+    for (const std::wstring& paragraph : paragraphs) {
+        if (paragraph.empty()) {
+            lines.push_back(std::wstring());
+            continue;
+        }
+        // Split into breakable segments first.
+        std::vector<std::wstring> segments;
+        std::wstring segment;
+        for (const wchar_t character : paragraph) {
+            segment.push_back(character);
+            if (breakChars.find(character) != std::wstring::npos) {
+                segments.push_back(segment);
+                segment.clear();
+            }
+        }
+        if (!segment.empty()) segments.push_back(segment);
+
+        std::wstring line;
+        for (const std::wstring& piece : segments) {
+            const std::wstring candidate = line + piece;
+            if (!line.empty() && measure(candidate) > maxWidth) {
+                trimLine(line);
+                if (!line.empty()) lines.push_back(line);
+                line = piece;
+            } else {
+                line = candidate;
+            }
+            // A single segment may still be wider than the line; fall back to
+            // breaking it character by character.
+            while (measure(line) > maxWidth && line.size() > 1) {
+                std::size_t fit = line.size() - 1;
+                while (fit > 1 && measure(line.substr(0, fit)) > maxWidth) --fit;
+                std::wstring head = line.substr(0, fit);
+                trimLine(head);
+                if (!head.empty()) lines.push_back(head);
+                line = line.substr(fit);
+            }
+        }
+        if (!line.empty()) lines.push_back(line);
+    }
+    if (lines.empty()) lines.push_back(std::wstring());
+    return lines;
+}
+
 void ControllerUi::drawText(Gdiplus::Graphics& graphics, const std::wstring& text,
                             float x, float y, float width, float height, float size,
                             Gdiplus::Color color, bool semibold,
-                            Gdiplus::StringAlignment alignment) {
+                            Gdiplus::StringAlignment alignment, bool wrap) {
     Gdiplus::FontFamily loaded[4];
     int found = 0;
     fonts_.GetFamilies(4, loaded, &found);
@@ -505,8 +595,21 @@ void ControllerUi::drawText(Gdiplus::Graphics& graphics, const std::wstring& tex
     format.SetAlignment(alignment);
     format.SetLineAlignment(Gdiplus::StringAlignmentCenter);
     format.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
-    const Gdiplus::RectF box(x, y, width, height);
-    graphics.DrawString(text.c_str(), static_cast<INT>(text.size()), &font, box, &format, &brush);
+    if (!wrap) {
+        const Gdiplus::RectF box(x, y, width, height);
+        graphics.DrawString(text.c_str(), static_cast<INT>(text.size()), &font, box, &format, &brush);
+        return;
+    }
+
+    const std::vector<std::wstring> lines = wrapLines(graphics, text, font, width);
+    const float lineHeight = size * 1.45f;
+    const float totalHeight = lineHeight * static_cast<float>(lines.size());
+    float lineY = y + (height - totalHeight) * 0.5f;
+    for (const std::wstring& line : lines) {
+        const Gdiplus::RectF box(x, lineY, width, lineHeight);
+        graphics.DrawString(line.c_str(), static_cast<INT>(line.size()), &font, box, &format, &brush);
+        lineY += lineHeight;
+    }
 }
 
 void ControllerUi::drawLogo(Gdiplus::Graphics& graphics, float y) {
@@ -711,9 +814,9 @@ void ControllerUi::drawOutdated(Gdiplus::Graphics& graphics) {
 void ControllerUi::drawError(Gdiplus::Graphics& graphics) {
     drawLogo(graphics, 179);
     drawText(graphics, model_.status().empty() ? ls(Ls::LoadErrorStage0) : model_.status(),
-        250, 235, 324, 48, 13, Gdiplus::Color(255, 203, 200, 204), true,
-        Gdiplus::StringAlignmentCenter);
-    drawRoundedRect(graphics, 356, 300, 112, 36, 3, Gdiplus::Color(255, 51, 51, 51));
-    drawText(graphics, ls(Ls::CopyError), 356, 300, 112, 36, 13,
+        150, 150, 504, 220, 13, Gdiplus::Color(255, 203, 200, 204), false,
+        Gdiplus::StringAlignmentCenter, true);
+    drawRoundedRect(graphics, 356, 410, 112, 36, 3, Gdiplus::Color(255, 51, 51, 51));
+    drawText(graphics, ls(Ls::CopyError), 356, 410, 112, 36, 13,
         Gdiplus::Color(255, 174, 171, 175), true, Gdiplus::StringAlignmentCenter);
 }

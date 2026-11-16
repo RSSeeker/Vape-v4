@@ -683,6 +683,18 @@ extends Mod {
     }
 
     public static void initializeFrames() {
+        try {
+            ClientSettings.buildFrames();
+        }
+        finally {
+            // initPrimaryMappingTasks() 会死等这个标志（Vape.java 中
+            // while (!framesInitialized) 的循环）。任何异常都不能让它保持 false，
+            // 否则注入流程会永久停在阶段 23。
+            framesInitialized = true;
+        }
+    }
+
+    private static void buildFrames() {
         for (FrameStackManager frameStackManager : allStacks) {
             frameStackManager.Y().clear();
         }

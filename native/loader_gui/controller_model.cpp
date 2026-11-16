@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <random>
 #include <sstream>
@@ -15,6 +16,35 @@
 #include <unordered_map>
 
 namespace {
+// Maps a native bootstrap failure ("Native bootstrap failed with code N") to a
+// user facing explanation. The codes come from native/dllmain.c where the
+// bootstrap thread reports its failure point:
+//   2  jvm.dll never appeared (game not started / not a Java process)
+//   3  JNI_GetCreatedJavaVMs export missing
+//   4  JNI_GetCreatedJavaVMs returned no VM (injected too early)
+//   5  AttachCurrentThreadAsDaemon failed
+//   6  launcher/game token handshake failed
+//   7  this game process already has a Vape DLL loaded
+//   8+ attached to the JVM but a later bootstrap step failed
+Ls friendlyNativeFailure(const std::string& detail) {
+    const std::size_t marker = detail.find("code ");
+    if (marker == std::string::npos) return Ls::Count;
+    const int code = std::atoi(detail.c_str() + marker + 5);
+    switch (code) {
+        case 2: return Ls::ErrorJvmNotLoaded;
+        case 3: return Ls::ErrorJvmExportMissing;
+        case 4: return Ls::ErrorNoJavaVm;
+        case 5: return Ls::ErrorAttachThread;
+        case 6: return Ls::ErrorLoaderToken;
+        case 7: return Ls::ErrorAlreadyInjected;
+        case 8: case 9: case 10: case 11: case 12:
+        case 13: case 14: case 15: case 16:
+            return Ls::ErrorJavaStage;
+        default:
+            return Ls::ErrorUnknownStage;
+    }
+}
+
 std::wstring onlineBaseUrl() {
     wchar_t value[2048]{};
     const DWORD length = GetEnvironmentVariableW(L"VAPE_ONLINE_BASE_URL", value,
@@ -248,6 +278,11 @@ void ControllerModel::setPage(ControllerPage value) {
 std::wstring ControllerModel::status() const {
     std::lock_guard lock(mutex_);
     return status_;
+}
+
+std::wstring ControllerModel::errorDetail() const {
+    std::lock_guard lock(mutex_);
+    return errorDetail_;
 }
 
 void ControllerModel::setStatus(std::wstring value) {
@@ -534,8 +569,23 @@ void ControllerModel::tick() {
         setPage(ControllerPage::LoadingComplete);
     } else if (service_.failed()) {
         const std::string detail = service_.error();
-        setStatus(detail.empty() ? ls(Ls::NativeConnectionClosed)
-                                 : std::wstring(detail.begin(), detail.end()));
+        std::wstring raw = detail.empty()
+            ? std::wstring()
+            : std::wstring(detail.begin(), detail.end());
+        std::wstring message = raw.empty() ? std::wstring(ls(Ls::NativeConnectionClosed)) : raw;
+        const Ls friendly = friendlyNativeFailure(detail);
+        if (friendly != Ls::Count) {
+            // Raw technical line first (kept for support reports), then the
+            // localized explanation below it.
+            message = raw.empty()
+                ? std::wstring(ls(friendly))
+                : raw + L"\r\n" + ls(friendly);
+        }
+        {
+            std::lock_guard lock(mutex_);
+            errorDetail_ = std::move(raw);
+        }
+        setStatus(std::move(message));
         setPage(ControllerPage::Error);
     } else if (loadingElapsedSeconds() >= 90.0) {
         setStatus(ls(Ls::NativeLoadTimeout));

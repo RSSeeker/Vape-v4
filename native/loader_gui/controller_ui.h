@@ -39,9 +39,15 @@ private:
     void drawText(Gdiplus::Graphics& graphics, const std::wstring& text,
         float x, float y, float width, float height, float size,
         Gdiplus::Color color, bool semibold = false,
-        Gdiplus::StringAlignment alignment = Gdiplus::StringAlignmentNear);
+        Gdiplus::StringAlignment alignment = Gdiplus::StringAlignmentNear,
+        bool wrap = false);
     std::wstring ellipsize(Gdiplus::Graphics& graphics,
         const std::wstring& text, float fontSize, float maxWidth) const;
+    // Splits text into lines that fit maxWidth. Breaks are chosen at
+    // punctuation (，。！？；：、etc.) or spaces so Chinese sentences are never
+    // cut in the middle of a segment; existing \r\n are hard breaks.
+    std::vector<std::wstring> wrapLines(Gdiplus::Graphics& graphics,
+        const std::wstring& text, const Gdiplus::Font& font, float maxWidth) const;
     void drawRoundedRect(Gdiplus::Graphics& graphics, float x, float y,
         float width, float height, float radius, Gdiplus::Color fill,
         Gdiplus::Color border = Gdiplus::Color(0, 0, 0, 0));

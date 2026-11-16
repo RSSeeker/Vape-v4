@@ -521,7 +521,13 @@ public class AutoMace extends Mod {
                 || player.h$src$Z$ftwoya() || !this.isElytraEquipped(player)) {
             return false;
         }
-        // 滑翔时原版会把 fallDistance 重置掉，单看 fallDistance 会漏判；垂直速度为负（下落）同样算滑翔。
+        // 1.21.11 专用：原版滑翔时每 tick 会把 fallDistance 重置为 1.0F，而自由落体会持续累积。
+        // 因此用「下落距离没有继续累积」判断是否真的滑翔：只是穿着鞘翅往下掉时不应进入
+        // 换甲流程，应直接当普通攻击处理。（26.x 的 fallDistance 语义不同，保持旧的宽松判定，
+        // 否则 26.1.2 会几乎不再卸/装鞘翅。）
+        if (ForgeVersion.MC_1_21_11.d() && !ForgeVersion.MC_26_1.d()) {
+            return player.getFallDistance() <= 1.15f;
+        }
         return player.getFallDistance() > 1.0f || player.q() < -0.2;
     }
 

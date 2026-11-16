@@ -48,6 +48,14 @@ const wchar_t* const kChinese[] = {
 
     // error page
     L"加载出错。阶段 0",
+    L"该游戏进程里已经有一份 Vape 在运行（上次注入的 DLL 仍在进程内），请完全关闭游戏后重新启动，再注入一次。",
+    L"加载器与游戏之间的令牌握手失败，请重新打开 Vape 启动器再试。",
+    L"没有等到游戏的 Java 虚拟机（jvm.dll）。请确认游戏已经启动并进入主界面，26+ 版本请先进入世界再注入。",
+    L"游戏使用的 Java 虚拟机缺少必要的导出函数，可能是被裁剪过的运行时，请更换官方 Java 后再试。",
+    L"Java 虚拟机没有返回可用的实例，通常是注入时机太早。请等游戏完全启动（26+ 先进入世界）后再注入。",
+    L"无法附加到游戏线程，请重启游戏后再试一次。",
+    L"已经成功附加到游戏的 Java 虚拟机，但注入过程中失败了。请重启游戏后重试；如果每次都出现，请把这份错误报告发给开发者。",
+    L"注入过程中出现了未识别的错误。请重启游戏后重试；如果每次都出现，请把这份错误报告发给开发者。",
     L"复制错误",
 
     // model status messages
@@ -123,6 +131,14 @@ const wchar_t* const kEnglish[] = {
 
     // error page
     L"Load error. Stage 0",
+    L"Vape is already loaded inside this game process (the DLL injected by an earlier attempt is still there). Fully close the game, start it again, then inject once.",
+    L"The token handshake between the loader and the game failed. Reopen the Vape launcher and try again.",
+    L"Timed out waiting for the game's Java VM (jvm.dll). Make sure the game is running and past the main menu; on 26+ open a world before injecting.",
+    L"The game's Java VM is missing a required export. Please use an unmodified official Java runtime and try again.",
+    L"The Java VM did not report a usable instance. This usually means the injection happened too early; wait until the game is fully loaded (on 26+, open a world first).",
+    L"Could not attach to the game thread. Restart the game and try again.",
+    L"Vape attached to the game's Java VM but failed during injection. Restart the game and retry; if this happens every time, send this error report to the developer.",
+    L"An unrecognised error occurred during injection. Restart the game and retry; if this happens every time, send this error report to the developer.",
     L"Copy error",
 
     // model status messages

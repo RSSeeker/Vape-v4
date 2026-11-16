@@ -36,6 +36,11 @@ public:
     void setPage(ControllerPage value);
     std::wstring status() const;
     void setStatus(std::wstring value);
+    // Raw, untranslated failure text reported by the native bootstrap (for
+    // example "Native bootstrap failed with code 7"). The UI shows only the
+    // localized explanation, but the copy button still includes this line so
+    // support reports keep the technical detail.
+    std::wstring errorDetail() const;
 
     std::wstring& username();
     std::wstring& password();
@@ -72,6 +77,7 @@ private:
     mutable std::mutex mutex_;
     ControllerPage page_{ControllerPage::Login};
     std::wstring status_;
+    std::wstring errorDetail_;
     std::wstring username_;
     std::wstring password_;
     std::vector<MinecraftProcess> minecraftProcesses_;

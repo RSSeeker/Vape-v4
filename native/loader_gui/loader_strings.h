@@ -65,6 +65,14 @@ enum class Ls {
 
     // error page
     LoadErrorStage0,
+    ErrorAlreadyInjected,
+    ErrorLoaderToken,
+    ErrorJvmNotLoaded,
+    ErrorJvmExportMissing,
+    ErrorNoJavaVm,
+    ErrorAttachThread,
+    ErrorJavaStage,
+    ErrorUnknownStage,
     CopyError,
 
     // model status messages

@@ -1080,10 +1080,12 @@ static DWORD WINAPI bootstrap_thread(LPVOID parameter) {
     attached = 1;
     set_vape_directory_property(env);
     if (vape_initialize_jvmti(vm) != JNI_OK) {
+        exit_code = 8;
         goto cleanup;
     }
     if (!materialize_embedded_product_jar(jar_path,
             sizeof(jar_path) / sizeof(jar_path[0]))) {
+        exit_code = 9;
         goto cleanup;
     }
     for (attempt = 0; attempt < 600 && loader == NULL; ++attempt) {
@@ -1094,27 +1096,34 @@ static DWORD WINAPI bootstrap_thread(LPVOID parameter) {
     }
     if (loader == NULL) {
         vape_log(L"Minecraft client/render thread was not found within 60 seconds");
+        exit_code = 10;
         goto cleanup;
     }
     if (!add_jar_to_loader(env, &loader, jar_path)) {
+        exit_code = 11;
         goto cleanup;
     }
     if (!set_current_context_class_loader(env, loader)) {
+        exit_code = 12;
         goto cleanup;
     }
     bridge_class = load_bridge_class(env, loader);
     if (bridge_class == NULL) {
+        exit_code = 13;
         goto cleanup;
     }
     if (vape_register_native_bridge(env, bridge_class) != JNI_OK) {
+        exit_code = 14;
         goto cleanup;
     }
     registered = 1;
     if (!pin_native_module()) {
+        exit_code = 15;
         goto cleanup;
     }
     vape_log(L"NativeBridge linked from %ls", jar_path);
     if (!call_bridge_start(env, bridge_class)) {
+        exit_code = 16;
         goto cleanup;
     }
     vape_loader_report_completed();
