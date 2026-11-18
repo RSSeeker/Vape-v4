@@ -27,6 +27,19 @@ const wchar_t* const kChinese[] = {
     L"请确保游戏已完全加载",
     L"已注入 [",
 
+    // auto inject (minecraft selection page)
+    L"游戏启动时自动注入",
+    L"等待 Minecraft 启动，检测到窗口后会自动注入",
+    L"启动时已检测到 Java 进程，自动注入未启用，请手动选择",
+    L"自动注入失败，请手动选择游戏进程",
+    L"等待 Minecraft 启动",
+    L"检测到窗口后会自动注入",
+    L"新启动的游戏将自动注入",
+
+    // settings flyout (slides in from the left edge)
+    L"设置",
+    L"启动器启动时没有 Java 进程，检测到游戏窗口后自动注入；已有 Java 进程时保持手动选择。",
+
     // loading page
     L"阶段 ",
     L"该阶段加载时间异常长\n请联系支持人员\n注：26+版本请在打开世界后注入",
@@ -109,6 +122,19 @@ const wchar_t* const kEnglish[] = {
     L"Select Minecraft",
     L"Make sure the game has finished loading",
     L"Injected [",
+
+    // auto inject (minecraft selection page)
+    L"Inject automatically when the game starts",
+    L"Waiting for Minecraft; it is injected once the game window appears",
+    L"A Java process was already running, so automatic injection is off. Select the process manually.",
+    L"Automatic injection failed. Select the game process manually.",
+    L"Waiting for Minecraft to start",
+    L"It will be injected once the game window appears",
+    L"Newly started games are injected automatically",
+
+    // settings flyout (slides in from the left edge)
+    L"Settings",
+    L"If no Java process is running when the loader starts, inject automatically once the game window appears; otherwise select manually.",
 
     // loading page
     L"Stage ",

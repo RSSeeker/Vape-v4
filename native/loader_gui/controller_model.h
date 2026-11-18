@@ -47,7 +47,16 @@ public:
     std::vector<MinecraftProcess> minecraftProcesses() const;
 
     void refreshMinecraftProcesses();
-    bool injectMinecraft(std::uint32_t processId);
+    bool injectMinecraft(std::uint32_t processId, bool reportFailure = true);
+    // Automatic injection: when the loader starts with no Java process running
+    // it arms a watchdog and injects into the first Minecraft window it sees,
+    // mirroring the "attach early on launch" behaviour of other injectors. When
+    // a Java process already exists at startup the watchdog stays disarmed and
+    // the user picks the process by hand (injecting into an already running
+    // game mid-session is much less reliable).
+    bool autoInjectEnabled() const;
+    void setAutoInjectEnabled(bool enabled);
+    bool autoInjectArmed() const;
     // Browser-based authentication was removed together with its remote
     // www.vape.gg endpoints. These entry points are kept so the UI keeps
     // compiling; none of them issues a network request. The begin call reports a
@@ -73,6 +82,12 @@ private:
         const wchar_t* path, const std::string& body);
     static std::string jsonString(const std::string& json, const char* key);
     bool materializeEmbeddedDll(std::uint32_t processId, std::wstring& output);
+    void initializeAutoInject();
+    void tickAutoInject();
+    void resetAutoInjectTarget();
+    void persistAutoInjectPreference(bool enabled);
+    static std::size_t countJavaProcesses();
+    static std::vector<std::uint32_t> listJavaProcessIds();
 
     mutable std::mutex mutex_;
     ControllerPage page_{ControllerPage::Login};
@@ -90,4 +105,19 @@ private:
     std::chrono::steady_clock::time_point loadingStarted_{};
     std::chrono::steady_clock::time_point stageStarted_{};
     std::chrono::steady_clock::time_point lastMinecraftRefresh_{};
+
+    bool autoInjectEnabled_{true};
+    bool autoInjectArmed_{};
+    bool autoInjectDone_{};
+    std::uint32_t autoInjectTarget_{};
+    int autoInjectAttempts_{};
+    std::chrono::steady_clock::time_point autoInjectArmedAt_{};
+    std::chrono::steady_clock::time_point lastAutoInjectTick_{};
+    std::chrono::steady_clock::time_point lastAutoInjectAttempt_{};
+    std::wstring autoInjectError_{};
+    // Java processes that already existed when the watchdog armed. They are
+    // never injected automatically: switching auto inject on while a game is
+    // already running must not attach to that live session, only to a game
+    // started afterwards.
+    std::vector<std::uint32_t> autoInjectIgnoreIds_{};
 };

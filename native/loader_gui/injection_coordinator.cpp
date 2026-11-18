@@ -4,6 +4,7 @@
 #include "manual_map.h"
 
 #include <windows.h>
+#include <tlhelp32.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -304,24 +305,21 @@ bool InjectionCoordinator::injectProductDll(std::uint32_t processId,
     }
 
 
-    const std::wstring mappingName = bootstrapObjectName(L"Bootstrap", processId);
-    const std::wstring ackName = bootstrapObjectName(L"BootstrapAck", processId);
+    /* The handshake block and ack event stay unnamed for the manual-map path:
+     * duplicate handles travel inside Vape421ManualMapParams, so an anticheat
+     * scanning named kernel objects sees nothing. The LoadLibrary fallback still
+     * needs the legacy named objects and creates them right before loading. */
     HANDLE mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE,
-        0, sizeof(Vape421BootstrapV2), mappingName.c_str());
-    if (!mapping || GetLastError() == ERROR_ALREADY_EXISTS) {
-        error = ls(Ls::BootstrapBlockExists);
-        if (mapping) CloseHandle(mapping);
-        return false;
-    }
-    auto* block = static_cast<Vape421BootstrapV2*>(MapViewOfFile(mapping,
-        FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Vape421BootstrapV2)));
-    HANDLE ack = CreateEventW(nullptr, TRUE, FALSE, ackName.c_str());
-    const bool ackAlreadyExists = ack && GetLastError() == ERROR_ALREADY_EXISTS;
-    if (!block || !ack || ackAlreadyExists) {
+        0, sizeof(Vape421BootstrapV2), nullptr);
+    auto* block = mapping == nullptr ? nullptr
+        : static_cast<Vape421BootstrapV2*>(MapViewOfFile(mapping,
+            FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Vape421BootstrapV2)));
+    HANDLE ack = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!mapping || !block || !ack) {
         error = ls(Ls::CannotCreateBootstrapObject);
         if (block) UnmapViewOfFile(block);
         if (ack) CloseHandle(ack);
-        CloseHandle(mapping);
+        if (mapping) CloseHandle(mapping);
         return false;
     }
 
@@ -347,7 +345,7 @@ bool InjectionCoordinator::injectProductDll(std::uint32_t processId,
     std::wstring manualMapError;
     if (extractEmbeddedJar(dllPath, manualJarPath)) {
         manualMapped = injectReflectiveDll(processId, dllPath, installDirectory,
-            manualJarPath, manualMapError);
+            manualJarPath, mapping, ack, manualMapError);
     } else {
         manualMapError = L"embedded product JAR extraction failed";
     }
@@ -362,7 +360,29 @@ bool InjectionCoordinator::injectProductDll(std::uint32_t processId,
     HMODULE kernel32 = nullptr;
     FARPROC loadLibrary = nullptr;
     bool remoteThreadCompleted = false;
+    HANDLE fallbackMapping = nullptr;
+    HANDLE fallbackAck = nullptr;
+    Vape421BootstrapV2* fallbackBlock = nullptr;
+    HANDLE waitAck = ack;
+    Vape421BootstrapV2* statusBlock = block;
     if (!manualMapped) {
+    // The LoadLibrary fallback cannot receive parameters, so it still needs the
+    // legacy pid-named objects. Recreate them here, right before loading.
+    const std::wstring mappingName = bootstrapObjectName(L"Bootstrap", processId);
+    const std::wstring ackName = bootstrapObjectName(L"BootstrapAck", processId);
+    fallbackMapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr,
+        PAGE_READWRITE, 0, sizeof(Vape421BootstrapV2), mappingName.c_str());
+    fallbackBlock = fallbackMapping == nullptr ? nullptr
+        : static_cast<Vape421BootstrapV2*>(MapViewOfFile(fallbackMapping,
+            FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Vape421BootstrapV2)));
+    fallbackAck = CreateEventW(nullptr, TRUE, FALSE, ackName.c_str());
+    if (fallbackBlock == nullptr || fallbackAck == nullptr) {
+        error = ls(Ls::CannotCreateBootstrapObject);
+        goto cleanup;
+    }
+    CopyMemory(fallbackBlock, block, sizeof(*block));
+    waitAck = fallbackAck;
+    statusBlock = fallbackBlock;
     enableDebugPrivilege();
     process = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION |
         PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ, FALSE, processId);
@@ -396,11 +416,11 @@ bool InjectionCoordinator::injectProductDll(std::uint32_t processId,
     }
     remoteThreadCompleted = true;
     }
-    if (WaitForSingleObject(ack, 30000) != WAIT_OBJECT_0) {
+    if (WaitForSingleObject(waitAck, 30000) != WAIT_OBJECT_0) {
         error = ls(Ls::ProductDllNoAck);
         goto cleanup;
     }
-    if (block->status != VAPE421_BOOTSTRAP_STATUS_CONSUMED) {
+    if (statusBlock->status != VAPE421_BOOTSTRAP_STATUS_CONSUMED) {
         error = ls(Ls::ProductDllRejected);
         goto cleanup;
     }
@@ -413,6 +433,9 @@ cleanup:
         VirtualFreeEx(process, remotePath, 0, MEM_RELEASE);
     }
     if (process) CloseHandle(process);
+    if (fallbackBlock) UnmapViewOfFile(fallbackBlock);
+    if (fallbackAck) CloseHandle(fallbackAck);
+    if (fallbackMapping) CloseHandle(fallbackMapping);
     UnmapViewOfFile(block);
     CloseHandle(ack);
     CloseHandle(mapping);
@@ -421,12 +444,152 @@ cleanup:
 
 namespace {
 
+struct HijackResult {
+    bool attempted{};  // a target thread was redirected to the stub
+    bool started{};    // the stub managed to create the loader thread
+    const wchar_t* reason{};
+};
+
+// Runs the reflective loader from a hijacked target thread instead of a fresh
+// remote thread. The target thread is redirected to a small stub which calls
+// CreateThread(loader, params) and then parks in a pause loop; the injector
+// polls a flag in the stub, restores the original thread context, and lets the
+// freshly created loader thread do the actual mapping. Nothing in this path
+// calls CreateRemoteThread, which some anticheats hook.
+HijackResult hijackLoader(HANDLE process, std::uint32_t processId,
+        std::uint64_t loaderAddress, std::uint64_t paramsAddress) {
+    HijackResult result;
+    const HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
+    const auto createThread = kernel32
+        ? reinterpret_cast<std::uint64_t>(GetProcAddress(kernel32, "CreateThread"))
+        : 0;
+    if (createThread == 0) {
+        result.reason = L"kernel32!CreateThread not resolvable";
+        return result;
+    }
+    auto stub = static_cast<std::byte*>(VirtualAllocEx(process, nullptr, 0x1000,
+        MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+    auto stack = static_cast<std::byte*>(VirtualAllocEx(process, nullptr, 0x10000,
+        MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+    if (stub == nullptr || stack == nullptr) {
+        if (stub != nullptr) VirtualFreeEx(process, stub, 0, MEM_RELEASE);
+        if (stack != nullptr) VirtualFreeEx(process, stack, 0, MEM_RELEASE);
+        result.reason = L"hijack: VirtualAllocEx failed";
+        return result;
+    }
+    const std::uint64_t flagAddress =
+        reinterpret_cast<std::uint64_t>(stub) + 0x80;
+    std::byte code[0x80]{};
+    std::size_t offset = 0;
+    const auto emitBytes = [&](std::initializer_list<unsigned char> bytes) {
+        for (const unsigned char byte : bytes) {
+            code[offset++] = static_cast<std::byte>(byte);
+        }
+    };
+    const auto emitAddress = [&](unsigned char first, unsigned char second,
+            std::uint64_t value) {
+        code[offset++] = static_cast<std::byte>(first);
+        code[offset++] = static_cast<std::byte>(second);
+        std::memcpy(code + offset, &value, sizeof(value));
+        offset += sizeof(value);
+    };
+    emitBytes({0x48, 0x83, 0xEC, 0x28});  // sub rsp, 28h
+    emitBytes({0x48, 0x31, 0xC9});        // xor rcx, rcx
+    emitBytes({0x48, 0x31, 0xD2});        // xor rdx, rdx
+    emitAddress(0x49, 0xB8, loaderAddress);  // mov r8, loader
+    emitAddress(0x49, 0xB9, paramsAddress);  // mov r9, params
+    emitBytes({0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00});  // mov [rsp+20h],0
+    emitAddress(0x48, 0xB8, createThread);  // mov rax, CreateThread
+    emitBytes({0xFF, 0xD0});                // call rax
+    emitBytes({0x48, 0x83, 0xC4, 0x28});    // add rsp, 28h
+    emitAddress(0x48, 0xB9, flagAddress);   // mov rcx, &flag
+    emitBytes({0x48, 0x89, 0x01});          // mov [rcx], rax  (thread handle)
+    emitBytes({0xF3, 0x90});                // pause
+    emitBytes({0xEB, 0xFC});                // jmp pause
+    SIZE_T written = 0;
+    if (!WriteProcessMemory(process, stub, code, sizeof(code), &written)) {
+        VirtualFreeEx(process, stub, 0, MEM_RELEASE);
+        VirtualFreeEx(process, stack, 0, MEM_RELEASE);
+        result.reason = L"hijack: WriteProcessMemory failed";
+        return result;
+    }
+    HANDLE hijacked = nullptr;
+    CONTEXT saved{};
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if (snapshot != INVALID_HANDLE_VALUE) {
+        THREADENTRY32 entry{sizeof(entry)};
+        if (Thread32First(snapshot, &entry)) {
+            do {
+                if (entry.th32OwnerProcessID != processId || entry.th32ThreadID == 0) {
+                    continue;
+                }
+                HANDLE thread = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT |
+                    THREAD_SET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE,
+                    entry.th32ThreadID);
+                if (thread == nullptr) continue;
+                if (SuspendThread(thread) == static_cast<DWORD>(-1)) {
+                    CloseHandle(thread);
+                    continue;
+                }
+                alignas(16) CONTEXT context{};
+                context.ContextFlags = CONTEXT_CONTROL;
+                if (!GetThreadContext(thread, &context)) {
+                    ResumeThread(thread);
+                    CloseHandle(thread);
+                    continue;
+                }
+                saved = context;
+                context.Rip = reinterpret_cast<DWORD64>(stub);
+                context.Rsp = reinterpret_cast<DWORD64>(stack + 0x10000 - 0x20);
+                if (!SetThreadContext(thread, &context)) {
+                    ResumeThread(thread);
+                    CloseHandle(thread);
+                    continue;
+                }
+                ResumeThread(thread);
+                hijacked = thread;
+                result.attempted = true;
+                break;
+            } while (Thread32Next(snapshot, &entry));
+        }
+        CloseHandle(snapshot);
+    }
+    if (hijacked == nullptr) {
+        VirtualFreeEx(process, stub, 0, MEM_RELEASE);
+        VirtualFreeEx(process, stack, 0, MEM_RELEASE);
+        result.reason = L"hijack: no thread could be redirected";
+        return result;
+    }
+    std::uint64_t threadHandle = 0;
+    for (int attempt = 0; attempt < 200 && threadHandle == 0; ++attempt) {
+        SIZE_T read = 0;
+        if (ReadProcessMemory(process, reinterpret_cast<LPCVOID>(flagAddress),
+                &threadHandle, sizeof(threadHandle), &read) &&
+                read == sizeof(threadHandle) && threadHandle != 0) {
+            result.started = true;
+            break;
+        }
+        Sleep(50);
+    }
+    // Put the hijacked thread back where it was, whatever the stub managed to do.
+    SuspendThread(hijacked);
+    SetThreadContext(hijacked, &saved);
+    ResumeThread(hijacked);
+    CloseHandle(hijacked);
+    VirtualFreeEx(process, stub, 0, MEM_RELEASE);
+    VirtualFreeEx(process, stack, 0, MEM_RELEASE);
+    if (!result.started) {
+        result.reason = L"hijack: redirected thread never reached CreateThread";
+    }
+    return result;
+}
 
 }  // namespace
 
 bool InjectionCoordinator::injectReflectiveDll(std::uint32_t processId,
     const std::wstring& dllPath, const std::wstring& installDirectory,
-    const std::wstring& jarPath, std::wstring& error) {
+    const std::wstring& jarPath, HANDLE bootstrapMapping, HANDLE bootstrapAck,
+    std::wstring& error) {
     std::ifstream input(dllPath, std::ios::binary);
     if (!input) {
         error = ls(Ls::VapeV4DllNotFound);
@@ -440,7 +603,8 @@ bool InjectionCoordinator::injectReflectiveDll(std::uint32_t processId,
     }
     enableDebugPrivilege();
     HANDLE process = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION |
-        PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ, FALSE, processId);
+        PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ | PROCESS_DUP_HANDLE,
+        FALSE, processId);
     if (!process) {
         error = ls(Ls::CannotOpenMinecraftProcess);
         return false;
@@ -456,6 +620,22 @@ bool InjectionCoordinator::injectReflectiveDll(std::uint32_t processId,
         return false;
     }
     Vape421ManualMapParams params{};
+    // Hand the loader handshake over as duplicated handles: the product DLL then
+    // never has to open a named kernel object, so the manual-map path leaves no
+    // "Bootstrap<pid>" signature behind.
+    HANDLE remoteMapping = nullptr;
+    HANDLE remoteAck = nullptr;
+    if (!DuplicateHandle(GetCurrentProcess(), bootstrapMapping, process, &remoteMapping,
+            0, FALSE, DUPLICATE_SAME_ACCESS)
+            || !DuplicateHandle(GetCurrentProcess(), bootstrapAck, process, &remoteAck,
+                0, FALSE, DUPLICATE_SAME_ACCESS)) {
+        error = ls(Ls::CannotCreateBootstrapObject);
+        VirtualFreeEx(process, remote, 0, MEM_RELEASE);
+        CloseHandle(process);
+        return false;
+    }
+    params.bootstrap_mapping = remoteMapping;
+    params.bootstrap_ack = remoteAck;
     wcsncpy_s(params.install_dir, MAX_PATH, installDirectory.c_str(), _TRUNCATE);
     wcsncpy_s(params.jar_path, MAX_PATH, jarPath.c_str(), _TRUNCATE);
     params.api.virtual_alloc = &VirtualAlloc;
@@ -493,23 +673,56 @@ bool InjectionCoordinator::injectReflectiveDll(std::uint32_t processId,
         CloseHandle(process);
         return false;
     }
-    auto start = reinterpret_cast<LPTHREAD_START_ROUTINE>(
-        static_cast<std::byte*>(remote) + loaderOffset);
-    HANDLE thread = CreateRemoteThread(process, nullptr, 0, start,
-        remoteParams, 0, nullptr);
-    if (!thread) {
-        error = ls(Ls::ReflectionLoaderStartFailed);
-        VirtualFreeEx(process, remote, 0, MEM_RELEASE);
-        CloseHandle(process);
-        return false;
-    }
-    WaitForSingleObject(thread, 30000);
+    const auto remoteLoaderAddress =
+        reinterpret_cast<std::uint64_t>(remote) + loaderOffset;
+    bool loaderStarted = false;
     DWORD exitCode = 0;
-    GetExitCodeThread(thread, &exitCode);
-    CloseHandle(thread);
+    LONG loaderStage = 0;
+    std::wstring startNote;
+    const HijackResult hijack = hijackLoader(process, processId, remoteLoaderAddress,
+        reinterpret_cast<std::uint64_t>(remoteParams));
+    if (hijack.started) {
+        loaderStarted = true;
+        // The loader thread is alive; poll the parameter block until it reports
+        // completion (stage 8) or a negative failure stage.
+        for (int attempt = 0; attempt < 600; ++attempt) {
+            Vape421ManualMapParams polled{};
+            SIZE_T read = 0;
+            if (ReadProcessMemory(process, remoteParams, &polled, sizeof(polled), &read) &&
+                    read == sizeof(polled)) {
+                loaderStage = polled.stage;
+                if (loaderStage == 8) {
+                    exitCode = 1;
+                    break;
+                }
+                if (loaderStage < 0) {
+                    break;
+                }
+            }
+            Sleep(50);
+        }
+    }
+    if (!loaderStarted) {
+        // Thread hijack was not possible; fall back to a remote thread.
+        startNote = hijack.reason != nullptr ? hijack.reason : L"hijack unavailable";
+        auto start = reinterpret_cast<LPTHREAD_START_ROUTINE>(
+            static_cast<std::byte*>(remote) + loaderOffset);
+        HANDLE thread = CreateRemoteThread(process, nullptr, 0, start,
+            remoteParams, 0, nullptr);
+        if (!thread) {
+            error = ls(Ls::ReflectionLoaderStartFailed);
+            VirtualFreeEx(process, remoteParams, 0, MEM_RELEASE);
+            VirtualFreeEx(process, remote, 0, MEM_RELEASE);
+            CloseHandle(process);
+            return false;
+        }
+        WaitForSingleObject(thread, 30000);
+        GetExitCodeThread(thread, &exitCode);
+        CloseHandle(thread);
+    }
     Vape421ManualMapParams observed{};
     ReadProcessMemory(process, remoteParams, &observed, sizeof(observed), nullptr);
-    const LONG loaderStage = observed.stage;
+    loaderStage = observed.stage;
     VirtualFreeEx(process, remoteParams, 0, MEM_RELEASE);
     VirtualFreeEx(process, remote, 0, MEM_RELEASE);
     CloseHandle(process);
@@ -520,6 +733,10 @@ bool InjectionCoordinator::injectReflectiveDll(std::uint32_t processId,
             static_cast<long>(loaderStage));
         error.assign(ls(Ls::ReflectionLoaderFailed));
         error.append(detail);
+        if (!loaderStarted) {
+            error.append(L" ");
+            error.append(startNote);
+        }
         return false;
     }
     return true;

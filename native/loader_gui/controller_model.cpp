@@ -134,6 +134,64 @@ void captureWindowTitles(std::vector<MinecraftProcess>& candidates) {
     }, reinterpret_cast<LPARAM>(&candidates));
 }
 
+std::wstring executableDirectory();
+
+// Diagnostic trail for the automatic-injection watchdog. Kept next to the
+// preferences so a user report can include it when auto injection misbehaves.
+void appendAutoInjectLog(const std::wstring& line) {
+    const std::wstring directory = executableDirectory() + L"\\.vapeclient\\";
+    CreateDirectoryW(directory.c_str(), nullptr);
+    SYSTEMTIME now{};
+    GetLocalTime(&now);
+    wchar_t stamp[40]{};
+    swprintf_s(stamp, L"[%02u:%02u:%02u.%03u] ",
+        now.wHour, now.wMinute, now.wSecond, now.wMilliseconds);
+    std::wofstream output(directory + L"auto-inject.log", std::ios::app);
+    output << stamp << line << L"\r\n";
+}
+
+// True when a Java process already hosts a visible Minecraft window. Java-based
+// launchers (HMCL, PCL in Java mode, ...) also run as javaw.exe, so counting
+// Java processes alone would wrongly suppress automatic injection at startup.
+bool hasRunningMinecraftGame() {
+    std::vector<DWORD> javaPids;
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return false;
+    PROCESSENTRY32W entry{sizeof(entry)};
+    if (Process32FirstW(snapshot, &entry)) {
+        do {
+            if (_wcsicmp(entry.szExeFile, L"java.exe") == 0 ||
+                    _wcsicmp(entry.szExeFile, L"javaw.exe") == 0) {
+                javaPids.push_back(entry.th32ProcessID);
+            }
+        } while (Process32NextW(snapshot, &entry));
+    }
+    CloseHandle(snapshot);
+    if (javaPids.empty()) return false;
+
+    struct Context {
+        const std::vector<DWORD>* pids;
+        bool found;
+    };
+    Context context{&javaPids, false};
+    EnumWindows([](HWND window, LPARAM value) -> BOOL {
+        auto* context = reinterpret_cast<Context*>(value);
+        if (!IsWindowVisible(window) || GetWindowTextLengthW(window) == 0) return TRUE;
+        wchar_t title[256]{};
+        if (GetWindowTextW(window, title, static_cast<int>(std::size(title))) == 0) {
+            return TRUE;
+        }
+        if (std::wstring(title).find(L"Minecraft") == std::wstring::npos) return TRUE;
+        DWORD processId = 0;
+        GetWindowThreadProcessId(window, &processId);
+        const auto match = std::find(context->pids->begin(), context->pids->end(), processId);
+        if (match == context->pids->end()) return TRUE;
+        context->found = true;
+        return FALSE;
+    }, reinterpret_cast<LPARAM>(&context));
+    return context.found;
+}
+
 std::wstring executableDirectory() {
     wchar_t path[MAX_PATH]{};
     GetModuleFileNameW(nullptr, path, MAX_PATH);
@@ -261,6 +319,228 @@ ControllerModel::ControllerModel() {
     // Skip the login page: authenticate against the local loopback Service
     // with an anonymous username and go straight to Minecraft selection.
     autoLoginToService();
+    initializeAutoInject();
+}
+
+void ControllerModel::initializeAutoInject() {
+    const std::wstring setting = cacheDirectory() + L"auto.preference";
+    std::wifstream input(setting);
+    int enabled = 1;
+    if (input >> enabled) {
+        autoInjectEnabled_ = enabled != 0;
+    }
+    autoInjectArmed_ = false;
+    autoInjectDone_ = false;
+    autoInjectTarget_ = 0;
+    autoInjectAttempts_ = 0;
+    autoInjectIgnoreIds_.clear();
+    if (!autoInjectEnabled_) {
+        appendAutoInjectLog(L"auto inject disabled by preference");
+        return;
+    }
+    // Always arm while the switch is on. Java processes that already exist are
+    // frozen and never injected behind the user's back, but the watchdog keeps
+    // running so every game started afterwards is injected automatically.
+    const std::size_t javaProcesses = countJavaProcesses();
+    const bool minecraftRunning = hasRunningMinecraftGame();
+    {
+        std::wostringstream line;
+        line << L"init java=" << javaProcesses << L" minecraftWindow="
+             << (minecraftRunning ? 1 : 0);
+        appendAutoInjectLog(line.str());
+    }
+    autoInjectIgnoreIds_ = listJavaProcessIds();
+    autoInjectArmed_ = true;
+    autoInjectArmedAt_ = std::chrono::steady_clock::now();
+    setStatus(ls(Ls::AutoInjectWaiting));
+    appendAutoInjectLog(L"armed: waiting for a newly started game");
+}
+
+std::vector<std::uint32_t> ControllerModel::listJavaProcessIds() {
+    std::vector<std::uint32_t> pids;
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) {
+        return pids;
+    }
+    PROCESSENTRY32W entry{sizeof(entry)};
+    if (Process32FirstW(snapshot, &entry)) {
+        do {
+            if (_wcsicmp(entry.szExeFile, L"java.exe") == 0 ||
+                    _wcsicmp(entry.szExeFile, L"javaw.exe") == 0) {
+                pids.push_back(entry.th32ProcessID);
+            }
+        } while (Process32NextW(snapshot, &entry));
+    }
+    CloseHandle(snapshot);
+    return pids;
+}
+
+std::size_t ControllerModel::countJavaProcesses() {
+    return listJavaProcessIds().size();
+}
+
+bool ControllerModel::autoInjectEnabled() const { return autoInjectEnabled_; }
+
+bool ControllerModel::autoInjectArmed() const { return autoInjectArmed_; }
+
+void ControllerModel::setAutoInjectEnabled(bool enabled) {
+    if (autoInjectEnabled_ == enabled) {
+        return;
+    }
+    autoInjectEnabled_ = enabled;
+    persistAutoInjectPreference(enabled);
+    appendAutoInjectLog(enabled ? L"preference enabled" : L"preference disabled");
+    if (!enabled) {
+        autoInjectArmed_ = false;
+        autoInjectDone_ = false;
+        autoInjectTarget_ = 0;
+        autoInjectAttempts_ = 0;
+        autoInjectIgnoreIds_.clear();
+        return;
+    }
+    // Enabling at runtime always arms the watchdog. Sessions that are already
+    // alive are frozen: they are not injected automatically, but every game
+    // started afterwards is.
+    autoInjectIgnoreIds_ = listJavaProcessIds();
+    autoInjectArmed_ = true;
+    autoInjectDone_ = false;
+    autoInjectTarget_ = 0;
+    autoInjectAttempts_ = 0;
+    autoInjectArmedAt_ = std::chrono::steady_clock::now();
+    setStatus(ls(Ls::AutoInjectWaiting));
+    appendAutoInjectLog(L"armed at runtime: waiting for a newly started game");
+}
+
+void ControllerModel::persistAutoInjectPreference(bool enabled) {
+    const auto directory = cacheDirectory();
+    if (CreateDirectoryW(directory.c_str(), nullptr) ||
+            GetLastError() == ERROR_ALREADY_EXISTS) {
+        const std::wstring clientRoot = executableDirectory() + L"\\.vapeclient";
+        const DWORD attributes = GetFileAttributesW(clientRoot.c_str());
+        if (attributes != INVALID_FILE_ATTRIBUTES &&
+                (attributes & FILE_ATTRIBUTE_HIDDEN) == 0) {
+            SetFileAttributesW(clientRoot.c_str(),
+                attributes | FILE_ATTRIBUTE_HIDDEN);
+        }
+    }
+    std::wofstream output(directory + L"auto.preference", std::ios::trunc);
+    output << (enabled ? 1 : 0);
+}
+
+void ControllerModel::tickAutoInject() {
+    if (!autoInjectArmed_ || autoInjectDone_) {
+        return;
+    }
+    const ControllerPage currentPage = page();
+    if (currentPage != ControllerPage::MinecraftSelection) {
+        return;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (lastAutoInjectTick_.time_since_epoch().count() != 0 &&
+            now - lastAutoInjectTick_ < std::chrono::seconds(1)) {
+        return;
+    }
+    lastAutoInjectTick_ = now;
+
+    std::uint32_t target = 0;
+    std::wstring targetTitle;
+    for (const auto& process : minecraftProcesses()) {
+        if (process.alreadyInjected) {
+            continue;
+        }
+        // Skip sessions that were already alive when the watchdog armed.
+        if (std::find(autoInjectIgnoreIds_.begin(), autoInjectIgnoreIds_.end(),
+                process.pid) != autoInjectIgnoreIds_.end()) {
+            continue;
+        }
+        target = process.pid;
+        targetTitle = process.title;
+        break;
+    }
+    if (target == 0) {
+        resetAutoInjectTarget();
+        return;
+    }
+    if (autoInjectTarget_ != target) {
+        autoInjectTarget_ = target;
+        autoInjectAttempts_ = 0;
+        autoInjectArmedAt_ = now;
+        std::wostringstream line;
+        line << L"target pid=" << target << L" title=" << targetTitle;
+        appendAutoInjectLog(line.str());
+        return;
+    }
+    // Give the JVM a moment to finish booting: injecting the instant the window
+    // exists reliably hits "jvm.dll never appeared" (code 2). The retry loop
+    // covers the cases where one second is still too early.
+    if (autoInjectAttempts_ == 0 &&
+            now - autoInjectArmedAt_ < std::chrono::seconds(1)) {
+        return;
+    }
+    if (autoInjectAttempts_ > 0 &&
+            now - lastAutoInjectAttempt_ < std::chrono::seconds(3)) {
+        return;
+    }
+    if (autoInjectAttempts_ >= 12) {
+        // Keep the watchdog alive: remember this session as failed so the next
+        // game started while the switch is on still gets injected.
+        if (std::find(autoInjectIgnoreIds_.begin(), autoInjectIgnoreIds_.end(),
+                autoInjectTarget_) == autoInjectIgnoreIds_.end()) {
+            autoInjectIgnoreIds_.push_back(autoInjectTarget_);
+        }
+        {
+            std::wostringstream line;
+            line << L"giving up on pid=" << autoInjectTarget_
+                 << L" after 12 attempts";
+            appendAutoInjectLog(line.str());
+        }
+        setStatus(ls(Ls::AutoInjectFailed));
+        resetAutoInjectTarget();
+        return;
+    }
+    lastAutoInjectAttempt_ = now;
+    ++autoInjectAttempts_;
+    {
+        std::wostringstream line;
+        line << L"attempt " << autoInjectAttempts_ << L" pid=" << autoInjectTarget_;
+        appendAutoInjectLog(line.str());
+    }
+    if (injectMinecraft(target, false)) {
+        // Injection has started: stop the watchdog so later game sessions are
+        // not touched. A manual selection is still available if needed.
+        resetAutoInjectTarget();
+        autoInjectArmed_ = false;
+        autoInjectDone_ = true;
+        autoInjectIgnoreIds_.clear();
+        appendAutoInjectLog(L"injection started; auto inject stopped");
+    } else {
+        {
+            std::lock_guard lock(mutex_);
+            std::wostringstream line;
+            line << L"attempt failed: " << autoInjectError_;
+            appendAutoInjectLog(line.str());
+        }
+        if (autoInjectAttempts_ >= 12) {
+            if (std::find(autoInjectIgnoreIds_.begin(), autoInjectIgnoreIds_.end(),
+                    autoInjectTarget_) == autoInjectIgnoreIds_.end()) {
+                autoInjectIgnoreIds_.push_back(autoInjectTarget_);
+            }
+            {
+                std::wostringstream line;
+                line << L"giving up on pid=" << autoInjectTarget_
+                     << L" after 12 attempts";
+                appendAutoInjectLog(line.str());
+            }
+            setStatus(ls(Ls::AutoInjectFailed));
+            resetAutoInjectTarget();
+        }
+    }
+}
+
+void ControllerModel::resetAutoInjectTarget() {
+    autoInjectTarget_ = 0;
+    autoInjectAttempts_ = 0;
+    autoInjectArmedAt_ = std::chrono::steady_clock::now();
 }
 
 ControllerModel::~ControllerModel() = default;
@@ -335,7 +615,8 @@ void ControllerModel::refreshMinecraftProcesses() {
     lastMinecraftRefresh_ = std::chrono::steady_clock::now();
 }
 
-bool ControllerModel::injectMinecraft(std::uint32_t processId) {
+bool ControllerModel::injectMinecraft(std::uint32_t processId, bool reportFailure) {
+    autoInjectError_.clear();
     std::string token;
     std::string serviceHttpBase;
     {
@@ -347,30 +628,42 @@ bool ControllerModel::injectMinecraft(std::uint32_t processId) {
     // (Minecraft not running yet). Re-authenticate lazily so the token handed
     // to the injected DLL is always valid.
     if (token.empty() && !loginToService()) {
-        setStatus(ls(Ls::CannotLoginStartMinecraft));
-        setPage(ControllerPage::Error);
+        autoInjectError_ = L"service login failed";
+        if (reportFailure) {
+            setStatus(ls(Ls::CannotLoginStartMinecraft));
+            setPage(ControllerPage::Error);
+        }
         return false;
     }
     {
         std::lock_guard lock(mutex_);
         token = accessToken_;
         if (token.empty()) {
-            setStatus(ls(Ls::CannotLoginStartMinecraft));
-            setPage(ControllerPage::Error);
+            autoInjectError_ = L"service token is empty";
+            if (reportFailure) {
+                setStatus(ls(Ls::CannotLoginStartMinecraft));
+                setPage(ControllerPage::Error);
+            }
             return false;
         }
     }
     if (!service_.start(token, cachePreference_, true)) {
-        setStatus(ls(Ls::CannotCreateControlSocket));
-        setPage(ControllerPage::Error);
+        autoInjectError_ = L"control socket start failed";
+        if (reportFailure) {
+            setStatus(ls(Ls::CannotCreateControlSocket));
+            setPage(ControllerPage::Error);
+        }
         return false;
     }
     std::wstring error;
     // Always use the embedded DLL resource; never load an external copy.
     std::wstring dllPath;
     if (!materializeEmbeddedDll(processId, dllPath)) {
-        setStatus(ls(Ls::CannotExtractNativeDll));
-        setPage(ControllerPage::Error);
+        autoInjectError_ = L"extract native dll failed";
+        if (reportFailure) {
+            setStatus(ls(Ls::CannotExtractNativeDll));
+            setPage(ControllerPage::Error);
+        }
         return false;
     }
     // The injected DLL derives the client directory from its own module path
@@ -379,8 +672,12 @@ bool ControllerModel::injectMinecraft(std::uint32_t processId) {
     if (!InjectionCoordinator::injectProductDll(processId, dllPath, service_.port(),
             serviceHttpBase, error)) {
         service_.stop();
-        setStatus(error.empty() ? ls(Ls::InjectNativeDllFailed) : error);
-        setPage(ControllerPage::Error);
+        autoInjectError_ = error.empty() ? std::wstring(ls(Ls::InjectNativeDllFailed))
+                                         : error;
+        if (reportFailure) {
+            setStatus(error.empty() ? ls(Ls::InjectNativeDllFailed) : error);
+            setPage(ControllerPage::Error);
+        }
         return false;
     }
     {
@@ -545,14 +842,18 @@ bool ControllerModel::cachePreference() const { return cachePreference_; }
 void ControllerModel::tick() {
     const auto now = std::chrono::steady_clock::now();
     const auto currentPage = page();
+    // The auto-inject watchdog only runs while the main selection page is
+    // visible: as soon as injection starts (loading/error page) polling stops,
+    // whether the last attempt succeeded or failed.
     if (currentPage == ControllerPage::MinecraftSelection) {
         bool refresh = false;
         {
             std::lock_guard lock(mutex_);
             refresh = lastMinecraftRefresh_.time_since_epoch().count() == 0 ||
-                now - lastMinecraftRefresh_ >= std::chrono::seconds(2);
+                now - lastMinecraftRefresh_ >= std::chrono::seconds(1);
         }
         if (refresh) refreshMinecraftProcesses();
+        tickAutoInject();
         return;
     }
     if (currentPage != ControllerPage::Loading) return;

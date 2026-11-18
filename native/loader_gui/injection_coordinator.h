@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <windows.h>
 
 class InjectionCoordinator {
 public:
@@ -11,5 +12,6 @@ public:
 
     static bool injectReflectiveDll(std::uint32_t processId,
         const std::wstring& dllPath, const std::wstring& installDirectory,
-        const std::wstring& jarPath, std::wstring& error);
+        const std::wstring& jarPath, HANDLE bootstrapMapping,
+        HANDLE bootstrapAck, std::wstring& error);
 };

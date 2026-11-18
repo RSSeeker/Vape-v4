@@ -44,6 +44,19 @@ enum class Ls {
     EnsureGameLoaded,
     Injected,
 
+    // auto inject (minecraft selection page)
+    AutoInjectLabel,
+    AutoInjectWaiting,
+    AutoInjectSkipped,
+    AutoInjectFailed,
+    AutoInjectWaitingTitle,
+    AutoInjectWaitingDetail,
+    AutoInjectActiveHint,
+
+    // settings flyout (slides in from the left edge)
+    SettingsLabel,
+    AutoInjectHint,
+
     // loading page
     Stage,
     StageTakingLong,

@@ -15,7 +15,7 @@ plugins {
 }
 
 group = 'gg.vape.recovery'
-version = '4.21.54'
+version = '4.21.55'
 
 java {
     toolchain {
@@ -44,6 +44,7 @@ dependencies {
     implementation 'org.lwjgl.lwjgl:lwjgl:2.9.3'
     implementation 'org.lwjgl.lwjgl:lwjgl_util:2.9.3'
     compileOnly 'org.jetbrains:annotations:24.1.0'
+    implementation 'org.mozilla:rhino:1.7.15'
 }
 
 configurations.configureEach {
@@ -180,6 +181,7 @@ tasks.register('injectionJar', com.github.jengelman.gradle.plugins.shadow.tasks.
     // like the client's own classes.
     relocate 'javassist', 'gg.vape.shaded.javassist'
     relocate 'org.objectweb.asm', 'gg.vape.shaded.org.objectweb.asm'
+    relocate 'org.mozilla', 'gg.vape.shaded.org.mozilla'
     exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
     exclude 'module-info.class', 'META-INF/versions/**'
     manifest {
@@ -205,7 +207,8 @@ tasks.register('verifyInjectionPayload') {
                 'com/google/common/',
                 'io/netty/',
                 'org/apache/commons/io/',
-                'org/lwjgl/'
+                'org/lwjgl/',
+                'gg/vape/shaded/org/mozilla/',
         ]
         def prefixCounts = requiredPrefixes.collectEntries { [(it): 0] }
         def tooNew = []

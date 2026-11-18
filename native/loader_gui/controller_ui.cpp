@@ -203,7 +203,111 @@ void ControllerUi::updateFrame() {
             loadingProgress_ = std::min(loadingProgress_, target);
         }
     }
+
+    // Settings flyout: opens when the pointer reaches the left edge and closes
+    // as soon as it moves away from the panel. The panel itself counts as
+    // "near", so the toggle stays clickable while the pointer is inside it.
+    const float panelWidth = settingsPanelWidthStatic();
+    bool wantPanel = false;
+    if (page == ControllerPage::MinecraftSelection && mouseX_ >= 0.0f) {
+        wantPanel = settingsOpen_ ? mouseX_ <= panelWidth + 24.0f : mouseX_ <= 8.0f;
+    }
+    settingsOpen_ = wantPanel;
+    const float panelTarget = settingsOpen_ ? 1.0f : 0.0f;
+    settingsProgress_ += (panelTarget - settingsProgress_) *
+        static_cast<float>(1.0 - std::exp(-20.0 * delta));
+    if (settingsProgress_ > 0.999f) settingsProgress_ = 1.0f;
+    if (settingsProgress_ < 0.001f) settingsProgress_ = 0.0f;
+
+    // Option description appears only while the pointer hovers that option,
+    // so the panel stays clean at rest.
+    settingsToggleHovered_ = settingsProgress_ > 0.5f &&
+        pointerIn(settingsPanelOffset() + 18.0f, 60.0f, 196.0f, 28.0f);
+    const float hintTarget = settingsToggleHovered_ ? 1.0f : 0.0f;
+    settingsHintProgress_ += (hintTarget - settingsHintProgress_) *
+        static_cast<float>(1.0 - std::exp(-24.0 * delta));
+    if (settingsHintProgress_ > 0.999f) settingsHintProgress_ = 1.0f;
+    if (settingsHintProgress_ < 0.001f) settingsHintProgress_ = 0.0f;
     InvalidateRect(window_, nullptr, FALSE);
+}
+
+float ControllerUi::settingsPanelWidthStatic() {
+    return 232.0f;
+}
+
+float ControllerUi::settingsPanelOffset() const {
+    return -(settingsPanelWidthStatic() + 6.0f) * (1.0f - settingsProgress_);
+}
+
+void ControllerUi::drawSettingsPanel(Gdiplus::Graphics& graphics) {
+    if (settingsProgress_ <= 0.0f) return;
+    const float width = settingsPanelWidthStatic();
+    const float left = settingsPanelOffset();
+    // Slightly dim whatever is behind the panel so it reads as an overlay.
+    Gdiplus::SolidBrush shade(Gdiplus::Color(
+        static_cast<BYTE>(80.0f * settingsProgress_), 0, 0, 0));
+    graphics.FillRectangle(&shade, left + width, 0.0f, CanvasWidth - left - width,
+        CanvasHeight);
+    Gdiplus::SolidBrush panelFill(Gdiplus::Color(255, 23, 22, 23));
+    graphics.FillRectangle(&panelFill, left, 0.0f, width, CanvasHeight);
+    Gdiplus::Pen edge(Gdiplus::Color(255, 46, 45, 46), 1.0f);
+    graphics.DrawLine(&edge, left + width - 0.5f, 0.0f,
+        left + width - 0.5f, CanvasHeight);
+
+    drawText(graphics, ls(Ls::SettingsLabel), left + 18, 14, 160, 24, 14,
+        Gdiplus::Color(255, 218, 215, 219), true);
+    Gdiplus::Pen divider(Gdiplus::Color(255, 46, 45, 46), 1.0f);
+    graphics.DrawLine(&divider, left + 16, 46.5f, left + width - 16, 46.5f);
+
+    const bool enabled = model_.autoInjectEnabled();
+    const bool hovered = pointerIn(left + 18, 60, 196, 28);
+    // Checked state is a plain solid green square, not a box with an inner mark.
+    drawRoundedRect(graphics, left + 18, 64, 14, 14, 2,
+        enabled ? Gdiplus::Color(255, 5, 139, 111) : Gdiplus::Color(255, 32, 31, 32),
+        enabled ? Gdiplus::Color(255, 5, 139, 111)
+                : (hovered ? Gdiplus::Color(255, 96, 95, 96)
+                           : Gdiplus::Color(255, 62, 61, 62)));
+    if (enabled) {
+        // White tick drawn into the solid green square.
+        Gdiplus::Pen tick(Gdiplus::Color(255, 246, 246, 246), 1.6f);
+        tick.SetLineCap(Gdiplus::LineCapRound, Gdiplus::LineCapRound,
+            Gdiplus::DashCapRound);
+        const Gdiplus::PointF points[3] = {
+            {left + 21.4f, 71.4f},
+            {left + 24.3f, 74.4f},
+            {left + 29.6f, 67.8f}};
+        graphics.DrawLines(&tick, points, 3);
+    }
+    drawText(graphics, ls(Ls::AutoInjectLabel), left + 40, 60, width - 58, 22, 12,
+        hovered ? Gdiplus::Color(255, 226, 224, 227)
+                : Gdiplus::Color(255, 202, 199, 203));
+
+    // Nothing is printed underneath the option: the skipped/failed explanation
+    // is folded into the floating tooltip together with the description.
+    const auto status = model_.status();
+    const std::wstring hint =
+        (!status.empty() && status != ls(Ls::AutoInjectWaiting))
+            ? status
+            : std::wstring(ls(Ls::AutoInjectHint));
+
+    // Option description is a floating tooltip next to the pointer, shown only
+    // while hovering the option, so nothing is printed under the panel rows.
+    if (settingsHintProgress_ > 0.0f && mouseX_ >= 0.0f) {
+        const BYTE alpha = static_cast<BYTE>(255.0f * settingsHintProgress_);
+        const float tipWidth = 268.0f;
+        const float tipHeight = 96.0f;
+        float tipX = mouseX_ + 16.0f;
+        float tipY = mouseY_ + 18.0f;
+        tipX = std::min(std::max(tipX, 8.0f), CanvasWidth - tipWidth - 8.0f);
+        tipY = std::min(std::max(tipY, 8.0f), CanvasHeight - tipHeight - 8.0f);
+        drawRoundedRect(graphics, tipX, tipY, tipWidth, tipHeight, 6.0f,
+            Gdiplus::Color(static_cast<BYTE>(alpha * 0.96f), 32, 31, 33),
+            Gdiplus::Color(alpha, 64, 63, 65));
+        drawText(graphics, hint, tipX + 12, tipY + 10,
+            tipWidth - 24, tipHeight - 20, 10,
+            Gdiplus::Color(alpha, 198, 196, 200), false,
+            Gdiplus::StringAlignmentNear, true);
+    }
 }
 
 void ControllerUi::drawTransitionMasks(Gdiplus::Graphics& graphics) {
@@ -276,6 +380,17 @@ LRESULT ControllerUi::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) 
             if (hit(x, y, 363, 306, 50, 25)) model_.reopenBrowserAuthentication();
             else if (hit(x, y, 420, 306, 50, 25)) model_.cancelBrowserAuthentication();
         } else if (page == ControllerPage::MinecraftSelection) {
+            const float panelLeft = settingsPanelOffset();
+            const float panelWidth = settingsPanelWidthStatic();
+            if (settingsProgress_ > 0.35f && x >= panelLeft &&
+                    x <= panelLeft + panelWidth) {
+                // Points inside the flyout belong to the settings panel; the
+                // process rows underneath must not react.
+                if (hit(x, y, panelLeft + 18.0f, 60.0f, 196.0f, 28.0f)) {
+                    model_.setAutoInjectEnabled(!model_.autoInjectEnabled());
+                }
+                return 0;
+            }
             const auto processes = model_.minecraftProcesses();
             if (processes.empty()) {
                 model_.refreshMinecraftProcesses();
@@ -404,6 +519,15 @@ void ControllerUi::paint() {
     case ControllerPage::Error: drawError(graphics); break;
     }
     drawTransitionMasks(graphics);
+    if (model_.page() == ControllerPage::MinecraftSelection) {
+        // Static three-dot handle marking the settings flyout edge; it does not
+        // react to the pointer.
+        Gdiplus::SolidBrush handle(Gdiplus::Color(85, 210, 207, 211));
+        for (int index = 0; index < 3; ++index) {
+            graphics.FillEllipse(&handle, 6.0f, 228.0f + index * 8.0f, 3.0f, 3.0f);
+        }
+    }
+    drawSettingsPanel(graphics);
 
     BitBlt(target, 0, 0, width, height, bufferDc, 0, 0, SRCCOPY);
     SelectObject(bufferDc, previous);
@@ -711,16 +835,27 @@ void ControllerUi::drawMinecraftSelection(Gdiplus::Graphics& graphics) {
     const auto processes = model_.minecraftProcesses();
     if (processes.empty()) {
         drawLogo(graphics, 182.0f - 80.0f * logoPosition_);
-        drawText(graphics, ls(Ls::MinecraftNotFound), 295, 234, 234, 24, 13,
-            Gdiplus::Color(255, 218, 215, 219), true, Gdiplus::StringAlignmentCenter);
-        drawText(graphics, ls(Ls::OpenMinecraftFirst), 295, 251, 234, 22, 12,
-            Gdiplus::Color(255, 116, 113, 117), false, Gdiplus::StringAlignmentCenter);
+        // With the auto-inject watchdog armed there is no reason to tell the
+        // user to open the game by hand: the loader is already waiting for the
+        // window and will inject as soon as it appears.
+        const bool waiting = model_.autoInjectArmed();
+        drawText(graphics,
+            ls(waiting ? Ls::AutoInjectWaitingTitle : Ls::MinecraftNotFound),
+            295, 234, 234, 24, 13, Gdiplus::Color(255, 218, 215, 219), true,
+            Gdiplus::StringAlignmentCenter);
+        drawText(graphics,
+            ls(waiting ? Ls::AutoInjectWaitingDetail : Ls::OpenMinecraftFirst),
+            295, 251, 234, 22, 12, Gdiplus::Color(255, 116, 113, 117), false,
+            Gdiplus::StringAlignmentCenter);
         return;
     }
     drawLogo(graphics, 182.0f - 80.0f * logoPosition_);
     drawText(graphics, ls(Ls::SelectMinecraft), 220, 150, 384, 38, 18,
         Gdiplus::Color(255, 218, 215, 219), true, Gdiplus::StringAlignmentCenter);
-    drawText(graphics, ls(Ls::EnsureGameLoaded), 220, 179, 384, 22, 12,
+    drawText(graphics,
+        ls(model_.autoInjectEnabled() ? Ls::AutoInjectActiveHint
+                                      : Ls::EnsureGameLoaded),
+        220, 179, 384, 22, 12,
         Gdiplus::Color(255, 116, 113, 117), false, Gdiplus::StringAlignmentCenter);
     float y = 210.0f;
     for (const auto& process : processes) {

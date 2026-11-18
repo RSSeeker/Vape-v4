@@ -223,6 +223,7 @@ extends ModuleCategoryFrame {
         this.addDefaultMenuComponent(new ModuleCategoryNavigationButtonComponent("Inventory", Category.INVENTORY.getIconKey()).Q(-1));
         this.addDefaultMenuComponent(new ModuleCategoryNavigationButtonComponent("Minigames", Category.MINIGAMES.getIconKey()));
         this.addDefaultMenuComponent(new ModuleCategoryNavigationButtonComponent("Other", "other").Q(1));
+        this.addDefaultMenuComponent(new ModuleCategoryNavigationButtonComponent("Extension", Category.EXTENSION.getIconKey()).Q(1));
         this.addDefaultMenuComponent(new SpacerComponent(1.0, 2.0));
         this.addDefaultMenuComponent(new SimpleTextLabelComponent("  MISC", 0.625));
         this.addDefaultMenuComponent(new SpacerComponent(1.0, 2.0));

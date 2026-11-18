@@ -30,6 +30,7 @@ import gg.vape.friend.ping.PingManager;
 import gg.vape.friend.ui.OnlineActivityPanelOptions;
 import gg.vape.input.InputEventDispatcher;
 import gg.vape.lifecycle.ClientDirectoryCleanupCallback;
+import gg.vape.manager.ExtensionManager;
 import gg.vape.manager.MacroManager;
 import gg.vape.manager.ModManager;
 import gg.vape.manager.SearchManager;
@@ -407,6 +408,14 @@ public class Vape {
         this.getFontSelector().N((FontOption)this.publicProfileSettings.language.getValue());
         this.modManager = new ModManager();
         this.modManager.init();
+        // 第三方脚本模块（Extension 分类）：必须在配置载入（syncThread.loadConfig）之前注册，
+        // 这样脚本模块的开关状态和内置模块一样能被配置文件恢复。
+        try {
+            ExtensionManager.loadFromDisk(this.modManager);
+        }
+        catch (Throwable throwable) {
+            Vape.logError("[Extension] failed to load script modules: " + throwable);
+        }
         this.clientSettings.antiBot = this.modManager.getMod(AntiBot.class);
         this.moduleProfileMetadataCodec = new ModuleProfileMetadataCodec();
         this.traceStep(23);

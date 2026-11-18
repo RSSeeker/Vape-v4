@@ -134,6 +134,8 @@ if(BUILD_TESTING)
     add_test(NAME Vape421BootstrapHandoff COMMAND Vape421BootstrapTest)
     add_test(NAME Vape421BootstrapRejectsInvalid
             COMMAND Vape421BootstrapTest invalid)
+    add_test(NAME Vape421BootstrapHandedHandle
+            COMMAND Vape421BootstrapTest handles)
 
     # Loader GUI language selection: reads the product's saved language from
     # .vapeclient\config.json and must fall back to Chinese on every failure.

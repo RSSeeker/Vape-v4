@@ -18,14 +18,12 @@ import gg.vape.module.blatant.AutoHeal;
 import gg.vape.module.blatant.AutoLadder;
 import gg.vape.module.blatant.Backtrack;
 import gg.vape.module.blatant.Blink;
-import gg.vape.module.blatant.Disabler;
 import gg.vape.module.blatant.Clutch;
 import gg.vape.module.blatant.Fly;
 import gg.vape.module.blatant.HitBoxes;
 import gg.vape.module.blatant.InvWalk;
 import gg.vape.module.blatant.KeepSprint;
 import gg.vape.module.blatant.KillAura;
-import gg.vape.module.blatant.NoFall;
 import gg.vape.module.blatant.NoSlowdown;
 import gg.vape.module.blatant.SafeWalk;
 import gg.vape.module.blatant.Scaffold;
@@ -226,9 +224,9 @@ implements EventListener {
         this.registerModules(Stream.of(new Backtrack()), ModManager::addBacktrackVersionConstraints);
         this.registerModules(Stream.of(new AutoFish(), new BedBreaker(), new AutoLadder(), new Clutch(), new FakeLag()), ModManager::addMinecraft1710Constraint);
         this.registerModules(Stream.of(new BedPlates()), ModManager::addBedPlatesVersionConstraints);
-        this.registerModules(Stream.of(new AntiBot(), new Disabler()));
+        this.registerModules(Stream.of(new AntiBot()));
         this.registerModules(Stream.of(new Triggerbot(), new HitSwap(), new AutoMace(), new AutoAnchor(), new WindCharge(), new CrystalAura(), new AutoTotem(), new ShieldBreaker(), new PearlCatch()), ModManager::addMinecraft1214Constraint);
-        this.registerModules(Stream.of(new NoFall(), new NoSlowdown(), new Speed(), new NoItemRelease(), new Timer()), ModManager::addModernMinecraftConstraint);
+        this.registerModules(Stream.of(new NoSlowdown(), new Speed(), new NoItemRelease(), new Timer()), ModManager::addModernMinecraftConstraint);
         this.registerTextGuiSettings();
         this.registerHudModules();
         if (preservedLegacyComponents == null) {

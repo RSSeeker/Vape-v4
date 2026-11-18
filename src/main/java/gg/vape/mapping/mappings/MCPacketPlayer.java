@@ -96,5 +96,27 @@ extends Mapping {
     public double getX(Object packet) {
         return this.xField.getDouble(packet);
     }
+
+    /**
+     * 尝试把出站移动包的视角字段改成给定值（Disabler 的旋转补丁用）。
+     *
+     * <p>1.16.5 起 {@code yRot}/{@code xRot} 是 final 字段：走反射路径时
+     * {@code setAccessible(true)} 之后可以写入；某些版本的映射解析失败、或
+     * native 字段写入不支持 final 字段时返回 {@code false}，调用方跳过改写即可，
+     * 不影响原始发包。</p>
+     */
+    public boolean trySetRotation(Object packet, float yaw, float pitch) {
+        if (this.yawField == null || this.pitchField == null) {
+            return false;
+        }
+        try {
+            this.yawField.setFloat(packet, yaw);
+            this.pitchField.setFloat(packet, pitch);
+            return true;
+        }
+        catch (Throwable throwable) {
+            return false;
+        }
+    }
 }
 

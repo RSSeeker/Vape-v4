@@ -40,6 +40,12 @@ typedef struct Vape421ManualMapParams {
     /* Progress breadcrumbs written by the reflective loader with plain stores
      * (no imports, no CRT), read back by the injector if the thread dies. */
     volatile LONG stage;
+    /* Handles duplicated into the target process by the injector. When present
+     * the product DLL consumes the loader handshake through these instead of
+     * opening the named "Bootstrap<pid>" objects, so no named kernel object is
+     * ever created for the manual-map path. */
+    HANDLE bootstrap_mapping;
+    HANDLE bootstrap_ack;
 } Vape421ManualMapParams;
 
 /* Set by the reflective loader inside the mapped image before the DLL entry

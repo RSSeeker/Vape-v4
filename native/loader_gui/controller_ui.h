@@ -56,6 +56,12 @@ private:
     std::unique_ptr<Gdiplus::Image> loadImage(int resourceId);
     void updateFrame();
     void drawTransitionMasks(Gdiplus::Graphics& graphics);
+    // Settings flyout: slides in when the pointer reaches the left edge and
+    // closes automatically once it moves away. Only shown on the process
+    // selection page, which is where the auto-inject toggle belongs.
+    void drawSettingsPanel(Gdiplus::Graphics& graphics);
+    float settingsPanelOffset() const;
+    static float settingsPanelWidthStatic();
     bool pointerIn(float x, float y, float width, float height) const;
 
     HINSTANCE instance_{};
@@ -85,4 +91,8 @@ private:
     float logoPosition_{};
     float loadingProgress_{0.05f};
     int previousLoadingStage_{};
+    bool settingsOpen_{};
+    float settingsProgress_{};
+    float settingsHintProgress_{};
+    bool settingsToggleHovered_{};
 };

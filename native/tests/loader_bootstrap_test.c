@@ -1,4 +1,5 @@
 #include "loader_bootstrap.h"
+#include "manual_map.h"
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -6,6 +7,11 @@
 
 #include <stdio.h>
 #include <string.h>
+
+/* The product DLL owns these globals; the test executable links the bootstrap
+ * translation unit on its own, so it provides the storage here. */
+Vape421ManualMapParams g_vape_manual_map_params;
+volatile LONG g_vape_manual_map_params_ready = 0;
 
 typedef struct TestServer {
     SOCKET listener;
@@ -64,6 +70,7 @@ int main(int argc, char **argv) {
     struct sockaddr_in address;
     int address_length = sizeof(address);
     int invalid = argc > 1 && strcmp(argv[1], "invalid") == 0;
+    int handles = argc > 1 && strcmp(argv[1], "handles") == 0;
     int winsock_started = 0;
     int result = 1;
 
@@ -101,9 +108,20 @@ int main(int argc, char **argv) {
             _TRUNCATE, L"Local\\Vape421.Bootstrap.%lu", process_id);
     _snwprintf_s(ack_name, sizeof(ack_name) / sizeof(ack_name[0]),
             _TRUNCATE, L"Local\\Vape421.BootstrapAck.%lu", process_id);
-    mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE,
-            0, sizeof(*block), mapping_name);
-    ack = CreateEventW(NULL, TRUE, FALSE, ack_name);
+    if (handles) {
+        /* Manual-map shape: anonymous objects handed over through the params
+         * block, no pid-named kernel object anywhere. */
+        mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE,
+                0, sizeof(*block), NULL);
+        ack = CreateEventW(NULL, TRUE, FALSE, NULL);
+        g_vape_manual_map_params.bootstrap_mapping = mapping;
+        g_vape_manual_map_params.bootstrap_ack = ack;
+        g_vape_manual_map_params_ready = 1;
+    } else {
+        mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE,
+                0, sizeof(*block), mapping_name);
+        ack = CreateEventW(NULL, TRUE, FALSE, ack_name);
+    }
     block = mapping == NULL ? NULL : (Vape421BootstrapV2 *)MapViewOfFile(
             mapping, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(*block));
     if (mapping == NULL || ack == NULL || block == NULL) {
@@ -147,10 +165,22 @@ int main(int argc, char **argv) {
             fprintf(stderr, "progress protocol sequence failed\n");
             goto cleanup;
         }
+        if (handles) {
+            HANDLE named_mapping = OpenFileMappingW(FILE_MAP_READ, FALSE, mapping_name);
+            HANDLE named_ack = OpenEventW(EVENT_MODIFY_STATE, FALSE, ack_name);
+            if (named_mapping != NULL || named_ack != NULL) {
+                if (named_mapping != NULL) CloseHandle(named_mapping);
+                if (named_ack != NULL) CloseHandle(named_ack);
+                fprintf(stderr, "handed-over bootstrap still created named objects\n");
+                goto cleanup;
+            }
+        }
     }
     result = 0;
 
 cleanup:
+    g_vape_manual_map_params_ready = 0;
+    memset(&g_vape_manual_map_params, 0, sizeof(g_vape_manual_map_params));
     vape_loader_bootstrap_clear();
     if (block != NULL) {
         SecureZeroMemory(block, sizeof(*block));

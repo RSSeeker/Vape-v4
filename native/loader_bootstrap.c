@@ -1,4 +1,5 @@
 #include "loader_bootstrap.h"
+#include "manual_map.h"
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -37,6 +38,17 @@ static void signal_ack(DWORD process_id) {
         SetEvent(event);
         CloseHandle(event);
     }
+}
+
+/* Manual-map injection hands the ack event over as a duplicated handle inside
+ * Vape421ManualMapParams, so the named object is only needed by the
+ * LoadLibrary fallback. */
+static void signal_ack_for(HANDLE handed_over, DWORD process_id) {
+    if (handed_over != NULL && handed_over != INVALID_HANDLE_VALUE) {
+        SetEvent(handed_over);
+        return;
+    }
+    signal_ack(process_id);
 }
 
 static int send_bytes(SOCKET socket_value, const char *bytes, size_t length) {
@@ -133,6 +145,8 @@ static BOOL CALLBACK initialize_bootstrap(
     DWORD process_id = GetCurrentProcessId();
     wchar_t name[96];
     HANDLE mapping;
+    HANDLE handed_over_mapping = NULL;
+    HANDLE handed_over_ack = NULL;
     Vape421BootstrapV2 *block;
     LONG state = VAPE421_TOKEN_FAILED;
     char zeus_address[160];
@@ -140,9 +154,18 @@ static BOOL CALLBACK initialize_bootstrap(
     (void)parameter;
     (void)context;
 
-    object_name(name, sizeof(name) / sizeof(name[0]),
-            L"Bootstrap", process_id);
-    mapping = OpenFileMappingW(FILE_MAP_READ | FILE_MAP_WRITE, FALSE, name);
+    if (g_vape_manual_map_params_ready != 0
+            && g_vape_manual_map_params.bootstrap_mapping != NULL) {
+        handed_over_mapping = g_vape_manual_map_params.bootstrap_mapping;
+        handed_over_ack = g_vape_manual_map_params.bootstrap_ack;
+    }
+    if (handed_over_mapping != NULL) {
+        mapping = handed_over_mapping;
+    } else {
+        object_name(name, sizeof(name) / sizeof(name[0]),
+                L"Bootstrap", process_id);
+        mapping = OpenFileMappingW(FILE_MAP_READ | FILE_MAP_WRITE, FALSE, name);
+    }
     if (mapping == NULL) {
         if (GetLastError() == ERROR_FILE_NOT_FOUND) {
             strcpy_s(g_access_token, sizeof(g_access_token), "0");
@@ -191,12 +214,14 @@ static BOOL CALLBACK initialize_bootstrap(
             InterlockedExchange((volatile LONG *)&block->status,
                     VAPE421_BOOTSTRAP_STATUS_FAILED);
         }
-        signal_ack(process_id);
+        signal_ack_for(handed_over_ack, process_id);
         UnmapViewOfFile(block);
     } else {
-        signal_ack(process_id);
+        signal_ack_for(handed_over_ack, process_id);
     }
-    CloseHandle(mapping);
+    if (handed_over_mapping == NULL) {
+        CloseHandle(mapping);
+    }
     InterlockedExchange(&g_token_state, state);
     return TRUE;
 }

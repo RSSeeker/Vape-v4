@@ -21,6 +21,7 @@ implements INamed {
     public static Category UTILITY;
     private final String iconKey;
     public static Category OTHER;
+    public static Category EXTENSION;
     public static Category FAVORITES;
     public static Category NETWORK;
     public static Category MINIGAMES;
@@ -53,6 +54,9 @@ implements INamed {
         NETWORK = new Category("Network", "network", -14651232);
         OTHER = new Category("Other", "other", -2419323);
         MINIGAMES = new Category("Minigames", "minigames", "BedBreaker, BedPlates, MurdererFinder, PropHunt", -13421773);
+        // 第三方脚本模块的归属分类：模块由 .vapeclient\scripts 下的脚本在运行时注册，
+        // 和内置模块共用同一套开关 / 事件 / 配置逻辑。
+        EXTENSION = new Category("Extension", "other", "Third-party script modules", -11363066);
         FAVORITES = new Category("Favorites", "newfavorites", "", 0);
         HIDDEN = new Category("Hidden", "favorites", -2419323);
         values = new ArrayList<Category>();
@@ -64,6 +68,7 @@ implements INamed {
         values.add(INVENTORY);
         values.add(MINIGAMES);
         values.add(OTHER);
+        values.add(EXTENSION);
         values.add(NONE);
     }
 
@@ -96,6 +101,7 @@ implements INamed {
         UTILITY = null;
         RENDER = null;
         OTHER = null;
+        EXTENSION = null;
         WORLD = null;
         FAVORITES = null;
         MINIGAMES = null;

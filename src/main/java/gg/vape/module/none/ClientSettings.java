@@ -711,6 +711,7 @@ extends Mod {
         legitModuleCategoryFrame = new ModuleCategoryFrame(Category.COMBAT);
         ClientSettings.registerFrame((Frame)legitModuleCategoryFrame, mainStack);
         ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.OTHER), mainStack);
+        ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.EXTENSION), mainStack);
         ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.RENDER), mainStack);
         ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.UTILITY), mainStack);
         ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.WORLD), mainStack);
