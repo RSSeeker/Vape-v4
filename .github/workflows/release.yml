@@ -1,17 +1,28 @@
 name: 构建并发布
 
+# 只在手工触发。仓库的正式发布是在本地用 OpenVape 证书签名后手工上传的；
+# CI 没有签名证书（scripts/sign-native.ps1 找不到证书会静默跳过签名），
+# 而 action-gh-release 是 overwrite: true —— 若在 tag push 时自动运行，
+# 会用未签名的 CI 产物覆盖已经发布的签名资产，所以这里不再监听 push tags。
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布的 tag（如 v4.21.56），须已存在或由本次发布创建'
+        required: true
+        type: string
+      overwrite:
+        description: '目标 Release 已有资产时仍覆盖（会替换成未签名构建）'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
 
 jobs:
   build-and-release:
@@ -20,8 +31,10 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - name: 检出源码
+      - name: 检出源码（指定 tag）
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
 
       - name: 校验 Gradle Wrapper
         uses: gradle/actions/wrapper-validation@v4
@@ -59,20 +72,45 @@ jobs:
         shell: pwsh
         run: ctest --test-dir build/native -C Release --output-on-failure
 
+      - name: 检查目标 Release 是否已有资产
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ inputs.tag }}"
+          $json = gh release view $tag --json assets 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Release $tag 尚不存在，将新建。"
+            exit 0
+          }
+          $assets = @(($json | ConvertFrom-Json).assets)
+          if ($assets.Count -eq 0) {
+            Write-Host "Release $tag 存在但没有资产，继续。"
+            exit 0
+          }
+          if ("${{ inputs.overwrite }}" -eq "true") {
+            Write-Host "Release $tag 已有 $($assets.Count) 个资产；已显式要求 overwrite，继续（这些资产会被未签名构建覆盖）。"
+            exit 0
+          }
+          Write-Error "Release $tag 已有 $($assets.Count) 个资产（可能是本地签名版）。若确实要用未签名 CI 产物覆盖，请重新触发并勾选 overwrite。"
+          exit 1
+
       - name: 发布 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Vape ${{ github.ref_name }}
+          tag_name: ${{ inputs.tag }}
+          name: Vape ${{ inputs.tag }}
           body: |
-            加载器：`Vape-${{ github.ref_name }}.exe`（内嵌 DLL + 图标 + 全部资源）。
+            加载器：`Vape-${{ inputs.tag }}.exe`（内嵌 DLL + 图标 + 全部资源）。
             原生库：`Vape-v4.21Native.dll` —— 放在 exe 同目录时优先使用外部 DLL，否则自动解压内嵌 DLL。
 
-            使用：双击打开 GUI 选 Minecraft 进程注入；或命令行 `Vape-${{ github.ref_name }}.exe -nogui [pid]`。
+            > 注意：本 workflow 产出的 exe/DLL **未签名**（CI 无证书）。正式发布的签名版由维护者在本地构建上传。
+            使用：双击打开 GUI 选 Minecraft 进程注入；或命令行 `Vape-${{ inputs.tag }}.exe -nogui [pid]`。
             详见 [CHANGELOG.md](https://github.com/RSSeeker/Vape-v4/blob/main/CHANGELOG.md)。
           files: |
             build/injection/Vape-v4.21*.exe
             build/injection/Vape-v4.21Native.dll
           overwrite: true
           update_release_body: false
-          prerelease: ${{ contains(github.ref_name, '-pre') }}
+          prerelease: ${{ contains(inputs.tag, '-pre') }}
           fail_on_unmatched_files: true
