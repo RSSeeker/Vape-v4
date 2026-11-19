@@ -228,7 +228,4 @@ onDisable(function () {
 
 ---
 
-## 8. 变更记录
-
-- **4.21.55**：脚本系统首版（log/chat/notify/module/player/setting、onEnable/onDisable/onTick、热重载）。
-- **4.21.55+（当前未发布）**：新增 `entities/players/isFriend`、`onRender2D` + `draw.*`、`onKeyPress/onChat/onAttack/onMove/onWorldChange`、模块句柄增强、`setting.color/keybind`、`storage`、`after`、`load`；设置项变更自动同步；全量重扫。
+更新日期：2026-11-19
