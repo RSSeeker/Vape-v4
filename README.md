@@ -105,6 +105,36 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 > 本项目用于软件恢复、兼容性分析和自有环境测试。仅应在你拥有并获准测试的隔离实例中
 > 使用，并自行确认当地法律、软件许可和服务器规则。
 
+## 脚本扩展
+
+客户端内嵌 Mozilla Rhino 1.7.15（重定位到 `gg.vape.shaded.org.mozilla`，解释执行、不生成字节码），可从 `.vapeclient\scripts\` 加载自定义模块脚本：
+
+```text
+.vapeclient/
+  scripts/
+    example.json      模块描述（必需）
+    example.js        脚本入口（默认与 json 同名，可用 main 指定）
+    mylib.js          其他脚本，用 load("mylib.js") 引入
+    data/             storage 持久化数据（每个脚本一个 json）
+  extension.log       脚本加载 / 运行 / 报错日志
+```
+
+- 首次启动自动生成 `example.json` + `example.js` 示例，脚本模板随版本升级自动重写
+- 脚本能力：读写模块与设置项（含颜色、快捷键）、玩家与实体查询、屏幕绘制，以及
+  `onEnable` / `onDisable` / `onTick` / `onRender2D` / `onKeyPress` / `onChat` / `onAttack` /
+  `onMove` / `onWorldChange` / `onPacketSend` / `onPacketReceive` 回调、`storage` 持久化、
+  `after()` 定时器、`load()` 多文件
+- 「重新加载脚本」模块可热重载：重新编译已有脚本、注册新增 json、禁用已删除 json 对应的模块
+- 脚本加载或运行出错会在游戏内弹提示，并写入 `.vapeclient\extension.log`
+
+完整开发文档（JSON 字段、全部 API、示例、版本白名单、限制与安全）见
+[`docs/scripting.md`](docs/scripting.md)。
+
+> ⚠️ **安全警告：脚本没有沙箱。** 当前版本使用 Rhino 的完整标准对象集加载脚本，脚本可以访问
+> `Packages.java.*`，等价于在 Minecraft 进程（即你当前 Windows 用户权限）里执行任意 Java 代码——
+> 起进程、读写任意文件、加载原生库等。**只运行你自己写的或完全信任的脚本**；从网络下载的第三方
+> 脚本等同于运行来源不明的程序。
+
 ## Minecraft 兼容性
 
 | Minecraft | Vanilla | Forge | Fabric |

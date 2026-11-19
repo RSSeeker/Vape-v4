@@ -104,6 +104,29 @@ The safety of any "Vape"-related program published through other GitHub reposito
 
 > This project is for software recovery, compatibility analysis and testing in your own environment. Only use it in an isolated instance you own and are permitted to test, and confirm local laws, licenses and server rules yourself.
 
+## Script extensions
+
+The client embeds Mozilla Rhino 1.7.15 (relocated to `gg.vape.shaded.org.mozilla`, interpreted, no bytecode generation) and loads custom module scripts from `.vapeclient\scripts\`:
+
+```text
+.vapeclient/
+  scripts/
+    example.json      module descriptor (required)
+    example.js        script entry (defaults to the json name; override with main)
+    mylib.js          extra scripts, pulled in with load("mylib.js")
+    data/             storage persistence (one json per script)
+  extension.log       script load / run / error log
+```
+
+- `example.json` + `example.js` are generated on first launch; the example template is rewritten when a newer version ships
+- Script capabilities: read/write modules and settings (including color and keybind), player and entity queries, screen drawing, callbacks `onEnable` / `onDisable` / `onTick` / `onRender2D` / `onKeyPress` / `onChat` / `onAttack` / `onMove` / `onWorldChange` / `onPacketSend` / `onPacketReceive`, `storage` persistence, `after()` timers and multi-file `load()`
+- The "Reload Scripts" module hot-reloads: recompiles existing scripts, registers newly added json files and disables modules whose json was removed
+- Load or runtime errors show an in-game notification and are written to `.vapeclient\extension.log`
+
+Full developer documentation (json fields, every API, examples, version whitelists, limitations and security) lives in [`docs/scripting.md`](docs/scripting.md).
+
+> ⚠️ **Security warning: scripts are not sandboxed.** The current build loads scripts with Rhino's full standard object set, so a script can reach `Packages.java.*` — equivalent to running arbitrary Java code inside the Minecraft process (i.e. with your current Windows user privileges): spawning processes, reading or writing any file, loading native libraries. **Only run scripts you wrote yourself or fully trust**; a third-party script downloaded from the internet is the same as running a program of unknown origin.
+
 ## Minecraft compatibility
 
 | Minecraft | Vanilla | Forge | Fabric |
