@@ -2842,3 +2842,4 @@ disabler.perfect_rotation=ACA Perfect Rotation
 disabler.themis_blink=Themis Blink
 disabler.themis_blink.tooltip=Sends a status-only tick packet when no move or heartbeat packet went out for 200ms, so Themis sees a steady link instead of a frozen client followed by a burst.
 extension=Extension
+extension.category.tooltip=Third-party script modules

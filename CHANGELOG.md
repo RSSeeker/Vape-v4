@@ -1,5 +1,33 @@
 # 更新日志
 
+## v4.21.56 (2026-11-19)
+
+**新增：脚本 API 全面扩展（世界查询、屏幕绘制、键鼠/聊天/攻击/移动事件、持久化、定时器、多文件）；扩展脚本支持自定义设置项、中英双语与版本白名单；原生注入加固**
+
+### 新增
+
+- **脚本世界查询**：新增 `entities()`（世界内全部实体快照）、`players()`（仅玩家）、`isFriend(name)`；快照含 `name` / `type` / `x` / `y` / `z` / `distance` / `isSelf` / `isPlayer` / `isFriend` / `health`，可直接写 ESP、雷达、目标筛选类脚本。
+- **脚本屏幕绘制**：新增 `onRender2D(event)` 回调与 `draw.text` / `draw.rect` / `draw.hline` / `draw.textWidth` / `draw.fontHeight` / `draw.displayWidth` / `draw.displayHeight`，颜色统一用 ARGB；绘制上下文受控，在回调外调用只记错误日志、不会崩客户端。
+- **脚本事件扩展**：新增 `onKeyPress`（`event.key` / `event.down`）、`onChat`（`event.message`）、`onAttack`（`event.target`）、`onMove`（`event.x/y/z`）、`onWorldChange`；配合已有的 `onPacketSend` / `onPacketReceive`（`event.cancel()` 可取消收发）覆盖常见触发场景。
+- **脚本模块操作**：`module(name)` 句柄新增 `visible`、`toggle()`、`setting(name)`、`settings()`，可直接读取/修改任意模块的任意设置项（`get()` / `set(v)`，颜色用 ARGB、快捷键用键码）。
+- **脚本设置项类型**：除 toggle / number / text / mode 外新增 `setting.color`（颜色选择器）与 `setting.keybind`（单键绑定），都渲染成真实设置控件、随配置保存。
+- **脚本持久化与调度**：`storage.get/set/has/remove/clear` 为每个脚本维护独立 JSON（`.vapeclient\scripts\data\<id>.json`，支持字符串、数字、布尔、对象、数组）；`after(ms, fn)` 定时器（在客户端 tick 上驱动）；`load("other.js")` 在同一作用域执行其他脚本文件（限制在 scripts 目录内、去重）。
+- **脚本中英双语**：json 的 `name` / `description` 支持 `{en, zh}` 对象或 `nameZh` / `descriptionZh` 兄弟字段，模块名与配置 key 始终用英文，切换语言不丢配置。
+- **脚本元数据**：新增 `defaultHidden`（默认隐藏）、`defaultEnabled`（进游戏默认开启）、`versions`（版本白名单，支持 `1.20.1`、`>=1.20.1`、`<1.21`、`!=`、`*` 或协议号）。
+- **脚本错误可见化**：加载失败、运行期异常、设置项声明错误都会弹游戏内 `Script error` 通知并写 `.vapeclient\extension.log`，不再需要翻日志才发现脚本挂了。
+- **脚本文档**：新增 `docs/scripting.md`，覆盖目录结构、JSON 字段、生命周期、全部 API、完整示例与限制说明。
+
+### 改进
+
+- **脚本热重载升级**：「重新加载脚本」改为全量重扫目录——已有脚本重新编译、**新增 json 立即注册**、**已删 json 对应模块自动禁用**（重启后从列表消失），有增删时自动刷新 GUI 分类布局；脚本内删掉或改名的设置项在重载时自动摘除，不再残留点不动的僵尸项。
+- **示例脚本升级**：`example.js` 模板重写为完整 API 演示（HUD 绘制、颜色/快捷键设置项、storage 计数、定时器、各类回调），旧占位示例会自动重写。
+- **扩展分类图标**：改为独立的拼图图标，不再复用「其他」分类的图标。
+- **原生注入加固**：native 侧 user32 相关导入改为运行期惰性解析并加 SEH 故障过滤，避免不同系统环境下 IAT 解析导致的崩溃；手动映射装载时不再因 `GetModuleHandleExW` 失败而中断初始化。
+- **接住珍珠**：瞄准速度上限从 10 放宽到 20（默认仍为 10），高灵敏度场景可更快对准。
+- **填充背包** 中文译名改为「快速拿取」。
+
+> 4.21.55 及更早版本的所有修复均保留。
+
 ## v4.21.55 (2026-11-18)
 
 **新增：第三方 JavaScript 脚本扩展系统（「扩展」分类）；加载器自动注入与设置面板；注入握手去除命名内核对象、优先线程劫持；移除反作弊绕过与无摔落害模块**

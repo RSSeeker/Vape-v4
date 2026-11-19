@@ -684,17 +684,102 @@ static void JNICALL windows_display_update(JNIEnv *env, jclass owner) {
     }
 }
 
+typedef BOOL (WINAPI *window_is_window_fn)(HWND);
+typedef DWORD (WINAPI *window_get_thread_process_id_fn)(HWND, LPDWORD);
+typedef int (WINAPI *window_get_class_name_w_fn)(HWND, LPWSTR, int);
+typedef HWND (WINAPI *window_get_foreground_window_fn)(void);
+typedef BOOL (WINAPI *window_enum_windows_fn)(WNDENUMPROC, LPARAM);
+typedef LONG_PTR (WINAPI *window_set_window_long_ptr_w_fn)(HWND, int, LONG_PTR);
+typedef LRESULT (WINAPI *window_call_window_proc_w_fn)(
+        WNDPROC, HWND, UINT, WPARAM, LPARAM);
+typedef LRESULT (WINAPI *window_def_window_proc_w_fn)(HWND, UINT, WPARAM, LPARAM);
+
+static window_is_window_fn g_window_is_window;
+static window_get_thread_process_id_fn g_window_get_thread_process_id;
+static window_get_class_name_w_fn g_window_get_class_name_w;
+static window_get_foreground_window_fn g_window_get_foreground_window;
+static window_enum_windows_fn g_window_enum_windows;
+static window_set_window_long_ptr_w_fn g_window_set_window_long_ptr_w;
+static window_call_window_proc_w_fn g_window_call_window_proc_w;
+static window_def_window_proc_w_fn g_window_def_window_proc_w;
+static volatile LONG g_window_probe_count;
+
+static void resolve_window_imports(void) {
+    HMODULE user32 = GetModuleHandleW(L"user32.dll");
+    if (user32 == NULL) {
+        return;
+    }
+    if (g_window_is_window == NULL) {
+        g_window_is_window = (window_is_window_fn)(void *)GetProcAddress(user32, "IsWindow");
+    }
+    if (g_window_get_thread_process_id == NULL) {
+        g_window_get_thread_process_id = (window_get_thread_process_id_fn)(void *)
+                GetProcAddress(user32, "GetWindowThreadProcessId");
+    }
+    if (g_window_get_class_name_w == NULL) {
+        g_window_get_class_name_w = (window_get_class_name_w_fn)(void *)
+                GetProcAddress(user32, "GetClassNameW");
+    }
+    if (g_window_get_foreground_window == NULL) {
+        g_window_get_foreground_window = (window_get_foreground_window_fn)(void *)
+                GetProcAddress(user32, "GetForegroundWindow");
+    }
+    if (g_window_enum_windows == NULL) {
+        g_window_enum_windows = (window_enum_windows_fn)(void *)
+                GetProcAddress(user32, "EnumWindows");
+    }
+    if (g_window_set_window_long_ptr_w == NULL) {
+        g_window_set_window_long_ptr_w = (window_set_window_long_ptr_w_fn)(void *)
+                GetProcAddress(user32, "SetWindowLongPtrW");
+    }
+    if (g_window_call_window_proc_w == NULL) {
+        g_window_call_window_proc_w = (window_call_window_proc_w_fn)(void *)
+                GetProcAddress(user32, "CallWindowProcW");
+    }
+    if (g_window_def_window_proc_w == NULL) {
+        g_window_def_window_proc_w = (window_def_window_proc_w_fn)(void *)
+                GetProcAddress(user32, "DefWindowProcW");
+    }
+}
+
 static BOOL is_lwjgl3_window(HWND window) {
     DWORD process_id = 0;
+    DWORD self_id = GetCurrentProcessId();
     WCHAR class_name[64];
-    if (window == NULL || !IsWindow(window)) {
+    LONG index = InterlockedIncrement(&g_window_probe_count);
+    BOOL verbose = index <= 6;
+    window_is_window_fn isw = g_window_is_window != NULL ? g_window_is_window : IsWindow;
+    window_get_thread_process_id_fn gwt = g_window_get_thread_process_id != NULL
+            ? g_window_get_thread_process_id : GetWindowThreadProcessId;
+    window_get_class_name_w_fn gcn = g_window_get_class_name_w != NULL
+            ? g_window_get_class_name_w : GetClassNameW;
+
+    if (verbose) {
+        vape_log(L"trs window: probe %p enter", (void *)window);
+    }
+    if (window == NULL || !isw(window)) {
+        if (verbose) {
+            vape_log(L"trs window: probe %p is not a window", (void *)window);
+        }
         return FALSE;
     }
-    GetWindowThreadProcessId(window, &process_id);
-    if (process_id != GetCurrentProcessId()
-            || GetClassNameW(window, class_name,
-                    (int)(sizeof(class_name) / sizeof(class_name[0]))) <= 0) {
+    gwt(window, &process_id);
+    if (verbose) {
+        vape_log(L"trs window: probe %p pid=%lu self=%lu",
+                (void *)window, (unsigned long)process_id, (unsigned long)self_id);
+    }
+    if (process_id != self_id) {
         return FALSE;
+    }
+    if (gcn(window, class_name,
+            (int)(sizeof(class_name) / sizeof(class_name[0]))) <= 0) {
+        if (verbose) {
+            vape_log(L"trs window: probe %p class name failed", (void *)window);
+        }
+        return FALSE;
+    }
+    if (verbose) {
+        vape_log(L"trs window: probe %p class=%ls", (void *)window, class_name);
     }
     return wcscmp(class_name, L"GLFW30") == 0
             || wcscmp(class_name, L"LWJGL3") == 0;
@@ -703,6 +788,7 @@ static BOOL is_lwjgl3_window(HWND window) {
 static BOOL CALLBACK find_lwjgl3_window(HWND window, LPARAM result_pointer) {
     HWND *result = (HWND *)(uintptr_t)result_pointer;
     if (result != NULL && is_lwjgl3_window(window)) {
+        vape_log(L"trs window: enum matched %p", (void *)window);
         *result = window;
         return FALSE;
     }
@@ -752,28 +838,91 @@ static LRESULT CALLBACK lwjgl3_window_proc(
     if (handled) {
         return 0;
     }
-    return original == NULL
-            ? DefWindowProcW(window, message, wparam, lparam)
+    if (original == NULL) {
+        return g_window_def_window_proc_w != NULL
+                ? g_window_def_window_proc_w(window, message, wparam, lparam)
+                : DefWindowProcW(window, message, wparam, lparam);
+    }
+    return g_window_call_window_proc_w != NULL
+            ? g_window_call_window_proc_w(original, window, message, wparam, lparam)
             : CallWindowProcW(original, window, message, wparam, lparam);
 }
 
+static int window_fault_filter(EXCEPTION_POINTERS *info) {
+    vape_log(L"trs window: fault %08lX at %p",
+            (unsigned long)(info != NULL && info->ExceptionRecord != NULL
+                    ? info->ExceptionRecord->ExceptionCode : 0),
+            (void *)(info != NULL && info->ExceptionRecord != NULL
+                    ? info->ExceptionRecord->ExceptionAddress : NULL));
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
+static void register_lwjgl3_window_inner(JNIEnv *env);
+
 static void register_lwjgl3_window(JNIEnv *env) {
-    HWND window = GetForegroundWindow();
+    __try {
+        register_lwjgl3_window_inner(env);
+    } __except (window_fault_filter(GetExceptionInformation())) {
+        vape_log(L"trs window: subclassing guarded after fault");
+    }
+}
+
+static void register_lwjgl3_window_inner(JNIEnv *env) {
+    HWND window;
     WNDPROC original;
+    BOOL foreground_is_lwjgl3;
+    vape_log(L"trs window: begin");
+    resolve_window_imports();
+    vape_log(L"trs window: resolved user32=%p IsWindow import=%p dyn=%p "
+            L"GetWindowThreadProcessId import=%p dyn=%p GetClassNameW import=%p dyn=%p",
+            (void *)GetModuleHandleW(L"user32.dll"),
+            (void *)(uintptr_t)IsWindow, (void *)g_window_is_window,
+            (void *)(uintptr_t)GetWindowThreadProcessId,
+            (void *)g_window_get_thread_process_id,
+            (void *)(uintptr_t)GetClassNameW, (void *)g_window_get_class_name_w);
+    vape_log(L"trs window: resolved2 GetForegroundWindow import=%p dyn=%p "
+            L"EnumWindows import=%p dyn=%p SetWindowLongPtrW import=%p dyn=%p "
+            L"CallWindowProcW import=%p dyn=%p DefWindowProcW import=%p dyn=%p",
+            (void *)(uintptr_t)GetForegroundWindow, (void *)g_window_get_foreground_window,
+            (void *)(uintptr_t)EnumWindows, (void *)g_window_enum_windows,
+            (void *)(uintptr_t)SetWindowLongPtrW, (void *)g_window_set_window_long_ptr_w,
+            (void *)(uintptr_t)CallWindowProcW, (void *)g_window_call_window_proc_w,
+            (void *)(uintptr_t)DefWindowProcW, (void *)g_window_def_window_proc_w);
+    window = g_window_get_foreground_window != NULL
+            ? g_window_get_foreground_window() : GetForegroundWindow();
+    vape_log(L"trs window: foreground=%p", (void *)window);
     if (InterlockedCompareExchange(&g_lwjgl3_window_registered, 0, 0) != 0) {
+        vape_log(L"trs window: already registered");
         return;
     }
-    if (!is_lwjgl3_window(window)) {
+    vape_log(L"trs window: probing foreground");
+    foreground_is_lwjgl3 = is_lwjgl3_window(window);
+    vape_log(L"trs window: probe result=%d", (int)foreground_is_lwjgl3);
+    if (!foreground_is_lwjgl3) {
+        vape_log(L"trs window: foreground is not LWJGL3; enumerating");
         window = NULL;
-        EnumWindows(find_lwjgl3_window, (LPARAM)(uintptr_t)&window);
+        SetLastError(ERROR_SUCCESS);
+        if (!(g_window_enum_windows != NULL
+                ? g_window_enum_windows(find_lwjgl3_window, (LPARAM)(uintptr_t)&window)
+                : EnumWindows(find_lwjgl3_window, (LPARAM)(uintptr_t)&window))) {
+            vape_log(L"trs window: EnumWindows failed: %lu", GetLastError());
+        }
+        vape_log(L"trs window: enum result=%p", (void *)window);
+    } else {
+        vape_log(L"trs window: foreground is LWJGL3: %p", (void *)window);
     }
     if (window == NULL) {
         vape_log(L"trs step 23: LWJGL3 window was not found");
         return;
     }
+    vape_log(L"trs window: subclassing %p", (void *)window);
     SetLastError(ERROR_SUCCESS);
-    original = (WNDPROC)(LONG_PTR)SetWindowLongPtrW(
-            window, GWLP_WNDPROC, (LONG_PTR)lwjgl3_window_proc);
+    original = (WNDPROC)(LONG_PTR)(g_window_set_window_long_ptr_w != NULL
+            ? g_window_set_window_long_ptr_w(window, GWLP_WNDPROC,
+                    (LONG_PTR)lwjgl3_window_proc)
+            : SetWindowLongPtrW(window, GWLP_WNDPROC, (LONG_PTR)lwjgl3_window_proc));
+    vape_log(L"trs window: original wndproc=%p err=%lu",
+            (void *)original, GetLastError());
     if (original == NULL && GetLastError() != ERROR_SUCCESS) {
         vape_log(L"failed to subclass LWJGL3 window: %lu", GetLastError());
         return;

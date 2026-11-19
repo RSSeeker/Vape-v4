@@ -1,13 +1,37 @@
 package gg.vape.script;
 
 import gg.vape.Vape;
+import gg.vape.input.BindSet;
 import gg.vape.manager.ModManager;
+import gg.vape.manager.client.FriendManager;
+import gg.vape.mapping.MappedClasses;
 import gg.vape.module.Mod;
 import gg.vape.notification.NotificationManager;
+import gg.vape.unmap.ColorUtil;
+import gg.vape.unmap.ModeSelection;
+import gg.vape.value.BindValue;
+import gg.vape.value.BooleanValue;
+import gg.vape.value.ColorValue;
+import gg.vape.value.ModeValue;
+import gg.vape.value.NumberValue;
+import gg.vape.value.StringValue;
+import gg.vape.value.Value;
+import gg.vape.wrapper.impl.Entity;
+import gg.vape.wrapper.impl.EntityLivingBase;
 import gg.vape.wrapper.impl.EntityPlayerSP;
 import gg.vape.wrapper.impl.Minecraft;
+import gg.vape.wrapper.impl.WorldClient;
+import java.awt.Color;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.mozilla.javascript.BaseFunction;
 import org.mozilla.javascript.Context;
+import org.mozilla.javascript.Function;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
@@ -23,11 +47,23 @@ import org.mozilla.javascript.Undefined;
  * <p>当前提供：
  * <ul>
  *   <li>{@code log(message)}：写客户端调试日志；</li>
- *   <li>{@code chat(message)}：以玩家身份发一条聊天消息；</li>
- *   <li>{@code module(name)}：按显示名取模块，返回 {@code { name, enabled, setEnabled(b) }}，
+ *   <li>{@code chat(message)}：以玩家身份发一条聊天消息（服务端可能丢弃未签名聊天，仅作调试）；</li>
+ *   <li>{@code notify(title, message)}：弹一条客户端通知，脚本里最可靠的可见输出；</li>
+ *   <li>{@code module(name)}：按显示名取模块，返回 {@code { name, category, enabled, setEnabled(b) }}，
  *       取不到时返回 {@code null}；</li>
- *   <li>{@code player}：每个 tick 刷新的只读快照 {@code { name, x, y, z, onGround }}，
- *       不在世界中时为 {@code null}。</li>
+ *   <li>{@code modules()}：返回全部模块句柄数组（同上字段），可用于遍历或批量开关；</li>
+ *   <li>{@code player}：每个 tick 刷新的只读快照
+ *       {@code { name, x, y, z, onGround, yaw, pitch, health, food }}，
+ *       不在世界中时为 {@code null}；</li>
+ *   <li>包事件回调：{@code function onPacketSend(event)} / {@code function onPacketReceive(event)}，
+ *       事件对象为 {@code { kind, name, className, cancelled, cancel() }}，调用 {@code event.cancel()}
+ *       可取消该包（只对已注册对应函数的脚本生效，且回调应尽量快，不要做重活）；</li>
+ *   <li>{@code setting}：{@code toggle(name, default)}、{@code number(name, default, min, max)}、
+ *       {@code text(name, default)}、{@code mode(name, default, [options])}，在脚本顶层调用会
+ *       创建真实的 ClickGUI 设置项，返回 {@code { kind, name, value, get(), set(v) }}。
+ *       名称可以是字符串，也可以是 {@code {en: "Speed", zh: "速度"}} 对象（中文界面显示译文，
+ *       英文界面显示原文，配置 key 始终用英文）。
+ *       声明必须写在顶层代码里，写在 {@code onEnable} 里 GUI 不会显示、也不会保存。</li>
  * </ul></p>
  */
 public final class ScriptApi {
@@ -36,8 +72,18 @@ public final class ScriptApi {
 
     /**
      * 在给定 scope 上安装全部 API。由 {@link ScriptRuntimeHost} 在编译脚本前调用一次。
+     *
+     * <p>没有设置宿主时 {@code setting.*} 只记录一条错误日志并返回 {@code null}，
+     * 用于离线测试或非模块场景。</p>
      */
     public static void install(Context context, Scriptable scope) {
+        install(context, scope, null);
+    }
+
+    /**
+     * 在给定 scope 上安装全部 API，并把 {@code setting.*} 交给指定宿主创建真实设置项。
+     */
+    public static void install(Context context, Scriptable scope, ScriptSettingHost settingHost) {
         ScriptableObject.putProperty(scope, "log", new CallbackFunction("log", 1,
                 (cx, s, args) -> {
                     Vape.debugLog("[Script] " + stringArg(args, 0));
@@ -77,7 +123,405 @@ public final class ScriptApi {
                 }));
         ScriptableObject.putProperty(scope, "module", new CallbackFunction("module", 1,
                 ScriptApi::resolveModule));
+        ScriptableObject.putProperty(scope, "modules", new CallbackFunction("modules", 0,
+                ScriptApi::listModules));
+        ScriptableObject.putProperty(scope, "entities", new CallbackFunction("entities", 0,
+                ScriptApi::listEntities));
+        ScriptableObject.putProperty(scope, "players", new CallbackFunction("players", 0,
+                ScriptApi::listPlayers));
+        ScriptableObject.putProperty(scope, "isFriend", new CallbackFunction("isFriend", 1,
+                (cx, s, args) -> {
+                    String name = stringArg(args, 0);
+                    if (name.isEmpty() || Vape.INSTANCE == null) {
+                        return Boolean.FALSE;
+                    }
+                    FriendManager friends = Vape.INSTANCE.getFriendManager();
+                    return friends != null && friends.isFriend(name) ? Boolean.TRUE : Boolean.FALSE;
+                }));
+        Scriptable draw = context.newObject(scope);
+        ScriptableObject.putProperty(draw, "text", new CallbackFunction("text", 4,
+                ScriptApi::drawText));
+        ScriptableObject.putProperty(draw, "rect", new CallbackFunction("rect", 5,
+                ScriptApi::drawRect));
+        ScriptableObject.putProperty(draw, "hline", new CallbackFunction("hline", 4,
+                ScriptApi::drawHorizontalLine));
+        ScriptableObject.putProperty(draw, "textWidth", new CallbackFunction("textWidth", 1,
+                ScriptApi::drawTextWidth));
+        ScriptableObject.putProperty(draw, "fontHeight", new CallbackFunction("fontHeight", 0,
+                ScriptApi::drawFontHeight));
+        ScriptableObject.putProperty(draw, "displayWidth", new CallbackFunction("displayWidth", 0,
+                (cx, s, args) -> {
+                    ScriptDrawContext active = ScriptDrawContext.current();
+                    return active == null ? Integer.valueOf(Minecraft.J()) : Integer.valueOf(active.getDisplayWidth());
+                }));
+        ScriptableObject.putProperty(draw, "displayHeight", new CallbackFunction("displayHeight", 0,
+                (cx, s, args) -> {
+                    ScriptDrawContext active = ScriptDrawContext.current();
+                    return active == null ? Integer.valueOf(Minecraft.h()) : Integer.valueOf(active.getDisplayHeight());
+                }));
+        ScriptableObject.putProperty(scope, "draw", draw);
+        ScriptStorage store = settingHost == null ? null : settingHost.getStorage();
+        Scriptable storage = context.newObject(scope);
+        ScriptableObject.putProperty(storage, "get", new CallbackFunction("get", 2,
+                (cx, s, args) -> storeGet(store, args)));
+        ScriptableObject.putProperty(storage, "set", new CallbackFunction("set", 2,
+                (cx, s, args) -> {
+                    requireStorage(store, "set");
+                    if (store != null) {
+                        store.set(stringArg(args, 0), args.length > 1 ? args[1] : null);
+                    }
+                    return Undefined.instance;
+                }));
+        ScriptableObject.putProperty(storage, "has", new CallbackFunction("has", 1,
+                (cx, s, args) -> store != null && store.has(stringArg(args, 0)) ? Boolean.TRUE : Boolean.FALSE));
+        ScriptableObject.putProperty(storage, "remove", new CallbackFunction("remove", 1,
+                (cx, s, args) -> {
+                    requireStorage(store, "remove");
+                    if (store != null) {
+                        store.remove(stringArg(args, 0));
+                    }
+                    return Undefined.instance;
+                }));
+        ScriptableObject.putProperty(storage, "clear", new CallbackFunction("clear", 0,
+                (cx, s, args) -> {
+                    requireStorage(store, "clear");
+                    if (store != null) {
+                        store.clear();
+                    }
+                    return Undefined.instance;
+                }));
+        ScriptableObject.putProperty(scope, "storage", storage);
+        ScriptableObject.putProperty(scope, "after", new CallbackFunction("after", 2,
+                (cx, s, args) -> {
+                    ScriptRuntimeHost runtime = settingHost == null ? null : settingHost.getRuntime();
+                    if (runtime == null) {
+                        Vape.logError("[Script] after() is only available inside script modules");
+                        return Undefined.instance;
+                    }
+                    Object callback = args.length > 1 ? args[1] : null;
+                    if (!(callback instanceof Function)) {
+                        Vape.logError("[Script] after(ms, fn) needs a function as the second argument");
+                        return Undefined.instance;
+                    }
+                    double delay = numberArgument(args, 0, 0.0);
+                    runtime.schedule(Math.max(0L, (long) delay), (Function) callback);
+                    return Undefined.instance;
+                }));
+        ScriptableObject.putProperty(scope, "load", new CallbackFunction("load", 1,
+                (cx, s, args) -> {
+                    ScriptRuntimeHost runtime = settingHost == null ? null : settingHost.getRuntime();
+                    if (runtime == null) {
+                        Vape.logError("[Script] load() is only available inside script modules");
+                        return Undefined.instance;
+                    }
+                    runtime.loadAdditionalScript(cx, s, stringArg(args, 0));
+                    return Undefined.instance;
+                }));
+        Scriptable setting = context.newObject(scope);
+        ScriptableObject.putProperty(setting, "toggle", new CallbackFunction("toggle", 2,
+                (cx, s, args) -> callSettingHost(settingHost, cx, s, "toggle", args)));
+        ScriptableObject.putProperty(setting, "number", new CallbackFunction("number", 4,
+                (cx, s, args) -> callSettingHost(settingHost, cx, s, "number", args)));
+        ScriptableObject.putProperty(setting, "text", new CallbackFunction("text", 2,
+                (cx, s, args) -> callSettingHost(settingHost, cx, s, "text", args)));
+        ScriptableObject.putProperty(setting, "mode", new CallbackFunction("mode", 3,
+                (cx, s, args) -> callSettingHost(settingHost, cx, s, "mode", args)));
+        ScriptableObject.putProperty(setting, "color", new CallbackFunction("color", 2,
+                (cx, s, args) -> callSettingHost(settingHost, cx, s, "color", args)));
+        ScriptableObject.putProperty(setting, "keybind", new CallbackFunction("keybind", 2,
+                (cx, s, args) -> callSettingHost(settingHost, cx, s, "keybind", args)));
+        ScriptableObject.putProperty(scope, "setting", setting);
         updateBindings(context, scope);
+    }
+
+    private static Object callSettingHost(ScriptSettingHost settingHost, Context context, Scriptable scope,
+                                          String kind, Object[] args) {
+        if (settingHost == null) {
+            Vape.logError("[Script] setting." + kind + " is only available inside script modules");
+            return null;
+        }
+        return settingHost.createSetting(context, scope, kind, args);
+    }
+
+    private static Object storeGet(ScriptStorage store, Object[] args) {
+        requireStorage(store, "get");
+        if (store == null) {
+            return args != null && args.length > 1 ? args[1] : null;
+        }
+        Object fallback = args != null && args.length > 1 ? args[1] : null;
+        return store.get(stringArg(args, 0), fallback);
+    }
+
+    private static void requireStorage(ScriptStorage store, String operation) {
+        if (store == null) {
+            Vape.logError("[Script] storage." + operation + " is only available inside script modules");
+        }
+    }
+
+    private static Object drawText(Context context, Scriptable scope, Object[] args) {
+        ScriptDrawContext draw = ScriptDrawContext.current();
+        if (draw == null) {
+            warnOutsideRender("draw.text");
+            return Undefined.instance;
+        }
+        draw.drawText(numberArgument(args, 0, 0.0), numberArgument(args, 1, 0.0),
+                stringArg(args, 2), colorArgument(args, 3, 0xFFFFFF));
+        return Undefined.instance;
+    }
+
+    private static Object drawRect(Context context, Scriptable scope, Object[] args) {
+        ScriptDrawContext draw = ScriptDrawContext.current();
+        if (draw == null) {
+            warnOutsideRender("draw.rect");
+            return Undefined.instance;
+        }
+        draw.drawRect(numberArgument(args, 0, 0.0), numberArgument(args, 1, 0.0),
+                numberArgument(args, 2, 0.0), numberArgument(args, 3, 0.0),
+                colorArgument(args, 4, 0xFFFFFF));
+        return Undefined.instance;
+    }
+
+    private static Object drawHorizontalLine(Context context, Scriptable scope, Object[] args) {
+        ScriptDrawContext draw = ScriptDrawContext.current();
+        if (draw == null) {
+            warnOutsideRender("draw.hline");
+            return Undefined.instance;
+        }
+        draw.drawHorizontalLine(numberArgument(args, 0, 0.0), numberArgument(args, 1, 0.0),
+                numberArgument(args, 2, 0.0), colorArgument(args, 3, 0xFFFFFF));
+        return Undefined.instance;
+    }
+
+    private static Object drawTextWidth(Context context, Scriptable scope, Object[] args) {
+        ScriptDrawContext draw = ScriptDrawContext.current();
+        if (draw == null) {
+            warnOutsideRender("draw.textWidth");
+            return 0.0;
+        }
+        return draw.measureText(stringArg(args, 0));
+    }
+
+    private static Object drawFontHeight(Context context, Scriptable scope, Object[] args) {
+        ScriptDrawContext draw = ScriptDrawContext.current();
+        return draw == null ? 0.0 : draw.fontHeight();
+    }
+
+    private static void warnOutsideRender(String function) {
+        Vape.logError("[Script] " + function + " can only be called inside onRender2D()");
+    }
+
+    /**
+     * 颜色参数：接受 ARGB 整数（0xAARRGGBB）或 {@code "#RRGGBB"} / {@code "#AARRGGBB"} 字符串。
+     */
+    public static int colorArgument(Object[] args, int index, int fallback) {
+        if (args == null || args.length <= index) {
+            return fallback;
+        }
+        Object value = args[index];
+        if (value == null || value == Undefined.instance) {
+            return fallback;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        String text = Context.toString(value).trim();
+        if (text.startsWith("#")) {
+            text = text.substring(1);
+        }
+        try {
+            long parsed = Long.parseLong(text, 16);
+            if (text.length() <= 6) {
+                return 0xFF000000 | (int) parsed;
+            }
+            return (int) parsed;
+        }
+        catch (Throwable ignored) {
+            return fallback;
+        }
+    }
+
+    /**
+     * 当前世界里的全部实体快照；不在世界中时返回空数组。
+     */
+    private static Object listEntities(Context context, Scriptable scope, Object[] args) {
+        List<Scriptable> handles = new ArrayList<Scriptable>();
+        try {
+            WorldClient world = Minecraft.theWorld();
+            if (world != null && world.isNotNull()) {
+                List<?> rawEntities = world.S();
+                if (rawEntities != null) {
+                    for (Object entityObject : rawEntities) {
+                        if (entityObject == null) {
+                            continue;
+                        }
+                        try {
+                            handles.add(entityHandle(context, scope, new Entity(entityObject)));
+                        }
+                        catch (Throwable ignored) {
+                            // 单个实体映射失败不能影响整个列表
+                        }
+                    }
+                }
+            }
+        }
+        catch (Throwable throwable) {
+            Vape.logError("[Script] entities() failed: " + throwable);
+        }
+        return handleArray(context, scope, handles);
+    }
+
+    /**
+     * 当前世界里的玩家列表（服务端玩家实体，不含自己）。
+     */
+    private static Object listPlayers(Context context, Scriptable scope, Object[] args) {
+        List<Scriptable> handles = new ArrayList<Scriptable>();
+        try {
+            WorldClient world = Minecraft.theWorld();
+            if (world != null && world.isNotNull()) {
+                List<?> rawPlayers = world.X();
+                if (rawPlayers != null) {
+                    for (Object entityObject : rawPlayers) {
+                        if (entityObject == null) {
+                            continue;
+                        }
+                        try {
+                            handles.add(entityHandle(context, scope, new Entity(entityObject)));
+                        }
+                        catch (Throwable ignored) {
+                        }
+                    }
+                }
+            }
+        }
+        catch (Throwable throwable) {
+            Vape.logError("[Script] players() failed: " + throwable);
+        }
+        return handleArray(context, scope, handles);
+    }
+
+    private static Object handleArray(Context context, Scriptable scope, List<Scriptable> handles) {
+        Scriptable array = context.newArray(scope, handles.size());
+        for (int index = 0; index < handles.size(); index++) {
+            ScriptableObject.putProperty(array, index, handles.get(index));
+        }
+        return array;
+    }
+
+    /**
+     * 构造一个只读实体快照：{@code {name, type, x, y, z, distance, health?, isPlayer, isFriend, isSelf}}。
+     */
+    public static Scriptable entityHandle(Context context, Scriptable scope, Entity entity) {
+        Scriptable handle = context.newObject(scope);
+        String name = "";
+        try {
+            String resolved = entity.getName();
+            if (resolved != null) {
+                name = resolved;
+            }
+        }
+        catch (Throwable ignored) {
+        }
+        ScriptableObject.putProperty(handle, "name", name);
+        Object rawObject = entity.getObject();
+        ScriptableObject.putProperty(handle, "type",
+                rawObject == null ? "" : rawObject.getClass().getSimpleName());
+        double x = 0.0;
+        double y = 0.0;
+        double z = 0.0;
+        try {
+            x = entity.double_z();
+            y = entity.double_N();
+            z = entity.double_h();
+        }
+        catch (Throwable ignored) {
+        }
+        ScriptableObject.putProperty(handle, "x", x);
+        ScriptableObject.putProperty(handle, "y", y);
+        ScriptableObject.putProperty(handle, "z", z);
+        boolean self = false;
+        double distance = 0.0;
+        try {
+            EntityPlayerSP player = Minecraft.thePlayer();
+            if (player != null && player.isNotNull()) {
+                self = player.getObject() == rawObject;
+                double dx = player.double_z() - x;
+                double dy = player.double_N() - y;
+                double dz = player.double_h() - z;
+                distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            }
+        }
+        catch (Throwable ignored) {
+        }
+        ScriptableObject.putProperty(handle, "distance", distance);
+        ScriptableObject.putProperty(handle, "isSelf", self);
+        boolean playerEntity = false;
+        try {
+            playerEntity = entity.isInstance(MappedClasses.lG);
+        }
+        catch (Throwable ignored) {
+        }
+        ScriptableObject.putProperty(handle, "isPlayer", playerEntity);
+        boolean friend = false;
+        if (!name.isEmpty() && Vape.INSTANCE != null) {
+            try {
+                FriendManager friends = Vape.INSTANCE.getFriendManager();
+                friend = friends != null && friends.isFriend(name);
+            }
+            catch (Throwable ignored) {
+            }
+        }
+        ScriptableObject.putProperty(handle, "isFriend", friend);
+        try {
+            EntityLivingBase living = new EntityLivingBase(rawObject);
+            ScriptableObject.putProperty(handle, "health", living.w$src$F$15l9epb());
+        }
+        catch (Throwable ignored) {
+            // 非生物实体没有血量字段
+        }
+        return handle;
+    }
+
+    public static Scriptable newRenderEvent(Context context, Scriptable scope, int width, int height) {
+        Scriptable handle = context.newObject(scope);
+        ScriptableObject.putProperty(handle, "width", width);
+        ScriptableObject.putProperty(handle, "height", height);
+        return handle;
+    }
+
+    public static Scriptable newKeyEvent(Context context, Scriptable scope, int key, boolean down) {
+        Scriptable handle = context.newObject(scope);
+        ScriptableObject.putProperty(handle, "key", key);
+        ScriptableObject.putProperty(handle, "down", down);
+        return handle;
+    }
+
+    public static Scriptable newChatEvent(Context context, Scriptable scope, String message) {
+        Scriptable handle = context.newObject(scope);
+        ScriptableObject.putProperty(handle, "message", message == null ? "" : message);
+        return handle;
+    }
+
+    public static Scriptable newAttackEvent(Context context, Scriptable scope, Object targetObject) {
+        Scriptable handle = context.newObject(scope);
+        Object target = null;
+        if (targetObject != null) {
+            try {
+                target = entityHandle(context, scope, new Entity(targetObject));
+            }
+            catch (Throwable throwable) {
+                Vape.logError("[Script] failed to snapshot attack target: " + throwable);
+            }
+        }
+        ScriptableObject.putProperty(handle, "target", target);
+        return handle;
+    }
+
+    public static Scriptable newMoveEvent(Context context, Scriptable scope, double x, double y, double z) {
+        Scriptable handle = context.newObject(scope);
+        ScriptableObject.putProperty(handle, "x", x);
+        ScriptableObject.putProperty(handle, "y", y);
+        ScriptableObject.putProperty(handle, "z", z);
+        return handle;
     }
 
     /**
@@ -97,6 +541,20 @@ public final class ScriptApi {
             ScriptableObject.putProperty(snapshot, "y", player.double_N());
             ScriptableObject.putProperty(snapshot, "z", player.double_h());
             ScriptableObject.putProperty(snapshot, "onGround", player.b$src$Z$fqlxe4());
+            ScriptableObject.putProperty(snapshot, "yaw", player.J());
+            ScriptableObject.putProperty(snapshot, "pitch", player.V());
+            // 生命/饥饿在个别版本上映射缺失，单独兜底，避免一个字段失败把整个 player 置空
+            try {
+                ScriptableObject.putProperty(snapshot, "health", player.w$src$F$15l9epb());
+            }
+            catch (Throwable ignored) {
+            }
+            try {
+                ScriptableObject.putProperty(snapshot, "food",
+                        player.Y$src$Lgg_vape_wrapper_impl_FoodStats_$fakh1z().getFoodLevel());
+            }
+            catch (Throwable ignored) {
+            }
             ScriptableObject.putProperty(scope, "player", snapshot);
         }
         catch (Throwable throwable) {
@@ -115,12 +573,37 @@ public final class ScriptApi {
             return null;
         }
         Mod mod = manager.getMod(name);
-        if (mod == null) {
-            return null;
+        return mod == null ? null : moduleHandle(context, scope, mod);
+    }
+
+    private static Object listModules(Context context, Scriptable scope, Object[] args) {
+        if (Vape.INSTANCE == null) {
+            return context.newArray(scope, 0);
         }
+        ModManager manager = Vape.INSTANCE.getModManager();
+        if (manager == null) {
+            return context.newArray(scope, 0);
+        }
+        Collection<Mod> modules = manager.getAllModules();
+        if (modules == null || modules.isEmpty()) {
+            return context.newArray(scope, 0);
+        }
+        List<Mod> ordered = new ArrayList<>(modules);
+        ordered.sort(Comparator.comparing(Mod::getName, String.CASE_INSENSITIVE_ORDER));
+        Scriptable array = context.newArray(scope, ordered.size());
+        for (int index = 0; index < ordered.size(); index++) {
+            ScriptableObject.putProperty(array, index, moduleHandle(context, scope, ordered.get(index)));
+        }
+        return array;
+    }
+
+    private static Scriptable moduleHandle(Context context, Scriptable scope, Mod mod) {
         Scriptable handle = context.newObject(scope);
         ScriptableObject.putProperty(handle, "name", mod.getName());
+        ScriptableObject.putProperty(handle, "category",
+                mod.getCategory() == null ? "" : mod.getCategory().getName());
         ScriptableObject.putProperty(handle, "enabled", mod.isEnabled());
+        ScriptableObject.putProperty(handle, "visible", mod.isVisible());
         ScriptableObject.putProperty(handle, "setEnabled", new CallbackFunction("setEnabled", 1,
                 (cx, s, setterArgs) -> {
                     boolean enabled = setterArgs.length > 0 && Context.toBoolean(setterArgs[0]);
@@ -130,10 +613,377 @@ public final class ScriptApi {
                     catch (Throwable throwable) {
                         Vape.logError("[Script] failed to toggle module " + mod.getName() + ": " + throwable);
                     }
-                    ScriptableObject.putProperty(handle, "enabled", mod.isEnabled());
+                    refreshModuleHandle(handle, mod);
+                    return Undefined.instance;
+                }));
+        ScriptableObject.putProperty(handle, "toggle", new CallbackFunction("toggle", 0,
+                (cx, s, toggleArgs) -> {
+                    try {
+                        mod.toggle();
+                    }
+                    catch (Throwable throwable) {
+                        Vape.logError("[Script] failed to toggle module " + mod.getName() + ": " + throwable);
+                    }
+                    refreshModuleHandle(handle, mod);
+                    return Undefined.instance;
+                }));
+        ScriptableObject.putProperty(handle, "setting", new CallbackFunction("setting", 1,
+                (cx, s, settingArgs) -> {
+                    String key = stringArg(settingArgs, 0);
+                    if (key.isEmpty()) {
+                        return null;
+                    }
+                    Value<?, ?> value = mod.getValue(key);
+                    return value == null ? null : valueHandle(cx, s, value);
+                }));
+        ScriptableObject.putProperty(handle, "settings", new CallbackFunction("settings", 0,
+                (cx, s, settingArgs) -> {
+                    List<Value<?, ?>> values = mod.getValues();
+                    int size = values == null ? 0 : values.size();
+                    Scriptable array = cx.newArray(s, size);
+                    for (int index = 0; index < size; index++) {
+                        ScriptableObject.putProperty(array, index, valueHandle(cx, s, values.get(index)));
+                    }
+                    return array;
+                }));
+        return handle;
+    }
+
+    private static void refreshModuleHandle(Scriptable handle, Mod mod) {
+        ScriptableObject.putProperty(handle, "enabled", mod.isEnabled());
+        try {
+            ScriptableObject.putProperty(handle, "visible", mod.isVisible());
+        }
+        catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 构造模块设置项的读写句柄：{@code {name, kind, value, get(), set(v)}}。
+     *
+     * <p>与 {@code setting.*} 声明出来的句柄不同，这个句柄是「按名字拿到已有设置项」，
+     * 读写的是模块当前的值，可以拿来改内置模块的选项（例如 {@code module("Killaura").setting("Range")}）。</p>
+     */
+    private static Scriptable valueHandle(Context context, Scriptable scope, Value<?, ?> value) {
+        Scriptable handle = context.newObject(scope);
+        ScriptableObject.putProperty(handle, "name", value.getName());
+        ScriptableObject.putProperty(handle, "kind", valueKind(value));
+        ScriptableObject.putProperty(handle, "value", readValue(value));
+        ScriptableObject.putProperty(handle, "get", new CallbackFunction("get", 0,
+                (cx, s, args) -> {
+                    Object current = readValue(value);
+                    ScriptableObject.putProperty(handle, "value", current);
+                    return current;
+                }));
+        ScriptableObject.putProperty(handle, "set", new CallbackFunction("set", 1,
+                (cx, s, args) -> {
+                    Object raw = args == null || args.length == 0 ? null : args[0];
+                    writeValue(value, raw);
+                    Object current = readValue(value);
+                    ScriptableObject.putProperty(handle, "value", current);
+                    return current;
+                }));
+        return handle;
+    }
+
+    private static String valueKind(Value<?, ?> value) {
+        if (value instanceof BooleanValue) {
+            return "toggle";
+        }
+        if (value instanceof NumberValue) {
+            return "number";
+        }
+        if (value instanceof StringValue) {
+            return "text";
+        }
+        if (value instanceof ModeValue) {
+            return "mode";
+        }
+        if (value instanceof ColorValue) {
+            return "color";
+        }
+        if (value instanceof BindValue) {
+            return "keybind";
+        }
+        return "value";
+    }
+
+    private static Object readValue(Value<?, ?> value) {
+        try {
+            if (value instanceof ColorValue) {
+                Color color = ((ColorValue) value).getDisplayColor();
+                return color == null ? null : ColorUtil.packRgba(color.getRed(), color.getGreen(),
+                        color.getBlue(), color.getAlpha());
+            }
+            Object raw = value.getValue();
+            if (raw instanceof ModeSelection) {
+                return ((ModeSelection) raw).getName();
+            }
+            if (raw instanceof BindSet) {
+                List<Integer> keys = ((BindSet) raw).getBoundInputs();
+                return keys == null || keys.isEmpty() ? Integer.valueOf(0) : keys.get(0);
+            }
+            if (raw instanceof Color) {
+                Color color = (Color) raw;
+                return ColorUtil.packRgba(color.getRed(), color.getGreen(), color.getBlue(),
+                        color.getAlpha());
+            }
+            if (raw instanceof Boolean || raw instanceof Number || raw instanceof CharSequence) {
+                return raw;
+            }
+            return raw == null ? null : String.valueOf(raw);
+        }
+        catch (Throwable throwable) {
+            Vape.logError("[Script] failed to read setting " + value.getName() + ": " + throwable);
+            return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void writeValue(Value<?, ?> value, Object raw) {
+        try {
+            if (value instanceof BooleanValue) {
+                ((BooleanValue) value).setValue(Context.toBoolean(raw));
+                return;
+            }
+            if (value instanceof NumberValue) {
+                ((NumberValue) value).setValue(Context.toNumber(raw));
+                return;
+            }
+            if (value instanceof StringValue) {
+                ((StringValue) value).setValue(Context.toString(raw));
+                return;
+            }
+            if (value instanceof ColorValue) {
+                ((ColorValue) value).setColor(new Color(colorArgument(new Object[]{raw}, 0, 0xFFFFFF), true));
+                return;
+            }
+            if (value instanceof BindValue) {
+                BindSet bindSet = (BindSet) value.getValue();
+                int key = (int) Context.toNumber(raw);
+                bindSet.setBoundInputs(key == 0
+                        ? Collections.<Integer>emptyList()
+                        : Collections.singletonList(Integer.valueOf(key)));
+                value.notifyChangeListeners();
+                return;
+            }
+            if (value instanceof ModeValue) {
+                String requested = Context.toString(raw);
+                for (ModeSelection mode : ((ModeValue) value).getModes()) {
+                    if (mode.getName().equalsIgnoreCase(requested)) {
+                        ((ModeValue) value).setValue(mode);
+                        return;
+                    }
+                }
+                Vape.logError("[Script] cannot set " + value.getName() + " to unknown mode '" + requested + "'");
+                return;
+            }
+            Vape.logError("[Script] setting " + value.getName() + " is read-only");
+        }
+        catch (Throwable throwable) {
+            Vape.logError("[Script] failed to write setting " + value.getName() + ": " + throwable);
+        }
+    }
+
+
+    /**
+     * 构造一个包事件句柄，供脚本的 {@code onPacketSend}/{@code onPacketReceive} 使用。
+     *
+     * @param kind {@code "send"} 或 {@code "receive"}
+     * @param cancelAction 调用 {@code event.cancel()} 时执行的取消动作
+     */
+    public static Scriptable newPacketEvent(Context context, Scriptable scope, String kind,
+                                            Object packetHandle, Runnable cancelAction) {
+        Scriptable handle = context.newObject(scope);
+        Class<?> packetClass = packetHandle.getClass();
+        ScriptableObject.putProperty(handle, "kind", kind);
+        ScriptableObject.putProperty(handle, "name", packetClass.getSimpleName());
+        ScriptableObject.putProperty(handle, "className", packetClass.getName());
+        ScriptableObject.putProperty(handle, "cancelled", Boolean.FALSE);
+        ScriptableObject.putProperty(handle, "cancel", new CallbackFunction("cancel", 0,
+                (cx, s, cancelArgs) -> {
+                    boolean alreadyCancelled = Context.toBoolean(
+                            ScriptableObject.getProperty(handle, "cancelled"));
+                    if (alreadyCancelled) {
+                        return Undefined.instance;
+                    }
+                    try {
+                        if (cancelAction != null) {
+                            cancelAction.run();
+                        }
+                    }
+                    catch (Throwable throwable) {
+                        Vape.logError("[Script] failed to cancel packet: " + throwable);
+                    }
+                    ScriptableObject.putProperty(handle, "cancelled", Boolean.TRUE);
                     return Undefined.instance;
                 }));
         return handle;
+    }
+
+    /**
+     * 构造一个设置项句柄，返回给脚本使用：{@code { kind, name, value, get(), set(v) }}。
+     *
+     * <p>{@code set()} 会按 {@code kind} 把 JS 值转成 Java 值再交给宿主；读取始终走
+     * {@link Supplier}，所以拿到的是当前值而不是声明时的快照。{@code value} 属性在每次
+     * {@code get()/set()} 后同步刷新，方便脚本直接读 {@code handle.value}。</p>
+     */
+    public static Scriptable newSettingHandle(Context context, Scriptable scope, String kind, String name,
+                                              Supplier<Object> getter, Consumer<Object> setter) {
+        Scriptable handle = context.newObject(scope);
+        ScriptableObject.putProperty(handle, "kind", kind);
+        ScriptableObject.putProperty(handle, "name", name);
+        ScriptableObject.putProperty(handle, "value", readSettingValue(getter));
+        ScriptableObject.putProperty(handle, "get", new CallbackFunction("get", 0,
+                (cx, s, args) -> {
+                    Object value = readSettingValue(getter);
+                    ScriptableObject.putProperty(handle, "value", value);
+                    return value;
+                }));
+        ScriptableObject.putProperty(handle, "set", new CallbackFunction("set", 1,
+                (cx, s, args) -> {
+                    Object raw = args == null || args.length == 0 ? null : args[0];
+                    Object converted = convertSettingValue(cx, kind, raw);
+                    try {
+                        setter.accept(converted);
+                    }
+                    catch (Throwable throwable) {
+                        Vape.logError("[Script] failed to set setting " + name + ": " + throwable);
+                    }
+                    Object value = readSettingValue(getter);
+                    ScriptableObject.putProperty(handle, "value", value);
+                    return value;
+                }));
+        return handle;
+    }
+
+    private static Object readSettingValue(Supplier<Object> getter) {
+        try {
+            return getter.get();
+        }
+        catch (Throwable throwable) {
+            Vape.logError("[Script] failed to read setting: " + throwable);
+            return null;
+        }
+    }
+
+    private static Object convertSettingValue(Context context, String kind, Object raw) {
+        if (raw == null || raw == Undefined.instance) {
+            return null;
+        }
+        if ("toggle".equals(kind)) {
+            return Context.toBoolean(raw);
+        }
+        if ("number".equals(kind)) {
+            return Context.toNumber(raw);
+        }
+        return Context.toString(raw);
+    }
+
+    /**
+     * 读取第 {@code index} 个参数为字符串；缺失时返回空串。
+     */
+    public static String stringArgument(Object[] args, int index) {
+        return stringArg(args, index);
+    }
+
+    /**
+     * 读取第 {@code index} 个参数为布尔值；缺失或类型不对时返回 {@code fallback}。
+     */
+    public static boolean booleanArgument(Object[] args, int index, boolean fallback) {
+        if (!hasArgument(args, index)) {
+            return fallback;
+        }
+        try {
+            return Context.toBoolean(args[index]);
+        }
+        catch (Throwable ignored) {
+            return fallback;
+        }
+    }
+
+    /**
+     * 读取第 {@code index} 个参数为数字；缺失或类型不对时返回 {@code fallback}。
+     */
+    public static double numberArgument(Object[] args, int index, double fallback) {
+        if (!hasArgument(args, index)) {
+            return fallback;
+        }
+        try {
+            double value = Context.toNumber(args[index]);
+            return Double.isNaN(value) || Double.isInfinite(value) ? fallback : value;
+        }
+        catch (Throwable ignored) {
+            return fallback;
+        }
+    }
+
+    /**
+     * 读取第 {@code index} 个参数为字符串数组（脚本里的 {@code [...]}）；缺失时返回空数组。
+     */
+    public static String[] stringArrayArgument(Object[] args, int index) {
+        if (!hasArgument(args, index) || !(args[index] instanceof Scriptable)) {
+            return new String[0];
+        }
+        Scriptable array = (Scriptable) args[index];
+        int length = (int) Math.max(0.0, Context.toNumber(ScriptableObject.getProperty(array, "length")));
+        String[] values = new String[length];
+        for (int i = 0; i < length; i++) {
+            values[i] = Context.toString(ScriptableObject.getProperty(array, i));
+        }
+        return values;
+    }
+
+    /**
+     * 读取第 {@code index} 个参数作为「可本地化的名称」。
+     *
+     * <p>参数既可以是普通字符串（同时作为内部名与显示名），也可以是对象
+     * {@code {en: "...", zh: "..."}}（{@code cn} 作为 {@code zh} 的别名）。返回
+     * {@code [canonical, localized]}：canonical 用作模块/设置项的稳定内部名和配置 key，
+     * localized 是可选的译文；<b>内部名始终取英文那一段</b>，所以切换语言不会改变配置。</p>
+     */
+    public static String[] localizedName(Context context, Object[] args, int index) {
+        if (!hasArgument(args, index)) {
+            return new String[]{"", ""};
+        }
+        Object value = args[index];
+        if (!(value instanceof Scriptable)) {
+            String text = Context.toString(value).trim();
+            return new String[]{text, ""};
+        }
+        Scriptable object = (Scriptable) value;
+        String english = scriptStringProperty(object, "en");
+        if (english == null || english.trim().isEmpty()) {
+            english = scriptStringProperty(object, "default");
+        }
+        String chinese = scriptStringProperty(object, "zh");
+        if (chinese == null || chinese.trim().isEmpty()) {
+            chinese = scriptStringProperty(object, "cn");
+        }
+        if (english == null || english.trim().isEmpty()) {
+            english = chinese;
+        }
+        return new String[]{
+                english == null ? "" : english.trim(),
+                chinese == null ? "" : chinese.trim()
+        };
+    }
+
+    private static String scriptStringProperty(Scriptable object, String key) {
+        try {
+            Object value = ScriptableObject.getProperty(object, key);
+            if (value == null || value == Scriptable.NOT_FOUND || value == Undefined.instance) {
+                return null;
+            }
+            return Context.toString(value);
+        }
+        catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static boolean hasArgument(Object[] args, int index) {
+        return args != null && args.length > index && args[index] != null && args[index] != Undefined.instance;
     }
 
     private static String stringArg(Object[] args, int index) {

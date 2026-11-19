@@ -32,3 +32,7 @@ signing/dist/
 # local reference material (third-party decompiled sources / jars)
 /OpenZen/
 /kiss/
+其他挂/
+
+# third-party binaries kept locally for analysis only
+docs/reverse/*.exe

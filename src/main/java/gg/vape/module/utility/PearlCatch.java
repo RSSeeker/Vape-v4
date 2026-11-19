@@ -44,7 +44,7 @@ public class PearlCatch extends UtilityMod {
             this.upwardMode,
             this.currentAimMode);
     private final NumberValue aimSpeed = NumberValue.create(
-            this, "Aim speed", "#.#", "", 1.0, 10.0, 10.0);
+            this, "Aim speed", "#.#", "", 1.0, 10.0, 20.0);
     private final BooleanValue silentAim = BooleanValue.create(this, "Silent aim", true, null);
     private final NumberValue chargeDelay = NumberValue.create(
             this,

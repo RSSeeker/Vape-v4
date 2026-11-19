@@ -55,8 +55,8 @@ implements INamed {
         OTHER = new Category("Other", "other", -2419323);
         MINIGAMES = new Category("Minigames", "minigames", "BedBreaker, BedPlates, MurdererFinder, PropHunt", -13421773);
         // 第三方脚本模块的归属分类：模块由 .vapeclient\scripts 下的脚本在运行时注册，
-        // 和内置模块共用同一套开关 / 事件 / 配置逻辑。
-        EXTENSION = new Category("Extension", "other", "Third-party script modules", -11363066);
+        // 和内置模块共用同一套开关 / 事件 / 配置逻辑。图标用拼图块，表示"可扩展"。
+        EXTENSION = new Category("Extension", "extension", "Third-party script modules", -11363066);
         FAVORITES = new Category("Favorites", "newfavorites", "", 0);
         HIDDEN = new Category("Hidden", "favorites", -2419323);
         values = new ArrayList<Category>();

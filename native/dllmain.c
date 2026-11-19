@@ -967,6 +967,14 @@ static int pin_native_module(void) {
          * meaningless (and GetModuleHandleExW would fail anyway). */
         return 1;
     }
+    {
+        wchar_t mapped_path[MAX_PATH];
+        if (GetModuleFileNameW(g_module, mapped_path, MAX_PATH) == 0) {
+            /* A manually mapped image is not a loader module, so pinning it is
+             * meaningless (and GetModuleHandleExW would fail anyway). */
+            return 1;
+        }
+    }
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
                     | GET_MODULE_HANDLE_EX_FLAG_PIN,
             (LPCWSTR)(const void *)&g_module, &pinned)) {
