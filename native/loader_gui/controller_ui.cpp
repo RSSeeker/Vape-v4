@@ -398,7 +398,9 @@ LRESULT ControllerUi::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) 
                 float rowY = 210.0f;
                 for (const auto& process : processes) {
                     if (hit(x, y, 252, rowY, 320, 48) && !process.alreadyInjected) {
-                        model_.injectMinecraft(process.pid);
+                        // Injection takes tens of seconds inside the target; keep it
+                        // off the window thread so the loader never freezes.
+                        model_.startInjection(process.pid);
                         break;
                     }
                     rowY += 58.0f;
@@ -890,12 +892,12 @@ void ControllerUi::drawLoading(Gdiplus::Graphics& graphics) {
         Gdiplus::Color(255, 5, 139, 111));
 
     const double stageElapsed = model_.stageElapsedSeconds();
-    if (stageElapsed >= 5.0) {
+    if (stageElapsed >= 15.0) {
         drawText(graphics, ls(Ls::Stage) + std::to_wstring(model_.loadingStage()) + L"/30",
             300, 286, 224, 24, 12, Gdiplus::Color(255, 139, 136, 140), false,
             Gdiplus::StringAlignmentCenter);
     }
-    if (stageElapsed >= 10.0) {
+    if (stageElapsed >= 20.0) {
         drawText(graphics,
             ls(Ls::StageTakingLong),
             180, 310, 464, 60, 12, Gdiplus::Color(255, 176, 73, 73), false,

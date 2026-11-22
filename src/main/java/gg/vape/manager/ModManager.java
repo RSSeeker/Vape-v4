@@ -211,13 +211,13 @@ implements EventListener {
         coreModules[60] = new BedPlates();
         this.registerModules(Stream.of(coreModules));
         ModRegistrationBuilder.create().setModule(new Explosions()).addVersionConstraint(ForgeVersion.MC_1_16_5.b()).registerWith(this);
-        Mod[] versionConstrainedModules = new Mod[2];
-        versionConstrainedModules[0] = new Chams();
+        // Chams is registered on every version now: 1.17+ uses the RenderSystem-friendly
+        // polygon offset path (see Chams#onRenderPlayerPre), older versions keep the
+        // legacy GL path with the optional colored re-render.
+        this.registerModules(Stream.of(new Chams()));
         XRay xRay = new XRay();
-        ModManager modManager = this;
-        modManager.xrayModule = xRay;
-        versionConstrainedModules[1] = xRay;
-        this.registerModules(Stream.of(versionConstrainedModules), ModManager::addMinecraft1165Constraint);
+        this.xrayModule = xRay;
+        this.registerModules(Stream.of(xRay), ModManager::addMinecraft1165Constraint);
         GuiComponent[] preservedLegacyComponents = legacyComponentsSnapshot;
         ModRegistrationBuilder.create().setModule(new Freecam()).addVersionConstraint(ForgeVersion.MC_1_16_5.b()).addVersionConstraint(ForgeVersion.MC_1_21_11.n()).registerWith(this);
         this.registerModules(Stream.of(new InvWalk()), ModManager::addMinecraft189Constraint);

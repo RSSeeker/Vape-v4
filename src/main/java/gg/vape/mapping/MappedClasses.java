@@ -31,6 +31,7 @@ public class MappedClasses {
     public static Class zZ;
     public static Class FJ;
     public static Class l9;
+    public static Class SubmitNodeStorage;
     @Deprecated
     public static Class Ye;
     public static Class Zo;
@@ -1397,6 +1398,7 @@ public class MappedClasses {
         if (ForgeVersion.MC_1_21_10.d()) {
             zf = MappedClasses.m("net/minecraft/client/renderer/state/CameraRenderState");
             l9 = MappedClasses.m("net/minecraft/client/renderer/SubmitNodeCollector");
+            SubmitNodeStorage = MappedClasses.m("net/minecraft/client/renderer/SubmitNodeStorage");
             qh = MappedClasses.m("net/minecraft/client/renderer/culling/Frustum");
             q4 = MappedClasses.m("net/minecraft/client/resources/model/AtlasManager");
             qq = MappedClasses.m("net/minecraft/data/AtlasIds");

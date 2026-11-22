@@ -505,7 +505,7 @@ void ControllerModel::tickAutoInject() {
         line << L"attempt " << autoInjectAttempts_ << L" pid=" << autoInjectTarget_;
         appendAutoInjectLog(line.str());
     }
-    if (injectMinecraft(target, false)) {
+    if (startInjection(autoInjectTarget_, false)) {
         // Injection has started: stop the watchdog so later game sessions are
         // not touched. A manual selection is still available if needed.
         resetAutoInjectTarget();
@@ -543,7 +543,42 @@ void ControllerModel::resetAutoInjectTarget() {
     autoInjectArmedAt_ = std::chrono::steady_clock::now();
 }
 
-ControllerModel::~ControllerModel() = default;
+ControllerModel::~ControllerModel() {
+    if (injectionThread_.joinable()) {
+        injectionThread_.join();
+    }
+}
+
+bool ControllerModel::injectionRunning() const {
+    return injectionRunning_.load();
+}
+
+bool ControllerModel::startInjection(std::uint32_t processId, bool reportFailure) {
+    bool idle = false;
+    if (!injectionRunning_.compare_exchange_strong(idle, true)) {
+        return false;
+    }
+    if (injectionThread_.joinable()) {
+        injectionThread_.join();
+    }
+    injectionSucceeded_.store(false);
+    if (reportFailure) {
+        // Manual injection: show the loading page immediately so the click has
+        // visible feedback while the worker waits for the target process.
+        std::lock_guard lock(mutex_);
+        loadingStage_ = 0;
+        loadingStarted_ = std::chrono::steady_clock::now();
+        stageStarted_ = loadingStarted_;
+        page_ = ControllerPage::Loading;
+        status_.clear();
+    }
+    injectionThread_ = std::thread([this, processId, reportFailure]() {
+        const bool injected = injectMinecraft(processId, reportFailure);
+        injectionSucceeded_.store(injected);
+        injectionRunning_.store(false);
+    });
+    return true;
+}
 
 ControllerPage ControllerModel::page() const {
     std::lock_guard lock(mutex_);

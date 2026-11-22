@@ -46,6 +46,21 @@ extends Mod {
     private final BooleanValue hideBots = BooleanValue.create(this, "Hide Bots", false, "Doesn't apply chams on bots.");
     private int renderPass = PASS_NONE;
 
+    @Override
+    public void onEnable() {
+        if (ForgeVersion.MC_1_21_11.d()) {
+            gg.vape.debug.ChamsRenderHooks.warmUp();
+            gg.vape.debug.ChamsRenderHooks.enabled = true;
+            gg.vape.debug.ChamsModernProbe.runOnce();
+        }
+    }
+
+    @Override
+    public void onDisable() {
+        gg.vape.debug.ChamsRenderHooks.enabled = false;
+        gg.vape.debug.ChamsRenderHooks.restorePipelines();
+    }
+
     @EventHandler
     public void onPreRenderLiving(EventPreRenderLiving event) {
         if (!this.renderingChamsPass) {
@@ -77,6 +92,15 @@ extends Mod {
     @EventHandler
     public void onRenderPlayerPost(EventRenderPlayerPost event) {
         if (Vape.INSTANCE.getClientSettings().isBot(event.getEntityPlayer()) && this.hideBots.getEffectiveValue().booleanValue()) {
+            return;
+        }
+        if (ForgeVersion.MC_1_16_5.d()) {
+            // 1.17+：只走 polygon offset 穿墙，没有自己重绘模型的 pass，直接复位。
+            EntityPlayer player = event.getEntityPlayer();
+            if (player.isInstance(MappedClasses.Yl) && !player.isInstance(MappedClasses.z5)) {
+                OpenGlBackendHolder.backend.disableCapability(32823);
+                GL11.glPolygonOffset((float)1.0f, (float)2500000.0f);
+            }
             return;
         }
         if (this.colored.getEffectiveValue().booleanValue()) {
@@ -113,6 +137,22 @@ extends Mod {
             return;
         }
         if (ClientSettings.isReservedEntity(event.getEntityPlayer())) {
+            return;
+        }
+        if (ForgeVersion.MC_1_16_5.d()) {
+            // 1.17+：实体走 RenderSystem / 批量顶点，彩色模式的“关深度测试后手动重绘”会
+            // 打乱状态，所以高版本只做 polygon offset：把墙后玩家的深度整体前移，让它
+            // 通过深度测试，显示的是原版皮肤（Colored 选项在高版本不生效）。
+            EntityPlayer modernPlayer = event.getEntityPlayer();
+            if (modernPlayer.isNull() || modernPlayer.isInstance(MappedClasses.z5)) {
+                return;
+            }
+            ESP outlineEsp = Vape.INSTANCE.getModManager().getMod(ESP.class);
+            if (outlineEsp != null && outlineEsp.isEnabled() && outlineEsp.isOutlineModeActive()) {
+                return;
+            }
+            OpenGlBackendHolder.backend.enableCapability(32823);
+            GL11.glPolygonOffset((float)1.0f, (float)-2500000.0f);
             return;
         }
         ESP esp = Vape.INSTANCE.getModManager().getMod(ESP.class);
@@ -198,7 +238,7 @@ extends Mod {
 
     public Chams() {
         super("Chams", -16711936, Category.RENDER, "Render players through walls.");
-        this.colored = BooleanValue.create(this, "Colored", false, "Colors entities.");
+        this.colored = BooleanValue.create(this, "Colored", false, "Colors entities.\nOnly works below 1.17; newer versions render the original skin through walls.");
         this.visibleColor = ColorValue.create(this, "Visible Color", new Color(255, 0, 0));
         this.colorBehindWalls = BooleanValue.create(this, "Color Behind Walls", true, "Renders a different color when\nplayers are behind walls.");
         this.occludedColor = ColorValue.create(this, "Invisible Color", new Color(255, 255, 0));

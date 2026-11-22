@@ -72,6 +72,15 @@ extends MappingTaskSet {
         if (ForgeVersion.MC_1_21_4.v()) {
             this.D.add(new RenderManagerEntityMappingTask());
         }
+        if (ForgeVersion.MC_1_21_11.d() && MappedClasses.q6 != null) {
+            this.D.add(new ChamsRenderTypeMappingTask());
+        }
+        if (ForgeVersion.MC_1_21_11.d() && MappedClasses.SubmitNodeStorage != null) {
+            this.D.add(new ChamsSubmitMappingTask());
+        }
+        if (ForgeVersion.MC_1_21_11.d() && MappedClasses.FZ != null) {
+            this.D.add(new ChamsDrawMappingTask());
+        }
         if (ForgeVersion.MC_1_7_10.L() && !Vape.INSTANCE.isForgeAbsent()) {
             this.D.add(new LegacyEntityRenderPreEventMappingTask());
         }

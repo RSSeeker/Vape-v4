@@ -48,6 +48,12 @@ public:
 
     void refreshMinecraftProcesses();
     bool injectMinecraft(std::uint32_t processId, bool reportFailure = true);
+    // Runs injectMinecraft on a worker thread and returns as soon as the job is
+    // queued. Manual map injection polls the target for up to ~40 seconds (hijack
+    // rendezvous + loader stages), which used to run on the window thread and made
+    // Windows mark the loader "Not Responding" before anything happened.
+    bool startInjection(std::uint32_t processId, bool reportFailure = true);
+    bool injectionRunning() const;
     // Automatic injection: when the loader starts with no Java process running
     // it arms a watchdog and injects into the first Minecraft window it sees,
     // mirroring the "attach early on launch" behaviour of other injectors. When
@@ -120,4 +126,7 @@ private:
     // already running must not attach to that live session, only to a game
     // started afterwards.
     std::vector<std::uint32_t> autoInjectIgnoreIds_{};
+    std::thread injectionThread_;
+    std::atomic<bool> injectionRunning_{false};
+    std::atomic<bool> injectionSucceeded_{false};
 };
