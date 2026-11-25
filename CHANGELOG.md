@@ -1,5 +1,17 @@
 # 更新日志
 
+## v4.21.58 (2026-11-25)
+
+**修复：安装 WalksyLib 后 Vape 的 ClickGUI（以及 HUD）被整帧覆盖、右 Shift 后鼠标已释放但界面看不见**
+
+### 新增
+
+- **WalksyLib 兼容层**：WalksyLib 会在 `GuiRenderer.render()` 返回时注入自己的收尾合成（`MsdfGuiRendererMixin` → `WLRenderSystem.flushText` / `finishGuiFrame`，用自建管线重建顶部玻璃层与 MSDF 文字），把同一帧里画好的 Vape 界面整块覆盖掉。现在启动时探测 `main.walksy.lib.core.render.WLRenderSystem`，检测到 WalksyLib 时不再在 GUI 阶段绘制，改到原版把主渲染目标 blit到屏幕之后（`EventFramePresent`）再补画 HUD 与 GUI；绘制时临时把批次 framebuffer 覆盖为屏幕默认 framebuffer，确保补画的内容真正落在屏幕上。没有安装 WalksyLib 时该路径完全不生效，行为与之前一致。
+
+### 说明
+
+- 走兼容路径时 HUD 与 ClickGUI 一起延后到帧末，因此会盖在原版聊天栏 / 计分板 / Tab 列表之上。
+
 ## v4.21.57 (2026-11-22)
 
 **新增：透视（Chams）支持 1.21.11 与 26.x 的「原版皮肤穿墙」；加载器注入改为后台线程执行，注入时窗口不再「未响应」；闪现回退分批放包改动**

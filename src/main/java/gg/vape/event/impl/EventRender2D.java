@@ -25,6 +25,24 @@ extends Event {
     }
 
     public static void create() {
+        // WalksyLib 在 GuiRenderer.render 返回时会重合成整帧，这里画的内容会被整块盖掉。
+        // 这种情况下跳过常规绘制，改由帧末（blit 之后）补画，见 createAtFramePresent。
+        if (gg.vape.compat.WalksyLibCompat.needsDeferredGui()
+                && !gg.vape.compat.WalksyLibCompat.isDeferredPass()) {
+            return;
+        }
+        createInternal();
+    }
+
+    /**
+     * 帧末补画入口：主渲染目标已 blit 到屏幕 framebuffer，此时绘制不会再被
+     * WalksyLib 的收尾合成覆盖。
+     */
+    public static void createAtFramePresent() {
+        createInternal();
+    }
+
+    private static void createInternal() {
         Minecraft.markGameThread();
         Minecraft.runPendingGameThreadTasks();
         if (OffscreenRenderContext.isRenderingOffscreen()) {
@@ -64,6 +82,10 @@ extends Event {
      * modules so they sit below the game's own HUD.
      */
     public static void createHud() {
+        if (gg.vape.compat.WalksyLibCompat.needsDeferredGui()
+                && !gg.vape.compat.WalksyLibCompat.isDeferredPass()) {
+            return;
+        }
         if (OffscreenRenderContext.isRenderingOffscreen()) {
             return;
         }
@@ -85,6 +107,10 @@ extends Event {
      * (font is ready here) and the ClickGUI, above the game's HUD.
      */
     public static void createGui() {
+        if (gg.vape.compat.WalksyLibCompat.needsDeferredGui()
+                && !gg.vape.compat.WalksyLibCompat.isDeferredPass()) {
+            return;
+        }
         if (OffscreenRenderContext.isRenderingOffscreen()) {
             return;
         }
