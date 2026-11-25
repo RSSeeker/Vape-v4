@@ -1,9 +1,10 @@
-name: 持续集成
+name: Build and test
 
 on:
   push:
     branches:
       - main
+      - 'arena/**'
   pull_request:
   workflow_dispatch:
 
@@ -16,46 +17,48 @@ concurrency:
 
 jobs:
   build-and-test:
-    name: 构建并测试 Java 与 Windows 原生组件
+    name: Build and test the Windows x64 bundle
     runs-on: windows-latest
     timeout-minutes: 30
 
     steps:
-      - name: 检出源码
+      - name: Check out source
         uses: actions/checkout@v4
 
-      - name: 校验 Gradle Wrapper
+      - name: Validate Gradle Wrapper
         uses: gradle/actions/wrapper-validation@v4
 
-      - name: 配置 JDK 17（编译 Java 载荷）
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: 配置 JDK 8（原生 JNI/JVMTI 头文件）
+      # Install JDK 8 first so JAVA_HOME points to JDK 17 for Gradle. The JDK 8
+      # path is still passed explicitly for JNI/JVMTI headers.
+      - name: Install JDK 8 headers
         id: setup-jdk8
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '8'
 
-      - name: 配置 Gradle 缓存
+      - name: Install JDK 17 for Gradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: 校验恢复源码并构建 Java 载荷
+      - name: Build and verify the Java 8-compatible payload
         shell: pwsh
-        run: .\gradlew.bat clean build verifyInjectionPayload --stacktrace
+        run: .\gradlew.bat clean build verifyInjectionPayload -PtargetRelease=8 -PnoObfuscation --stacktrace
 
-      - name: 构建 Windows x64 注入包（JDK 8 头文件）
+      - name: Build the Windows x64 bundle
         shell: pwsh
-        run: .\gradlew.bat prepareInjectionBundle -PtargetRelease=8 "-PnativeJavaHome=${{ steps.setup-jdk8.outputs.path }}" --stacktrace
+        run: .\gradlew.bat prepareInjectionBundle -PtargetRelease=8 -PnoObfuscation "-PnativeJavaHome=${{ steps.setup-jdk8.outputs.path }}" --stacktrace
 
-      - name: 运行原生组件测试
+      - name: Run native tests
         shell: pwsh
         run: ctest --test-dir build/native -C Release --output-on-failure
 
-      - name: 上传 Java 注入载荷
+      - name: Upload Java injection payload
         uses: actions/upload-artifact@v4
         with:
           name: java-injection-payload
@@ -63,10 +66,10 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: 上传 Windows x64 注入包
+      - name: Upload English Windows x64 bundle
         uses: actions/upload-artifact@v4
         with:
-          name: windows-x64-injection-bundle
+          name: windows-x64-english-bundle
           path: build/injection/
           if-no-files-found: error
           retention-days: 14

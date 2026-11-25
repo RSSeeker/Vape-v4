@@ -5,6 +5,7 @@ import gg.vape.event.EventHandler;
 import gg.vape.event.impl.EventRender3D;
 import gg.vape.mapping.MappedClasses;
 import gg.vape.module.Category;
+import gg.vape.notification.NotificationText;
 import gg.vape.module.Mod;
 import gg.vape.utils.RotationUtil;
 import gg.vape.utils.render.OpenGlBackendHolder;
@@ -83,6 +84,7 @@ extends Mod {
 
     @EventHandler
     public void onRender3D(EventRender3D eventRender3D) {
+        String spawnerLabel = NotificationText.localize("Spawner");
         boolean bl = GL11.glIsEnabled((int)3042);
         if (bl) {
             Minecraft.m$src$Lgg_vape_wrapper_impl_EntityRenderer_$13begmf().B(1.0);
@@ -107,7 +109,7 @@ extends Mod {
                     String string3 = ClientSettings.FORMAT_CODE + "a[" + ClientSettings.FORMAT_CODE + "f" + (int)entityPlayerSP.i((double)tileEntityMobSpawner.getX(), (double)tileEntityMobSpawner.getY(), (double)tileEntityMobSpawner.getZ()) + ClientSettings.FORMAT_CODE + "a]" + ClientSettings.FORMAT_CODE + "r";
                     string2 = string2 + string3 + " ";
                 }
-                string2 = string2 + string + " 刷怪笼";
+                string2 = string2 + string + " " + spawnerLabel;
                 RenderUtil.U(string2, (double)tileEntityMobSpawner.getX() - d + 0.5, (double)tileEntityMobSpawner.getY() - d2 - 1.0, (double)tileEntityMobSpawner.getZ() - d3 + 0.5, (Double)this.scale.getValue(), RotationUtil.p(entityPlayerSP, tileEntityMobSpawner.getX(), tileEntityMobSpawner.getY(), tileEntityMobSpawner.getZ()), -1, this.backgroundColor, 1.4, matrixStack);
             }
             GL11.glDepthMask((boolean)true);
@@ -140,7 +142,7 @@ extends Mod {
                 String string5 = ClientSettings.FORMAT_CODE + "a[" + ClientSettings.FORMAT_CODE + "f" + (int)entityPlayerSP.i((double)tileEntityMobSpawner.getX(), (double)tileEntityMobSpawner.getY(), (double)tileEntityMobSpawner.getZ()) + ClientSettings.FORMAT_CODE + "a]" + ClientSettings.FORMAT_CODE + "r";
                 string4 = string4 + string5 + " ";
             }
-            string4 = string4 + string + " 刷怪笼";
+            string4 = string4 + string + " " + spawnerLabel;
             RenderUtil.U(string4, (double)tileEntityMobSpawner.getX() - d + 0.5, (double)tileEntityMobSpawner.getY() - d4 - 1.0, (double)tileEntityMobSpawner.getZ() - d5 + 0.5, (Double)this.scale.getValue(), RotationUtil.p(entityPlayerSP, tileEntityMobSpawner.getX(), tileEntityMobSpawner.getY(), tileEntityMobSpawner.getZ()), -1, this.backgroundColor, 1.4, matrixStack);
         }
         GL11.glDepthMask((boolean)true);

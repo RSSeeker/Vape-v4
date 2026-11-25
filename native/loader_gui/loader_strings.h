@@ -11,20 +11,12 @@
 //     <exe>\.vapeclient\config.json
 //     -> settings.otherData[] -> { "id": "Language", "value": "<name>" }
 //
-// where <name> is the font option name ("English" / "Chinese" / "Spanish" /
-// "Portuguese" / "French"). The product's default is Chinese, and default
-// values are deliberately omitted from that array, so a Chinese user simply has
-// no Language entry at all.
-//
-// We therefore read that file once, before any UI is built:
-//
-//     "English"                        -> English
-//     "Spanish"/"Portuguese"/"French"  -> English (nearest bundled set)
-//     "Chinese"                        -> Chinese
-//     missing / malformed / unknown    -> Chinese (the product default)
-//
-// Only Chinese and English tables exist in the loader; the loader never writes
-// the setting back, the product remains the single source of truth.
+// Only Chinese and English are bundled in the product. English is its default,
+// and default values are omitted from the array. We therefore use English for
+// an absent, unreadable or malformed configuration, and Chinese only when it
+// was explicitly selected and saved. Unsupported entries are ignored, as in
+// the product. Legacy English settings work too.
+// The loader reads this before the UI is built and never writes it back.
 enum class Ls {
     // login page
     UsernameEmail,
@@ -125,7 +117,7 @@ enum class Ls {
 
 // Reads the saved language from <vapeClientDirectory>\config.json and selects
 // the string table. Must be called before the UI is created. Any failure leaves
-// the loader on Chinese, the product default.
+// the loader on English, the product default.
 void loaderStringsInitialize(const std::wstring& vapeClientDirectory);
 
 // Returns the active string for id. Never null.

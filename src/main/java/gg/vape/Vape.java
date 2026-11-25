@@ -256,7 +256,7 @@ public class Vape {
         StringWriter stackTraceWriter = new StringWriter();
         PrintWriter stackTracePrinter = new PrintWriter(stackTraceWriter);
         error.printStackTrace(stackTracePrinter);
-        return "\n异常 " + error.getClass().getCanonicalName() + " " + stackTraceWriter.toString();
+        return "\nException " + error.getClass().getCanonicalName() + " " + stackTraceWriter.toString();
     }
 
     public FriendManager getFriendManager() {
@@ -360,18 +360,18 @@ public class Vape {
             ApiResponse<AccountInfoResponse> response = ApiServices.getInstance().getAccountInfo().join();
             if (response == null || !response.isSuccessful() || response.getData() == null) {
                 String error = response == null ? "empty response" : response.getError();
-                Vape.logError("初始化账户信息失败1: " + error);
+                Vape.logError("Failed to initialize account information: " + error);
                 return false;
             }
             AccountInfo initializedAccount = AccountInfo.fromResponse(response.getData());
             if (initializedAccount == null) {
-                Vape.logError("初始化账户信息失败1: 账户数据为空");
+                Vape.logError("Failed to initialize account information: account data is empty");
                 return false;
             }
             this.accountInfo = initializedAccount;
         }
         catch (CancellationException | CompletionException error) {
-            Vape.logError("初始化账户信息失败2: " + Vape.formatThrowable(error));
+            Vape.logError("Failed to initialize account information: " + Vape.formatThrowable(error));
             return false;
         }
         return true;
@@ -427,7 +427,7 @@ public class Vape {
         }
         catch (Throwable throwable) {
             // 产品 JAR 读取偶发失败（重复注入、文件被占用）不应该让整个客户端初始化崩掉。
-            Vape.logError("加载物品语义表失败: " + throwable);
+            Vape.logError("Failed to load item mappings: " + throwable);
         }
         try {
             this.itemStackSemanticResolver.reportMissingMappings();
@@ -441,6 +441,9 @@ public class Vape {
         this.modManager.initializeAllModules();
         this.notificationManager = new NotificationManager();
         this.syncThread.loadConfig();
+        // Apply a saved language before module initialization and the startup
+        // notification are rendered; absent settings use the English default.
+        this.getFontSelector().N((FontOption)this.publicProfileSettings.language.getValue());
         this.traceStep(25);
         this.modManager.finishModuleInitialization();
         if (this.publicProfileSettings.getSelectedProfile() != null) {
@@ -466,7 +469,6 @@ public class Vape {
         this.initClientListeners();
         this.showLoadCompleteNotification();
         this.syncThread.clearPendingSave();
-        this.getFontSelector().N((FontOption)Vape.INSTANCE.getPublicProfileSettings().language.getValue());
         this.syncThread.start();
         this.traceStep(28);
         NativeBridge.dc();

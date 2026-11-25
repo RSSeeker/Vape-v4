@@ -74,6 +74,15 @@ The token and loading state use the decomp-supported controller commands over
 loopback. The full design is documented at
 `../../native_method_research/loader_product_token_handoff_design.md`.
 
+## Language
+
+The GUI and Java payload default to English. An explicit Chinese setting in
+`<exe>\.vapeclient\config.json` is honored on the next launch; missing,
+unreadable or malformed settings default to English. The `-nogui` console is
+English. To use the embedded English payload, keep older external
+`Vape-v4.21Native.dll` files out of the executable's directory or replace them
+with the DLL from this build.
+
 ## Build
 
 Use Gradle to build the Java 8 payload, embed all remotely managed runtime
@@ -81,7 +90,7 @@ dependencies, compile the native targets, and assemble the single-file bundle
 (this is exactly what `.github/workflows/release.yml` runs in CI):
 
 ```powershell
-.\gradlew.bat prepareInjectionBundle -PtargetRelease=8 `
+.\gradlew.bat prepareInjectionBundle -PtargetRelease=8 -PnoObfuscation `
   -PnativeJavaHome="C:\Program Files\Java\jdk1.8.0_301"
 ```
 
@@ -93,8 +102,8 @@ as `VAPE421_JAVA_HOME`, and `VAPE421_VERSION` comes from the version in
 ```powershell
 cmake -S native -B build/native -A x64 `
   -DVAPE421_JAVA_HOME="C:\Program Files\Java\jdk1.8.0_301" `
-  -DVAPE421_PRODUCT_JAR="build\libs\vape421-product-recovery-4.21.39-injection.jar" `
-  -DVAPE421_VERSION=4.21.39
+  -DVAPE421_PRODUCT_JAR="build\libs\vape421-product-recovery-4.21.58-injection.jar" `
+  -DVAPE421_VERSION=4.21.58
 cmake --build build/native --config Release
 ```
 

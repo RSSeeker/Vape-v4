@@ -1,4 +1,5 @@
 #include "loader_strings.h"
+#include "loader_language.h"
 
 #include <windows.h>
 
@@ -124,12 +125,12 @@ const wchar_t* const kEnglish[] = {
     L"Injected [",
 
     // auto inject (minecraft selection page)
-    L"Inject automatically when the game starts",
+    L"Auto inject on game start",
     L"Waiting for Minecraft; it is injected once the game window appears",
     L"A Java process was already running, so automatic injection is off. Select the process manually.",
     L"Automatic injection failed. Select the game process manually.",
     L"Waiting for Minecraft to start",
-    L"It will be injected once the game window appears",
+    L"Injects when the game window opens",
     L"Newly started games are injected automatically",
 
     // settings flyout (slides in from the left edge)
@@ -206,7 +207,7 @@ static_assert(sizeof(kChinese) / sizeof(kChinese[0]) == kCount,
 static_assert(sizeof(kEnglish) / sizeof(kEnglish[0]) == kCount,
         "English table out of sync with enum class Ls");
 
-bool gEnglish = false;
+bool gEnglish = true;
 
 // Reads the whole file as raw bytes. Returns false when it cannot be read.
 bool readAllBytes(const std::wstring& path, std::string& out) {
@@ -238,69 +239,12 @@ bool readAllBytes(const std::wstring& path, std::string& out) {
     return true;
 }
 
-// Finds the value of the "Language" entry inside settings.otherData. The entry
-// is written as {"id":"Language","value":"English"}; we locate the object that
-// contains the "Language" token and then read its "value" member, so the order
-// of the members inside that object does not matter.
-bool findLanguageValue(const std::string& json, std::string& out) {
-    const std::string idToken = "\"Language\"";
-    std::size_t cursor = 0;
-    while (true) {
-        const std::size_t idPos = json.find(idToken, cursor);
-        if (idPos == std::string::npos) {
-            return false;
-        }
-        cursor = idPos + idToken.size();
-        const std::size_t open = json.rfind('{', idPos);
-        const std::size_t close = json.find('}', idPos);
-        if (open == std::string::npos || close == std::string::npos
-                || close < open) {
-            continue;
-        }
-        const std::size_t valuePos = json.find("\"value\"", open);
-        if (valuePos == std::string::npos || valuePos > close) {
-            continue;
-        }
-        const std::size_t colon = json.find(':', valuePos);
-        if (colon == std::string::npos || colon > close) {
-            continue;
-        }
-        const std::size_t openQuote = json.find('"', colon);
-        if (openQuote == std::string::npos || openQuote > close) {
-            // value is null / non-string; treat as unusable
-            return false;
-        }
-        const std::size_t closeQuote = json.find('"', openQuote + 1);
-        if (closeQuote == std::string::npos) {
-            return false;
-        }
-        out = json.substr(openQuote + 1, closeQuote - openQuote - 1);
-        return true;
-    }
-}
-
-bool equalsIgnoreCase(const std::string& value, const char* expected) {
-    std::size_t i = 0;
-    for (; i < value.size() && expected[i] != '\0'; ++i) {
-        char a = value[i];
-        char b = expected[i];
-        if (a >= 'A' && a <= 'Z') {
-            a = static_cast<char>(a - 'A' + 'a');
-        }
-        if (b >= 'A' && b <= 'Z') {
-            b = static_cast<char>(b - 'A' + 'a');
-        }
-        if (a != b) {
-            return false;
-        }
-    }
-    return i == value.size() && expected[i] == '\0';
-}
-
 }  // namespace
 
 void loaderStringsInitialize(const std::wstring& vapeClientDirectory) {
-    gEnglish = false;
+    // Reset on every call: a missing, unreadable or invalid file uses the same
+    // English default as the product's PublicProfileSettings.
+    gEnglish = true;
     if (vapeClientDirectory.empty()) {
         return;
     }
@@ -311,30 +255,9 @@ void loaderStringsInitialize(const std::wstring& vapeClientDirectory) {
     path += L"config.json";
 
     std::string json;
-    if (!readAllBytes(path, json)) {
-        return;
+    if (readAllBytes(path, json)) {
+        gEnglish = loaderLanguageIsEnglish(json);
     }
-    std::string language;
-    if (!findLanguageValue(json, language)) {
-        // No entry: the product is on its default (Chinese) language, which
-        // deliberately omits the value, so the loader stays Chinese.
-        return;
-    }
-    if (equalsIgnoreCase(language, "Chinese")) {
-        gEnglish = false;
-        return;
-    }
-    // English plus every other product language (Spanish / Portuguese /
-    // French) that has no bundled loader table falls back to English; only a
-    // value we cannot interpret at all keeps the Chinese default.
-    if (equalsIgnoreCase(language, "English")
-            || equalsIgnoreCase(language, "Spanish")
-            || equalsIgnoreCase(language, "Portuguese")
-            || equalsIgnoreCase(language, "French")) {
-        gEnglish = true;
-        return;
-    }
-    gEnglish = false;
 }
 
 const wchar_t* ls(Ls id) {

@@ -137,18 +137,30 @@ if(BUILD_TESTING)
     add_test(NAME Vape421BootstrapHandedHandle
             COMMAND Vape421BootstrapTest handles)
 
-    # Loader GUI language selection: reads the product's saved language from
-    # .vapeclient\config.json and must fall back to Chinese on every failure.
+    # The loader follows the product's saved language, defaulting to English.
     add_executable(Vape421LoaderStringsTest
             tests/loader_strings_test.cpp
-            loader_gui/loader_strings.cpp)
+            loader_gui/loader_strings.cpp
+            loader_gui/loader_language.cpp)
     target_include_directories(Vape421LoaderStringsTest PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/loader_gui")
+    target_compile_features(Vape421LoaderStringsTest PRIVATE cxx_std_17)
     target_compile_definitions(Vape421LoaderStringsTest PRIVATE
             WIN32_LEAN_AND_MEAN
             _CRT_SECURE_NO_WARNINGS)
     target_compile_options(Vape421LoaderStringsTest PRIVATE /W4 /utf-8)
     add_test(NAME Vape421LoaderStrings COMMAND Vape421LoaderStringsTest)
+
+    # The JSON language-selection logic itself is portable and also runs on
+    # non-Windows hosts without the rest of the native bridge.
+    add_executable(Vape421LoaderLanguageTest
+            tests/loader_language_test.cpp
+            loader_gui/loader_language.cpp)
+    target_include_directories(Vape421LoaderLanguageTest PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/loader_gui")
+    target_compile_features(Vape421LoaderLanguageTest PRIVATE cxx_std_17)
+    target_compile_options(Vape421LoaderLanguageTest PRIVATE /W4 /utf-8)
+    add_test(NAME Vape421LoaderLanguage COMMAND Vape421LoaderLanguageTest)
 endif()
 
 set_property(TARGET Vape421Native Vape421LoaderGui

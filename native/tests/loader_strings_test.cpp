@@ -1,6 +1,6 @@
 // Verifies that the loader follows the language the product saved in
 // <exe>\.vapeclient\config.json, and that every failure mode keeps the loader
-// on Chinese (the product default).
+// on English (the product default).
 #include "loader_strings.h"
 
 #include <windows.h>
@@ -77,6 +77,23 @@ void expectChinese(const char* what) {
 int main() {
     gDirectory = makeDirectory();
 
+    loaderStringsInitialize(L"");
+    expect("empty directory defaults to English", ls(Ls::Login), L"Log in");
+    for (int i = 0; i < static_cast<int>(Ls::Count); ++i) {
+        const wchar_t* text = ls(static_cast<Ls>(i));
+        if (*text == L'\0') {
+            std::printf("  FAIL English string %d is empty\n", i);
+            ++gFailures;
+        }
+        for (const wchar_t* c = text; *c != L'\0'; ++c) {
+            if (*c >= 0x3400 && *c <= 0x9fff) {
+                std::printf("  FAIL English string %d contains a Chinese character\n", i);
+                ++gFailures;
+                break;
+            }
+        }
+    }
+
     // The product's own layout: other entries first, Language is the one we want.
     writeConfig("{\"version\":1,\"settings\":{\"friends\":{},\"otherData\":["
                 "{\"id\":\"selectedprofile_uuid\",\"value\":\"b64:M2Jm\"},"
@@ -101,19 +118,31 @@ int main() {
     writeConfig("{\"version\":1,\"settings\":{\"friends\":{},\"otherData\":["
                 "{\"id\":\"selectedprofile_uuid\",\"value\":\"b64:M2Jm\"},"
                 "{\"enemies\":[]},{\"frames\":[]}]}}");
-    expectChinese("no Language entry (product default Chinese)");
+    expectEnglish("no Language entry (product default English)");
 
     removeConfig();
-    expectChinese("config.json missing");
+    expectEnglish("config.json missing");
 
     writeConfig("this is not json at all {{{");
-    expectChinese("malformed config");
+    expectEnglish("malformed config");
 
     writeConfig("{\"settings\":{\"otherData\":[{\"id\":\"Language\",\"value\":\"Klingon\"}]}}");
-    expectChinese("unknown language value");
+    expectEnglish("unknown language value");
 
     writeConfig("{\"settings\":{\"otherData\":[{\"id\":\"Language\",\"value\":null}]}}");
-    expectChinese("Language value is null");
+    expectEnglish("Language value is null");
+
+    // Reinitialization must reset a prior Chinese selection on any failure.
+    writeConfig("{\"settings\":{\"otherData\":[{\"id\":\"Language\",\"value\":\"Chinese\"}]}}");
+    expectChinese("Chinese can be reselected");
+    removeConfig();
+    expectEnglish("missing config resets a previous Chinese selection");
+
+    // An unrelated module or malformed document must not change the loader.
+    writeConfig("{\"profiles\":{\"id\":\"Language\",\"value\":\"Chinese\"},\"settings\":{\"otherData\":[]}}");
+    expectEnglish("Language outside settings.otherData is ignored");
+    writeConfig("{\"settings\":{\"otherData\":[{\"id\":\"Language\",\"value\":\"Chinese\"}]}} trailing");
+    expectEnglish("trailing garbage makes the document invalid");
 
     // Member order inside the entry must not matter.
     writeConfig("{\"settings\":{\"otherData\":[{\"value\":\"English\",\"id\":\"Language\"}]}}");

@@ -157,6 +157,35 @@ tasks.register('verifyFontCoverage', JavaExec) {
     ignoreExitValue = false
 }
 
+// Run translation-resource checks without starting the Minecraft/native runtime.
+def localizationCheckClassDirectory = layout.buildDirectory.dir('localizationCheck')
+def localizationCheckSource = file('tools/LocalizationCheck.java')
+
+tasks.register('compileLocalizationCheck', JavaCompile) {
+    group = 'verification'
+    description = 'Compiles the standalone localization checker.'
+    source = files(localizationCheckSource)
+    classpath = files()
+    destinationDirectory = localizationCheckClassDirectory
+    options.encoding = 'UTF-8'
+}
+
+tasks.register('verifyLocalization', JavaExec) {
+    group = 'verification'
+    description = 'Checks English UI text and the corresponding Chinese translations.'
+    dependsOn(tasks.named('compileLocalizationCheck'))
+    def english = file('src/main/resources/resources/english.properties.txt')
+    def chinese = file('src/main/resources/resources/chinese.properties.txt')
+    inputs.files(localizationCheckSource, english, chinese)
+    classpath = files(localizationCheckClassDirectory)
+    mainClass = 'LocalizationCheck'
+    args english.absolutePath, chinese.absolutePath
+}
+
+tasks.named('check') {
+    dependsOn(tasks.named('verifyLocalization'))
+}
+
 idea {
     module {
         sourceDirs += file('src/main/java')
@@ -197,6 +226,7 @@ tasks.register('verifyInjectionPayload') {
     description = 'Verifies that the embedded payload is complete and Java 8 loadable.'
     dependsOn(tasks.named('injectionJar'))
     dependsOn(tasks.named('verifyFontCoverage'))
+    dependsOn(tasks.named('verifyLocalization'))
     inputs.file(tasks.named('injectionJar', Jar).flatMap { it.archiveFile })
     doLast {
         def payload = tasks.named('injectionJar', Jar).get().archiveFile.get().asFile
@@ -534,8 +564,7 @@ tasks.register('prepareInjectionBundle', Sync) {
         include 'Vape-v' + project.version + '.exe'
         include 'Vape-v4.21Native.dll'
     }
-    // 包内同时附中英两�?README：native/README.md（中文）�?native/README_EN.md�?
-    // 两份互相链接，相对链接在包目录里同样有效�?
+    // Include both native README files; their relative language links work in the bundle.
     from(file('native/README.md'))
     from(file('native/README_EN.md'))
     into(injectionBundleDirectory)

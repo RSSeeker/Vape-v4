@@ -10,7 +10,7 @@ public enum AnticheatProfile {
     GRIM("Grim", "Grim"),
     ACA("ACA", "ACA"),
     THEMIS("Themis", "Themis"),
-    ALL("All", "全部");
+    ALL("All", "ALL");
 
     private final String name;
     private final String label;

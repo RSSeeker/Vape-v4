@@ -1,6 +1,7 @@
 package gg.vape.ui.click.frame.impl.online;
 
 import gg.vape.manager.client.OnlineConnectionManager;
+import gg.vape.notification.NotificationText;
 import gg.vape.ui.click.component.gui.UnderlinedTextLabel;
 import gg.vape.ui.click.component.layout.PaddedComponent;
 import gg.vape.ui.click.frame.impl.online.OnlineConnectionSettingsPageComponent;
@@ -21,9 +22,11 @@ extends OnlineConnectionSettingsPageComponent {
         long reconnectAt = OnlineConnectionManager.INSTANCE.getNextReconnectAt();
         if (reconnectAt != -1L) {
             int remainingSeconds = (int)((reconnectAt - System.currentTimeMillis()) / 1000L);
-            this.getAlternateFontRenderer(0.8).W("正在重连，剩余 " + remainingSeconds + " 秒...", this.G$src$D$1b2f02a() + this.A() / 2.0, this.n() + 52.0, OnlineConnectionRetryPageComponent.J.A);
+            String message = String.format(java.util.Locale.ROOT,
+                    NotificationText.localize("Reconnecting in %d seconds..."), remainingSeconds);
+            this.getAlternateFontRenderer(0.8).W(message, this.G$src$D$1b2f02a() + this.A() / 2.0, this.n() + 52.0, OnlineConnectionRetryPageComponent.J.A);
         } else {
-            this.getAlternateFontRenderer(1.0).W("正在重新连接...", this.G$src$D$1b2f02a() + this.A() / 2.0, this.n() + 52.0, OnlineConnectionRetryPageComponent.J.A);
+            this.getAlternateFontRenderer(1.0).W(NotificationText.localize("Reconnecting..."), this.G$src$D$1b2f02a() + this.A() / 2.0, this.n() + 52.0, OnlineConnectionRetryPageComponent.J.A);
         }
         this.yr.setExplicitWidth(60.0);
     }

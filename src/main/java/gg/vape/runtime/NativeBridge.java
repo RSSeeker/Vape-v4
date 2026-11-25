@@ -412,9 +412,10 @@ public class NativeBridge {
         int detectedGameVersion = ForgeVersion.c();
         if ((detectedGameVersion == 47 || detectedGameVersion == 52)
                 && NativeBridge.isFabricRuntime()) {
-            NativeBridge.sce("UNSUPPORTED: Minecraft " + detectedGameVersion
-                    + " Fabric 不受支持（Fabric Knot 类加载隔离 + slf4j 冲突），"
-                    + "请使用对应版本的 Forge / NeoForge 或 1.21.11+ / 26.x 版本");
+            String versionName = detectedGameVersion == 47 ? "1.20.1" : "1.21.1";
+            NativeBridge.sce("UNSUPPORTED: Minecraft " + versionName
+                    + " Fabric is unsupported (Knot class-loader isolation and SLF4J conflicts). "
+                    + "Use Forge / NeoForge for this version, or Minecraft 1.21.11+ / 26.x");
             return;
         }
         // Fabric（Knot）等运行时：注入可能发生在任意线程，其 context

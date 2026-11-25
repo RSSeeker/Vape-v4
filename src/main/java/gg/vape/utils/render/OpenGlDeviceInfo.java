@@ -73,9 +73,9 @@ public class OpenGlDeviceInfo {
 
     public static void appendDeviceInfo(StringBuilder output) {
         OpenGlDeviceInfo.collectDeviceInfo();
-        output.append("GPU 厂商: ").append(gpuVendor.name()).append(" (").append(vendorName).append(")\n");
-        output.append("GPU 渲染器: ").append(rendererName).append('\n');
-        output.append("OpenGL 版本: ").append(versionName).append('\n');
+        output.append("GPU vendor: ").append(gpuVendor.name()).append(" (").append(vendorName).append(")\n");
+        output.append("GPU renderer: ").append(rendererName).append('\n');
+        output.append("OpenGL version: ").append(versionName).append('\n');
     }
 
     private static void logCapabilities() {

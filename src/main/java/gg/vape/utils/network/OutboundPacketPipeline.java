@@ -75,7 +75,7 @@ implements EventListener {
                 delayed.task.z().t();
             }
             catch (Throwable throwable) {
-                gg.vape.Vape.logError("延迟发包失败: " + throwable);
+                gg.vape.Vape.logError("Failed to send delayed packet: " + throwable);
             }
         }
     }

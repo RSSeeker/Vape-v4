@@ -60,7 +60,7 @@ public class PublicProfileSettings {
         this.selectedProfileId = (StringValue)((StringValue)new PublicProfileSelectedProfileStringValue(this, this, "selectedprofile_uuid", "").setBase64Encoded(true)).addAlias("selectedprofile");
         this.autoSave = BooleanValue.create(this, "Auto save", true, "Automatically sync your settings");
         this.framePositionsPerProfile = BooleanValue.create(this, "Frame positions per profile", false, "Saves the positions of your GUI frames per profile");
-        this.language = (ModeValue)ModeValue.create((Object)this, "Language", FontSelector.c, FontSelector.j, FontSelector.c).setResettable(false);
+        this.language = (ModeValue)ModeValue.create((Object)this, "Language", FontSelector.j, FontSelector.j, FontSelector.c).setResettable(false);
         this.volume = NumberValue.create(this, "Volume", "#", "%", 0.0, 50.0, 100.0);
         this.muted = BooleanValue.create(this, "Muted", false, "Mutes all sounds");
         this.guiBind = new PublicProfileSettingsBindValue(this, this, "GUI Bind", new PublicProfileSettingsBindSet(this, 161));

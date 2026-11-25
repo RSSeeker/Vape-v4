@@ -1,13 +1,13 @@
 # Vape 4.21 Product Recovery
 
-> **Language:** English | [中文](README.md)
+> **Language:** English | [中文](README_ZH.md)
 >
 > Releases: [Releases](https://github.com/RSSeeker/Vape-v4/releases)
 >
 > Source code: [OpenVapeCN/OpenVape](https://github.com/OpenVapeCN/OpenVape)
 > (This project recovers, cleans up and localizes the public source from that repository.)
 
-A research/recovery project for Vape 4.21's Java layer and Windows x64 native bridge layer, with full Chinese localization.
+A research/recovery project for Vape 4.21's Java layer and Windows x64 native bridge layer. This branch defaults to English while retaining Chinese.
 
 ## Disclaimer and Copyright
 
@@ -31,8 +31,7 @@ The project is started and maintained independently by one individual; all views
 
 ## Security Notice
 
-Source code and build artifacts for this project are published only through this GitHub repository and the resources attached to videos on the Bilibili account [RS_Seeker](https://space.bilibili.com/649086235); files released through those channels can be considered safe.
-The safety of any "Vape"-related program published through other GitHub repositories, Discord, QQ groups, Telegram groups, third-party websites, cloud drives or similar channels cannot be guaranteed. This project accepts no responsibility for those programs or for any loss they may cause.
+Verify the origin, signatures and hashes of downloaded programs before running them. A locally rebuilt binary differs from the upstream release and is unsigned unless you supply a code-signing certificate. No distribution channel can guarantee safety.
 
 ## Main artifact
 
@@ -41,6 +40,16 @@ The safety of any "Vape"-related program published through other GitHub reposito
 | `Vape-v4.21.*.exe` | Single-file GUI loader (embeds the complete DLL, Java payload and icon) |
 
 **Optional external DLL**: if `Vape-v4.21Native.dll` sits next to the exe it is loaded preferentially (handy for replacing/updating the native layer yourself); otherwise the embedded copy is extracted, so no extra files are required.
+
+**Language and compatibility:** The loader reads `.vapeclient\config.json` next
+to the executable. An explicitly saved Chinese selection remains Chinese; choose
+**Settings → General → Language → English** in-game and restart the loader to
+change it. Configurations from older versions that omitted their default language
+now start in English. The console messages are English regardless of this setting.
+
+Run the rebuilt EXE on its own or next to the **matching rebuilt DLL**. A stale
+external `Vape-v4.21Native.dll` takes precedence over the embedded payload and
+can otherwise bring back the older Chinese in-game UI.
 
 **Usage**:
 
@@ -52,7 +61,7 @@ The safety of any "Vape"-related program published through other GitHub reposito
 
 **GUI loader**
 
-- Integrated upstream VapeLoader GUI (GDI+ self-drawn, fully localized to Chinese): process selection / injection progress / load complete
+- Integrated VapeLoader GUI (GDI+ self-drawn, English by default): process selection / injection progress / load complete
 - Removed the login page and cache prompt: it starts straight to process selection and injection, generating a token locally
 - **External DLL support**: if `Vape-v4.21Native.dll` sits next to the exe it is injected preferentially; otherwise the embedded copy is extracted and injected — both modes need no extra files
 - Window title "Vape v4", icon consistent with the product
@@ -82,14 +91,14 @@ The safety of any "Vape"-related program published through other GitHub reposito
 **Localization**
 
 - Language pack expanded to 2600+ keys, covering module names, value names, tooltips, tutorials, confirmation dialogs, potion/item names
-- Default language is Chinese; language options trimmed to "中文 / English"
+- English is the default for a fresh install and for missing or invalid language settings. Explicitly saved Chinese remains supported; restart the loader after changing the in-game language.
 - Module search matches both the English name and the Chinese translated name, so Chinese can find modules directly
 - Category navigation shows the "Other" category, so Other-category modules (e.g. NoItemRelease) are browsable directly
 
 **Fonts & display**
 
 - `noto.ttf` is a static subset of Noto Sans SC covering all translated glyphs (SemiBold 600 weight)
-- The injector console is localized to Chinese and outputs UTF-8
+- The injector console uses English and outputs UTF-8
 
 **Engineering & stability**
 
@@ -271,7 +280,7 @@ Building the native bundle additionally needs:
 From the repository root in PowerShell:
 
 ```powershell
-.\gradlew.bat clean build verifyInjectionPayload
+.\gradlew.bat clean build verifyInjectionPayload -PtargetRelease=8 -PnoObfuscation
 ```
 
 This command:
@@ -290,7 +299,7 @@ Main Java artifacts are in `build/libs/`. To generate IntelliJ IDEA project conf
 ## Build the native test bundle
 
 ```powershell
-.\gradlew.bat prepareInjectionBundle -PtargetRelease=8 `
+.\gradlew.bat prepareInjectionBundle -PtargetRelease=8 -PnoObfuscation `
   -PnativeJavaHome="C:\Program Files\Java\jdk1.8.0_301"
 ```
 
@@ -298,10 +307,20 @@ The complete test bundle outputs to `build/injection/` (the filename varies with
 
 ```text
 Vape-v4.21.*.exe   GUI single-file loader (embeds the DLL and all resources)
-README.md
+Vape-v4.21Native.dll   optional matching external DLL
+README.md / README_EN.md   native bundle documentation
 ```
 
-The DLL embeds the Java injection JAR as an `RCDATA` resource, so a separate payload is not required. The native bridge layer recovers the sample's `RegisterNatives` interface table and additionally registers the sample's unimplemented native declarations as safe stubs to avoid `UnsatisfiedLinkError`. See [`native/README.md`](native/README.md) for details.
+The DLL embeds the Java injection JAR as an `RCDATA` resource, so a separate payload is not required. The native bridge layer recovers the sample's `RegisterNatives` interface table and additionally registers the sample's unimplemented native declarations as safe stubs to avoid `UnsatisfiedLinkError`. See [`native/README_EN.md`](native/README_EN.md) for details.
+
+## GitHub Actions build
+
+Once these changes are pushed to the working branch, open **Actions → Build and
+test → Run workflow**, select that branch and run it (enable Actions on the fork
+if needed). The successful run publishes `windows-x64-english-bundle` as an
+artifact for 14 days. It contains the rebuilt EXE and a matching optional DLL;
+this is not the original signed release. The workflow also runs on pull requests
+and pushes to `arena/**`.
 
 ## Running in an isolated environment
 
@@ -316,7 +335,7 @@ You can also inject from the command line:
 .\Vape-v4.21.*.exe -nogui
 ```
 
-The injector only performs `LoadLibraryW`. Once loaded the DLL waits for the JVM and Minecraft `Client thread`, then loads the embedded JAR through its context ClassLoader; on Fabric it adds the payload to the Knot ClassLoader via the Fabric Launcher API. The DLL then registers the native methods and calls `gg.vape.runtime.NativeBridge.start()`. Each injection log is at `.vapeclient\log\vape421-native-<pid>-<timestamp>.log` next to the injector EXE.
+The GUI tries manual mapping first and falls back to `LoadLibraryW`; console mode uses `LoadLibraryW`. Once loaded the DLL waits for the JVM and Minecraft `Client thread`, then loads the embedded JAR through its context ClassLoader; on Fabric it adds the payload to the Knot ClassLoader via the Fabric Launcher API. The DLL then registers the native methods and calls `gg.vape.runtime.NativeBridge.start()`. Each injection log is at `.vapeclient\log\vape421-native-<pid>-<timestamp>.log` next to the injector EXE.
 
 ## Common validation tasks
 
@@ -324,7 +343,7 @@ The injector only performs `LoadLibraryW`. Once loaded the DLL waits for the JVM
 | --- | --- |
 | `.\gradlew.bat check` | Compile, source-coverage and recovery-quality checks |
 | `.\gradlew.bat injectionJar` | Build the self-contained Java injection payload |
-| `.\gradlew.bat verifyInjectionPayload` | Check dependency completeness and Java 8 bytecode version |
+| `.\gradlew.bat verifyInjectionPayload -PtargetRelease=8` | Check dependency completeness, localization and Java 8 bytecode version |
 | `.\gradlew.bat buildNative` | Build the x64 DLL and injector |
 | `.\gradlew.bat prepareInjectionBundle` | Produce the native bundle for isolated testing |
 

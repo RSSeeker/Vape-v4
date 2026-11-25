@@ -39,8 +39,8 @@ extends Event {
                 if (!EventRenderWorldPassExecutorDrain.contextWarned) {
                     EventRenderWorldPassExecutorDrain.contextWarned = true;
                     gg.vape.Vape.debugLog("ERWPD: GL context not ready at update entry (thread="
-                            + Thread.currentThread().getName() + "). 26.2 若使用 Vulkan 图形后端则没有"
-                            + " OpenGL 上下文，请将视频设置中的图形 API 切换为 OpenGL 后重试。");
+                            + Thread.currentThread().getName() + "). Minecraft 26.2 running with the Vulkan backend has no "
+                            + "OpenGL context. Switch the Graphics API to OpenGL in Video Settings and retry.");
                 }
                 return false;
             }
