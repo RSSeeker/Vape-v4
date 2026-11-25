@@ -284,6 +284,16 @@ def product_resource(name):
             and name not in {"resources/english.properties.txt", "resources/chinese.properties.txt"})
 
 
+def audit_embedded_resources(current_jar, embedded_jar):
+    nonclass = lambda name: not name.endswith("/") and not name.endswith(".class")
+    current = zip_hashes(current_jar, nonclass)
+    embedded = zip_hashes(embedded_jar, nonclass)
+    same_inventory(current, embedded, "Embedded non-class resource")
+    changes = sorted(name for name in current if current[name] != embedded[name])
+    require(not changes, "Obfuscation changed embedded resources: " + str(changes[:20]))
+    return len(current)
+
+
 def inspect_unrecognized_release_layout(data, ref_modules):
     """Describe an original JAR whose module names do not match our build.
 
@@ -370,6 +380,8 @@ def main():
     parser.add_argument("--current-source", type=Path, required=True)
     parser.add_argument("--baseline-jar", type=Path, required=True)
     parser.add_argument("--current-jar", type=Path, required=True)
+    parser.add_argument("--embedded-jar", type=Path,
+                        help="Expected embedded JAR (may be the randomized current build)")
     parser.add_argument("--original-exe", type=Path, required=True)
     parser.add_argument("--original-jar-output", type=Path,
                         help="Optional temporary output for further offline inspection; do not distribute")
@@ -394,10 +406,12 @@ def main():
         args.original_jar_output.write_bytes(release_jar)
 
     current_jar = args.current_jar.read_bytes()
+    embedded_jar = args.embedded_jar.read_bytes() if args.embedded_jar else current_jar
     current_exe = args.current_exe.read_bytes()
     embedded_dll = pe_resource(current_exe, 422)
     require(embedded_dll == args.current_dll.read_bytes(), "External DLL differs from embedded DLL")
-    require(pe_resource(embedded_dll, 421) == current_jar, "EXE does not embed the tested Java payload")
+    require(pe_resource(embedded_dll, 421) == embedded_jar, "EXE does not embed the expected Java payload")
+    embedded_resource_count = audit_embedded_resources(current_jar, embedded_jar)
     stats = audit_jars(args.baseline_jar.read_bytes(), current_jar, release_jar)
 
     lines = [
@@ -407,7 +421,8 @@ def main():
         "Original release EXE SHA-256 verified: " + ORIGINAL_SHA256,
         "English EXE SHA-256: " + sha256(current_exe),
         "English DLL SHA-256: " + sha256(embedded_dll),
-        "English Java payload SHA-256: " + sha256(current_jar),
+        "English source-build Java payload SHA-256: " + sha256(current_jar),
+        "English embedded Java payload SHA-256: " + sha256(embedded_jar),
         f"Java source files: {source_count}; module sources: {module_source_count}; reviewed localized files: {changed_sources}.",
         "All module sources match the baseline after reversing the English default and spawner-label edits.",
         f"Native files: {native_count} baseline files; {native_changes} reviewed localization/build/test changes or additions.",
@@ -417,7 +432,8 @@ def main():
         *("  " + name for name in stats["module_changes"]),
         f"Owned class inventory ({stats['own_classes']} files) unchanged; no unreviewed class differences.",
         f"Non-language product resources ({stats['resources']} files) unchanged.",
-        "Native bridge/loading files unchanged; EXE and optional DLL embed the tested JAR.",
+        f"Embedded payload has the same {embedded_resource_count} non-class resources as the English source build.",
+        "Native bridge/loading files unchanged; EXE and optional DLL embed the expected JAR.",
     ]
     if stats["release_layout"] is None:
         official_matches = stats["module_classes"] - len(stats["release_differences"])

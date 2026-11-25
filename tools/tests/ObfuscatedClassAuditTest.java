@@ -107,6 +107,11 @@ public final class ObfuscatedClassAuditTest {
             check(ObfuscatedClassAudit.matchesExpected(identical, Set.of(second)), "Expected differences were rejected");
             check(!ObfuscatedClassAudit.matchesExpected(identical, Set.of(first)), "Unexpected differences passed");
 
+            writeJar(origFile, obfuscate(english));
+            ObfuscatedClassAudit.Result embedded = ObfuscatedClassAudit.analyze(engFile, engFile, origFile);
+            check(embedded.baselineEqual == 3 && embedded.englishEqual == 3, "Embedded payload normalization failed");
+            check(ObfuscatedClassAudit.matchesExpected(embedded, Set.of()), "Identical embedded payload failed the guard");
+
             Map<String, byte[]> alteredOriginal = new LinkedHashMap<>(baseline);
             alteredOriginal.put(first, makeClass(first, "First.java", "different logic", helper));
             writeJar(origFile, obfuscate(alteredOriginal));

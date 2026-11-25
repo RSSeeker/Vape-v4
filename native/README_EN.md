@@ -86,11 +86,11 @@ with the DLL from this build.
 ## Build
 
 Use Gradle to build the Java 8 payload, embed all remotely managed runtime
-dependencies, compile the native targets, and assemble the single-file bundle
-(this is exactly what `.github/workflows/release.yml` runs in CI):
+dependencies, compile the native targets, and assemble the single-file bundle.
+The default build randomizes product class names, like the supplied EXE:
 
 ```powershell
-.\gradlew.bat prepareInjectionBundle -PtargetRelease=8 -PnoObfuscation `
+.\gradlew.bat prepareInjectionBundle -PtargetRelease=8 `
   -PnativeJavaHome="C:\Program Files\Java\jdk1.8.0_301"
 ```
 

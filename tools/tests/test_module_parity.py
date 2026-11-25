@@ -115,6 +115,14 @@ class JarComparisonTests(unittest.TestCase):
         result = parity.audit_jars(jar(self.reference), jar(self.english), jar(official))
         self.assertEqual(result["release_differences"], [self.other])
 
+    def test_embedded_resources_match_even_when_class_names_change(self):
+        current = {"resources/language.txt": b"same", "gg/vape/module/Example.class": b"old name"}
+        embedded = {"resources/language.txt": b"same", "random/package.class": b"new name"}
+        self.assertEqual(parity.audit_embedded_resources(jar(current), jar(embedded)), 1)
+        embedded["resources/language.txt"] = b"changed"
+        with self.assertRaises(parity.ParityError):
+            parity.audit_embedded_resources(jar(current), jar(embedded))
+
     def test_rejects_original_inventory_mismatch(self):
         official = dict(self.reference)
         del official[self.other]

@@ -72,9 +72,11 @@ jobs:
         shell: pwsh
         run: .\gradlew.bat clean build verifyInjectionPayload -PtargetRelease=8 -PnoObfuscation --stacktrace
 
+      # Preserve the release's randomized class-name packaging; the resulting
+      # embedded JAR is separately compared with the un-obfuscated source build.
       - name: Build the Windows x64 bundle
         shell: pwsh
-        run: .\gradlew.bat prepareInjectionBundle -PtargetRelease=8 -PnoObfuscation "-PnativeJavaHome=${{ steps.setup-jdk8.outputs.path }}" --stacktrace
+        run: .\gradlew.bat prepareInjectionBundle -PtargetRelease=8 "-PnativeJavaHome=${{ steps.setup-jdk8.outputs.path }}" --stacktrace
 
       - name: Run native tests
         shell: pwsh
@@ -124,13 +126,14 @@ jobs:
           python -B -X utf8 tools/verify_module_parity.py `
             --baseline-source 'build/module-parity-baseline' --current-source '.' `
             --baseline-jar $baseline[0].FullName --current-jar $current[0].FullName `
+            --embedded-jar 'build/obfuscated-payload/payload.jar' `
             --original-exe (Join-Path $env:RUNNER_TEMP 'Vape-v4.21.58-original.exe') `
             --original-jar-output (Join-Path $env:RUNNER_TEMP 'Vape-original-payload.jar') `
             --current-exe $executables[0].FullName --current-dll 'build/injection/Vape-v4.21Native.dll' `
             --report 'build/injection/MODULE-PARITY-REPORT.txt'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Compare the obfuscated original module classes
+      - name: Compare original and embedded module classes
         shell: pwsh
         run: |
           $classes = Join-Path $env:RUNNER_TEMP 'module-parity-tools'
@@ -147,6 +150,15 @@ jobs:
             $detail = ($output | Where-Object { "$_" -match '(Exception|Error)' } | Select-Object -First 1)
             Write-Output "::error title=Normalized release comparison::Parity was not verified. $detail"
             Add-Content -LiteralPath 'build/injection/MODULE-PARITY-REPORT.txt' -Value "`nNormalized original comparison did not pass; see the workflow log."
+            exit $code
+          }
+          $output = @(& java @exports -cp $classes ObfuscatedClassAudit $current $current 'build/obfuscated-payload/payload.jar' 'build/injection/MODULE-PARITY-REPORT.txt' --embedded 2>&1)
+          $code = $LASTEXITCODE
+          $output | ForEach-Object { Write-Output $_ }
+          if ($code -ne 0) {
+            $detail = ($output | Where-Object { "$_" -match '(Exception|Error)' } | Select-Object -First 1)
+            Write-Output "::error title=Embedded payload comparison::Parity was not verified. $detail"
+            Add-Content -LiteralPath 'build/injection/MODULE-PARITY-REPORT.txt' -Value "`nEmbedded payload comparison did not pass; see the workflow log."
             exit $code
           }
           Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '## Module parity audit'
@@ -175,10 +187,10 @@ jobs:
           Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '## Rebuilt bundle SHA-256'
           $checksums | ForEach-Object { Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- $_" }
 
-      - name: Upload Java injection payload
+      - name: Upload un-obfuscated Java source-build payload
         uses: actions/upload-artifact@v4
         with:
-          name: java-injection-payload
+          name: java-source-build-payload
           path: build/libs/*-injection.jar
           if-no-files-found: error
           retention-days: 14

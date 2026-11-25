@@ -71,7 +71,7 @@ can otherwise bring back the older Chinese in-game UI.
 
 - Uses **manual map** injection by default: the injector writes the DLL image into the target process and performs section mapping, relocations, import resolution and section protection itself before calling the entry point. The DLL is **never loaded through `LoadLibrary`**, so it does not appear in the Minecraft process module list (Process Explorer and `EnumProcessModules` cannot see it) and leaves no image-load trace
 - **Automatic fallback**: if any manual-map step fails, injection falls back to the classic `CreateRemoteThread` + `LoadLibraryW` path so availability comes first. Both paths load the same DLL, so in-game behavior, performance and version compatibility are identical
-- Pairs with build-time class-name obfuscation (on by default when compiling yourself): injection trace plus randomized class names make signature-based detection harder. Release packages are not obfuscated — see FAQ 10
+- The verified upstream EXE and this branch's CI bundle use build-time randomized product class names. This does not establish any particular detection or anti-cheat outcome — see FAQ 10.
 
 **Motion Blur (MotionBlur)**
 
@@ -243,9 +243,9 @@ VapeService stores accounts and configs in a single local JSON file, and the dat
 
 Always pass an explicit `--data-file` path and keep regular backups, and never let two Service instances write the same file. The Service is an experimental compatibility layer: some public config, comment, report, tag and pagination behaviour is simplified, so a successful connection does not mean every original Online feature works.
 
-### 10. Why are class names in the release not randomized?
+### 10. Are the product class names randomized?
 
-Release packages are compiled with the original class names and are **not obfuscated**, which keeps them easy to verify and debug. To get a random package and class name on every build, compile it yourself: a local `gradlew.bat build verifyInjectionPayload prepareInjectionBundle` enables build-time obfuscation by default (every owned `gg.vape.*` class is renamed to a random 16-character name, while the three classes hard-coded by the native layer keep their names). Each build differs, and the mapping is written to `build/rename-mapping.txt` for de-obfuscating crash logs.
+The supplied v4.21.58 EXE has randomized product class names, and this branch's CI bundle preserves that packaging. The build renames owned `gg.vape.*` classes to random 16-character names, except the three classes hard-coded by the native layer. Each build differs; `build/rename-mapping.txt` maps the names for crash-log analysis. Passing `-PnoObfuscation` disables this for a diagnostic build. The CI parity report compares classes after reversing the randomized names; it does not establish identical runtime behavior or detection characteristics.
 
 ## Embedded service config
 
@@ -280,7 +280,7 @@ Building the native bundle additionally needs:
 From the repository root in PowerShell:
 
 ```powershell
-.\gradlew.bat clean build verifyInjectionPayload -PtargetRelease=8 -PnoObfuscation
+.\gradlew.bat clean build verifyInjectionPayload -PtargetRelease=8
 ```
 
 This command:
@@ -288,7 +288,7 @@ This command:
 1. Compiles the recovered source and processes all resources.
 2. Checks the source count and residual fatal CFR decompilation markers.
 3. Builds the injection JAR with runtime dependencies.
-4. Confirms the payload contains the necessary packages and all classes load under Java 8.
+4. Checks for necessary packages and class-file versions compatible with Java 8; this does not prove runtime loading.
 
 Main Java artifacts are in `build/libs/`. To generate IntelliJ IDEA project config, run:
 
@@ -299,7 +299,7 @@ Main Java artifacts are in `build/libs/`. To generate IntelliJ IDEA project conf
 ## Build the native test bundle
 
 ```powershell
-.\gradlew.bat prepareInjectionBundle -PtargetRelease=8 -PnoObfuscation `
+.\gradlew.bat prepareInjectionBundle -PtargetRelease=8 `
   -PnativeJavaHome="C:\Program Files\Java\jdk1.8.0_301"
 ```
 

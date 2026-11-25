@@ -21,12 +21,12 @@ Requirements: Windows x64, Visual Studio 2022 C++ x64 and Windows SDK, CMake 3.2
 ```powershell
 # Change this path to your JDK 8 installation. JAVA_HOME should point to JDK 17.
 $jdk8 = 'C:\Program Files\Java\jdk1.8.0_301'
-.\gradlew.bat clean build verifyInjectionPayload -PtargetRelease=8 -PnoObfuscation
-.\gradlew.bat prepareInjectionBundle -PtargetRelease=8 -PnoObfuscation "-PnativeJavaHome=$jdk8"
+.\gradlew.bat clean build verifyInjectionPayload -PtargetRelease=8
+.\gradlew.bat prepareInjectionBundle -PtargetRelease=8 "-PnativeJavaHome=$jdk8"
 ctest --test-dir build/native -C Release --output-on-failure
 ```
 
-The expected result is `build\injection\Vape-v4.21.58.exe`, a single-file loader containing the rebuilt DLL and Java payload. Windows CI builds the bundle and runs native tests; it does not test gameplay. The bundle also includes the matching optional DLL. Keep it separate from the original release: the rebuilt EXE has a different hash and is unsigned unless you configure your own signing certificate.
+The expected result is `build\injection\Vape-v4.21.58.exe`, a single-file loader containing the rebuilt DLL and Java payload. Like the verified upstream EXE, the bundle randomizes product class names; CI checks that the embedded module classes match the source build after reversing those names. Windows CI builds the bundle and runs native tests; it does not test gameplay or detection characteristics. The bundle also includes the matching optional DLL. Keep it separate from the original release: the rebuilt EXE has a different hash and is unsigned unless you configure your own signing certificate.
 
 Alternatively, push the branch or run **Actions → Build and test → Run workflow** on that branch. A successful Windows run uploads the **windows-x64-english-bundle** artifact for 14 days, including `SHA256SUMS.txt` and `MODULE-PARITY-REPORT.txt`. The report records source/build comparisons against the pinned v4.21.58 baseline and inspects the hash-verified upstream release. If its class layout prevents direct comparison, the report says so; it is not an in-game functionality guarantee. GitHub Actions may need to be enabled on your fork first.
 

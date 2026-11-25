@@ -306,29 +306,34 @@ public final class ObfuscatedClassAudit {
     }
 
     public static void main(String[] args) throws Exception {
-        if (args.length != 4) {
-            throw new IllegalArgumentException("Expected: baseline.jar english.jar original.jar report.txt");
+        if (args.length != 4 && (args.length != 5 || !"--embedded".equals(args[4]))) {
+            throw new IllegalArgumentException("Expected: baseline.jar english.jar randomized.jar report.txt [--embedded]");
         }
+        boolean embeddedMode = args.length == 5;
         Result result = analyze(Path.of(args[0]), Path.of(args[1]), Path.of(args[2]));
+        String subject = embeddedMode ? "Embedded English payload" : "Original obfuscated release";
+        String baselineLabel = embeddedMode ? "English source build" : "baseline";
         List<String> lines = new ArrayList<>();
         lines.add("");
-        lines.add("Original obfuscated-release comparison (offline, after reversing randomized class names):");
+        lines.add(subject + " comparison (offline, after reversing randomized class names):");
         lines.add("Randomized classes mapped: " + result.mappedProduct + "/" + result.randomCount
                 + "; exact copied constant pools: " + result.poolMatches + "; ambiguous: "
                 + result.ambiguous + "; unmatched: " + result.unmatched + ".");
         lines.add("Module classes mapped: " + result.mappedModules + "/" + result.moduleCount + ".");
-        lines.add("Normalized original vs baseline: " + result.baselineEqual + "/" + result.moduleCount
-                + " module class files identical (includes code, class members and debug data).");
-        lines.add("Normalized original vs baseline with debug and stack-map frames omitted: "
+        lines.add("Normalized " + subject + " vs " + baselineLabel + ": " + result.baselineEqual + "/"
+                + result.moduleCount + " module class files identical (includes code, class members and debug data).");
+        lines.add("Same comparison with debug and stack-map frames omitted: "
                 + result.equalWithoutDebugOrFrames + "/" + result.moduleCount + ".");
-        lines.add("Normalized original vs English: " + result.englishEqual + "/" + result.moduleCount
-                + " module class files identical (includes code, class members and debug data).");
+        if (!embeddedMode) {
+            lines.add("Normalized " + subject + " vs English source build: " + result.englishEqual + "/"
+                    + result.moduleCount + " module class files identical (includes code, class members and debug data).");
+        }
         if (!result.baselineDifferences.isEmpty()) {
-            lines.add("Original vs baseline differences or unmapped classes:");
+            lines.add(subject + " vs " + baselineLabel + " differences or unmapped classes:");
             for (String name : result.baselineDifferences) lines.add("  " + name);
         }
-        if (!result.englishDifferences.isEmpty()) {
-            lines.add("Original vs English differences or unmapped classes:");
+        if (!embeddedMode && !result.englishDifferences.isEmpty()) {
+            lines.add(subject + " vs English differences or unmapped classes:");
             for (String name : result.englishDifferences) lines.add("  " + name);
         }
         lines.add("Normalization removes randomized product class names and unused constants; it does not run the code.");
@@ -337,17 +342,19 @@ public final class ObfuscatedClassAudit {
         Files.write(Path.of(args[3]), lines, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         for (String line : lines) System.out.println(line);
-        System.out.println("::notice title=Normalized original module comparison::Mapped "
-                + result.mappedModules + "/" + result.moduleCount + "; original vs baseline "
-                + result.baselineEqual + "/" + result.moduleCount + "; original vs English "
-                + result.englishEqual + "/" + result.moduleCount + ".");
-        System.out.println("::notice title=Original class mapping::Mapped " + result.mappedProduct + "/"
+        String noticeTitle = embeddedMode ? "Normalized embedded module comparison" : "Normalized original module comparison";
+        String notice = "Mapped " + result.mappedModules + "/" + result.moduleCount + "; "
+                + subject + " vs " + baselineLabel + " " + result.baselineEqual + "/" + result.moduleCount;
+        if (!embeddedMode) notice += "; vs English source build " + result.englishEqual + "/" + result.moduleCount;
+        System.out.println("::notice title=" + noticeTitle + "::" + notice + ".");
+        System.out.println("::notice title=" + subject + " class mapping::Mapped " + result.mappedProduct + "/"
                 + result.randomCount + " randomized product classes; " + result.poolMatches
                 + " copied constant-pool prefixes match; " + result.ambiguous + " ambiguous, "
                 + result.unmatched + " unmatched.");
-        if (!matchesExpected(result, EXPECTED_ENGLISH_MODULE_CHANGES)) {
-            System.out.println("::error title=Normalized module parity::Original module mapping or "
-                    + "class differences are not the reviewed localization-only set; see the report.");
+        Set<String> expected = embeddedMode ? Collections.emptySet() : EXPECTED_ENGLISH_MODULE_CHANGES;
+        if (!matchesExpected(result, expected)) {
+            System.out.println("::error title=Normalized module parity::" + subject + " module mapping or "
+                    + "class differences are not the expected set; see the report.");
             System.exit(1);
         }
     }
