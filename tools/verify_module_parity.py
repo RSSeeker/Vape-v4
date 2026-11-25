@@ -1,0 +1,405 @@
+#!/usr/bin/env python3
+"""Audit the English build against the pinned v4.21.58 source and EXE.
+
+No executable is run: the two PE resources (EXE -> DLL -> JAR) are read as
+bytes. This check verifies inventories and compiled class/resource equality;
+it cannot replace a Minecraft runtime test or prove identical behavior.
+"""
+
+import argparse
+import hashlib
+import io
+from pathlib import Path
+import struct
+import subprocess
+import sys
+import zipfile
+
+
+ORIGINAL_SHA256 = "9b77e8ae1bddb6296e5d773d19ecada341fe93ac8ef39559bddcca7a4b945482"
+BASE_COMMIT = "36aa9fb4890b2845de3452f008a334d0d08b774f"
+
+# These are the reviewed localization-only source files in this English fork.
+# Pin their complete contents so an unrelated change cannot hide inside an
+# approved file. Deliberate future changes require a fresh parity review.
+APPROVED_SOURCES = {
+    "gg/vape/Vape.java": "2da21b4ec883518e4d190ac7ac30921fd5cc1dcccdd350844a7722b4ca93dfb5",
+    "gg/vape/config/PublicProfileSettings.java": "ad84092706c242e2ec7f02a7a8855a35f11cb25f95cf1e584c317e051e430b3b",
+    "gg/vape/event/impl/EventRenderWorldPassExecutorDrain.java": "64f504db1a0f4d4d366edeae82e05c08de59ef1d29802e1a0cb92d380b3f2991",
+    "gg/vape/manager/client/GlobalSettingsController.java": "cde64f8889c4e191df4e6f4927e763d787748adca7261131e86c5b44f9dee6b4",
+    "gg/vape/manager/client/OnlineConnectionManager.java": "d43f088392707ab5d0677712c8c7703b84e60aff8b69bc8f1973019dc05118b5",
+    "gg/vape/module/none/ClientSettings.java": "92dc37e0c17b116fbc754ae51223aa2c7c81cc292d69d8bd5ab801d8bd7fa893",
+    "gg/vape/module/render/SpawnerFinder.java": "68b4b4fe35be4887778bba746b42070f8976672be3051ad8a0e93879bb5f3fd3",
+    "gg/vape/runtime/NativeBridge.java": "ca5f8024b13b55a1143090742859dc7605d94962f8eae74fb78c35939c0b23de",
+    "gg/vape/ui/click/frame/impl/online/OnlineConnectionRetryPageComponent.java": "c6972148235f2731fe093abfaf8edf685c64bee18f4c4bf335ad9da77815b548",
+    "gg/vape/utils/network/AnticheatProfile.java": "1954e7755d9e936b2264b93a22836eeadf7c678f584510ba292e2c72d626bd8d",
+    "gg/vape/utils/network/OutboundPacketPipeline.java": "1b991f5cd372546b2412b71cca30f8985834fa35fddd71e902ff04d0074be5b7",
+    "gg/vape/utils/render/OpenGlDeviceInfo.java": "abeb2fc96b3d007dad7405d79d17722213f7574fde98dc52a6e705eea04fdcfe",
+    "gg/vape/utils/render/RenderBatchManager.java": "645b1e34c96cf27758314f80cde946fa855e67c5f04abcfac94bdce02432be3b",
+}
+
+MODULE_EXCEPTIONS = {
+    "gg/vape/module/none/ClientSettings.java",
+    "gg/vape/module/render/SpawnerFinder.java",
+}
+
+# All other native files (including bridge, manual-map and controller code)
+# must match the baseline. These reviewed exceptions are translations, the
+# language reader, and its build/tests. Binary assets are compared byte-for-byte.
+APPROVED_NATIVE = {
+    "native/CMakeLists.txt": "5db5897b37927b5cb1e0dfb057cd48084f41d9b16cbbae1e6c504f5343be5dac",
+    "native/injector.c": "1e34fa9d34f84aa4052f2039bdaee93ee39c2cd2e998686f621376f37414708f",
+    "native/loader_gui/loader_language.cpp": "2ab4680092e008f9f547e9960a0f0c738c9dda7631f0a812b51617322c9e823a",
+    "native/loader_gui/loader_language.h": "06ec241e8626d994baeba1a5b54f723baa8fc7f27bb13b46ca5c0b0e73d8b2f7",
+    "native/loader_gui/loader_strings.cpp": "6bb6a6aeee3ec681db8504d593002568e18f60540ed03fcc2abc9efad6431dd5",
+    "native/loader_gui/loader_strings.h": "e96cd08aef7e49e127a9b3755e829ed5aafe3b6723f5be84a46b682c3e992132",
+    "native/loader_gui/main.cpp": "b7cc364bfef52e32d9b31497af891630a8041e3ed44a04159b7ba73ae2128f97",
+    "native/tests/loader_language_test.cpp": "b21e9c690c90d9618ad0bc8b936b91fe6b67ef40cf40e7c8c22419fa4859d741",
+    "native/tests/loader_strings_test.cpp": "0d60fd78fda307e493b703997203d92633194fa9d4d246f45481690cce048de0",
+}
+NATIVE_ADDITIONS = {
+    "native/loader_gui/loader_language.cpp",
+    "native/loader_gui/loader_language.h",
+    "native/tests/loader_language_test.cpp",
+}
+APPROVED_RESOURCES = {
+    "src/main/resources/resources/chinese.properties.txt": "deffbc7f8dd1f4b39f254865d2c9302e0403e8d0360b9e4459dd67beebcdba20",
+    "src/main/resources/resources/english.properties.txt": "b0a9d3e50d1d48722a7fb1f87103dab8e36272175080b0f5de59e20ee3d78ff4",
+}
+TEXT_SUFFIXES = {
+    ".c", ".cpp", ".h", ".cmake", ".in", ".rc", ".manifest", ".txt",
+    ".json", ".csv", ".srg", ".map", ".frag", ".vert",
+}
+
+
+class ParityError(Exception):
+    pass
+
+
+def require(condition, message):
+    if not condition:
+        raise ParityError(message)
+
+
+def sha256(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def replace_once(text, old, new, description):
+    require(text.count(old) == 1, "Expected exactly one " + description)
+    return text.replace(old, new, 1)
+
+
+def module_original_form(name, data):
+    """Reverse just the documented module localization edits."""
+    text = data.decode("utf-8")
+    if name.endswith("/none/ClientSettings.java"):
+        text = replace_once(
+            text,
+            '(String)"Language", (ModeSelection)FontSelector.j, (ModeSelection[])new ModeSelection[]{FontSelector.j, FontSelector.c}',
+            '(String)"Language", (ModeSelection)FontSelector.c, (ModeSelection[])new ModeSelection[]{FontSelector.j, FontSelector.c}',
+            "GUI Language default",
+        )
+    elif name.endswith("/render/SpawnerFinder.java"):
+        text = replace_once(text, "import gg.vape.notification.NotificationText;\n", "", "spawner import")
+        text = replace_once(text, '        String spawnerLabel = NotificationText.localize("Spawner");\n', "", "spawner label")
+        require(text.count('+ " " + spawnerLabel;') == 2, "Expected two translated spawner labels")
+        text = text.replace('+ " " + spawnerLabel;', '+ " 刷怪笼";')
+    return text.encode("utf-8")
+
+
+def file_map(directory, suffix):
+    return {p.relative_to(directory).as_posix(): p for p in directory.rglob("*" + suffix) if p.is_file()}
+
+
+def audit_sources(reference, current):
+    ref_root = reference / "src/main/java"
+    cur_root = current / "src/main/java"
+    ref_files, cur_files = file_map(ref_root, ".java"), file_map(cur_root, ".java")
+    require(ref_files and cur_files, "Java source trees are missing")
+    require(ref_files.keys() == cur_files.keys(), "Java source inventory changed")
+    changed = set()
+    module_count = 0
+    for name, ref_path in ref_files.items():
+        # Windows checkouts may use CRLF; compare canonical source text.
+        before = ref_path.read_bytes().replace(b"\r\n", b"\n")
+        after = cur_files[name].read_bytes().replace(b"\r\n", b"\n")
+        if name.startswith("gg/vape/module/"):
+            module_count += 1
+            if name in MODULE_EXCEPTIONS:
+                require(module_original_form(name, after) == before,
+                        "Unapproved logic change in module source " + name)
+            else:
+                require(before == after, "Unexpected module source change: " + name)
+        if before != after:
+            changed.add(name)
+            require(name in APPROVED_SOURCES, "Unexpected Java source change: " + name)
+            require(sha256(after) == APPROVED_SOURCES[name], "Unreviewed change in " + name)
+    require(changed == set(APPROVED_SOURCES), "The reviewed source-change set differs")
+    require(module_count > 0, "No module sources found")
+    return len(ref_files), module_count, len(changed)
+
+
+def audit_tree(reference, current, directory, approved, additions, excluded_names=()):
+    def collect(root):
+        folder = root / directory
+        require(folder.is_dir(), "Missing directory: " + str(folder))
+        return {p.relative_to(root).as_posix(): p for p in folder.rglob("*")
+                if p.is_file() and p.name not in excluded_names}
+
+    before, after = collect(reference), collect(current)
+    require(before.keys() | additions == after.keys(),
+            directory + " inventory changed; missing=" + str(sorted(before.keys() - after.keys())[:12])
+            + ", added=" + str(sorted(after.keys() - before.keys() - additions)[:12]))
+    changes = set()
+    for name, path in after.items():
+        data = path.read_bytes()
+        original = before[name].read_bytes() if name in before else None
+        # Checkouts on Windows may convert text to CRLF. Do not alter binary assets.
+        if path.suffix in TEXT_SUFFIXES or path.name == ".gitignore":
+            data = data.replace(b"\r\n", b"\n")
+            if original is not None:
+                original = original.replace(b"\r\n", b"\n")
+        if data != original:
+            changes.add(name)
+            require(name in approved, "Unreviewed change in " + name)
+            require(sha256(data) == approved[name], "Unreviewed content in " + name)
+    require(changes == set(approved), directory + " reviewed-change set differs")
+    return len(before), len(changes)
+
+
+def verify_baseline_checkout(path):
+    def git(*args):
+        result = subprocess.run(["git", "-C", str(path.resolve()), *args],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                encoding="utf-8", errors="replace", check=False)
+        require(result.returncode == 0, "Cannot verify baseline checkout: " + result.stderr.strip())
+        return result.stdout.strip()
+
+    require(git("rev-parse", "HEAD") == BASE_COMMIT, "Baseline checkout is not the pinned commit")
+    status = git("status", "--porcelain", "--untracked-files=all", "--",
+                 "src/main/java", "src/main/resources", "native")
+    require(not status, "Baseline source or resources have local changes: " + status[:500])
+
+
+def unpack(fmt, data, offset):
+    size = struct.calcsize(fmt)
+    require(offset >= 0 and offset + size <= len(data), "Truncated PE image")
+    return struct.unpack_from(fmt, data, offset)
+
+
+def pe_resource(image, resource_id):
+    """Read one numeric RT_RCDATA resource from a PE32/PE32+ file safely."""
+    require(image[:2] == b"MZ", "Missing DOS header")
+    nt = unpack("<I", image, 0x3C)[0]
+    require(image[nt:nt + 4] == b"PE\0\0", "Missing PE header")
+    sections = unpack("<H", image, nt + 6)[0]
+    optional_size = unpack("<H", image, nt + 20)[0]
+    optional = nt + 24
+    magic = unpack("<H", image, optional)[0]
+    require(magic in (0x10B, 0x20B), "Unsupported PE optional header")
+    data_directory = optional + (96 if magic == 0x10B else 112)
+    require(data_directory + 24 <= optional + optional_size, "Missing resource directory")
+    resource_rva, resource_size = unpack("<II", image, data_directory + 16)
+    require(resource_rva and resource_size, "PE image has no resources")
+    table = optional + optional_size
+    section_ranges = []
+    for index in range(sections):
+        off = table + index * 40
+        virtual_size, va, raw_size, raw_offset = unpack("<IIII", image, off + 8)
+        section_ranges.append((va, virtual_size, raw_size, raw_offset))
+
+    def offset_for(rva, size):
+        for va, _virtual_size, raw_size, raw_offset in section_ranges:
+            if va <= rva and rva - va + size <= raw_size:
+                result = raw_offset + rva - va
+                require(result + size <= len(image), "PE resource exceeds file")
+                return result
+        raise ParityError("PE resource RVA is outside file-backed sections")
+
+    def entries(relative):
+        off = offset_for(resource_rva + relative, 16)
+        named, numbered = unpack("<HH", image, off + 12)
+        count = named + numbered
+        require(count <= 65535, "Too many PE resource entries")
+        offset_for(resource_rva + relative, 16 + count * 8)
+        return [unpack("<II", image, off + 16 + i * 8) for i in range(count)]
+
+    def numeric_entry(relative, desired):
+        matches = [entry for entry in entries(relative)
+                   if not entry[0] & 0x80000000 and entry[0] == desired]
+        require(len(matches) == 1, "Missing or duplicate PE resource " + str(desired))
+        return matches[0][1]
+
+    type_dir = numeric_entry(0, 10)  # RT_RCDATA
+    require(type_dir & 0x80000000, "Invalid PE resource type directory")
+    name_dir = numeric_entry(type_dir & 0x7FFFFFFF, resource_id)
+    require(name_dir & 0x80000000, "Invalid PE resource name directory")
+    languages = entries(name_dir & 0x7FFFFFFF)
+    require(languages, "PE resource has no language")
+    data_rel = languages[0][1]
+    require(not data_rel & 0x80000000, "Unexpected PE resource directory nesting")
+    data_entry = offset_for(resource_rva + data_rel, 16)
+    data_rva, size = unpack("<II", image, data_entry)
+    require(data_rva and size, "Empty PE resource")
+    data_offset = offset_for(data_rva, size)
+    return image[data_offset:data_offset + size]
+
+
+def zip_hashes(data, predicate):
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        names = [name for name in archive.namelist() if predicate(name)]
+        require(len(names) == len(set(names)), "Duplicate entries in JAR")
+        return {name: sha256(archive.read(name)) for name in names}
+
+
+def same_inventory(left, right, description):
+    missing = sorted(left.keys() - right.keys())
+    added = sorted(right.keys() - left.keys())
+    require(not missing and not added,
+            description + " inventory changed; missing=" + str(missing[:12]) + ", added=" + str(added[:12]))
+
+
+def module_class(name):
+    return name.startswith("gg/vape/module/") and name.endswith(".class")
+
+
+def own_class(name):
+    return (name.startswith("gg/vape/") or name.startswith("func/")) and name.endswith(".class")
+
+
+def approved_class(name):
+    for source in APPROVED_SOURCES:
+        stem = source[:-5]
+        if name == stem + ".class" or name.startswith(stem + "$"):
+            return True
+    return False
+
+
+def product_resource(name):
+    return (not name.endswith("/")
+            and name.startswith(("mappings/", "resources/", "liquidbounce/"))
+            and name not in {"resources/english.properties.txt", "resources/chinese.properties.txt"})
+
+
+def audit_jars(reference_jar, english_jar, release_jar):
+    ref_modules = zip_hashes(reference_jar, module_class)
+    eng_modules = zip_hashes(english_jar, module_class)
+    release_modules = zip_hashes(release_jar, module_class)
+    require(ref_modules and eng_modules and release_modules, "Module class inventory missing")
+    same_inventory(ref_modules, eng_modules, "English module class")
+    same_inventory(release_modules, ref_modules, "Original release module class")
+    module_changes = sorted(name for name in ref_modules if ref_modules[name] != eng_modules[name])
+    allowed_modules = {name[:-5] + ".class" for name in MODULE_EXCEPTIONS}
+    require(set(module_changes) == allowed_modules,
+            "Unexpected module class changes: " + str(module_changes))
+
+    ref_classes = zip_hashes(reference_jar, own_class)
+    eng_classes = zip_hashes(english_jar, own_class)
+    same_inventory(ref_classes, eng_classes, "Owned class")
+    extra = sorted(name for name in ref_classes
+                   if ref_classes[name] != eng_classes[name] and not approved_class(name))
+    require(not extra, "Unexpected changed supporting classes: " + str(extra[:20]))
+
+    ref_resources = zip_hashes(reference_jar, product_resource)
+    eng_resources = zip_hashes(english_jar, product_resource)
+    same_inventory(ref_resources, eng_resources, "Product resource")
+    resource_changes = [name for name in ref_resources if ref_resources[name] != eng_resources[name]]
+    require(not resource_changes, "Unexpected resource changes: " + str(resource_changes[:20]))
+
+    release_differences = sorted(name for name in release_modules
+                                 if release_modules[name] != ref_modules[name])
+    return {
+        "module_classes": len(ref_modules),
+        "matching_module_classes": len(ref_modules) - len(module_changes),
+        "module_changes": module_changes,
+        "own_classes": len(ref_classes),
+        "resources": len(ref_resources),
+        "release_differences": release_differences,
+        "release_english_matches": sum(release_modules[name] == eng_modules[name] for name in release_modules),
+    }
+
+
+def emit_notice(title, text):
+    print("::notice title=" + title + "::" + text.replace("%", "%25").replace("\n", "%0A"))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--baseline-source", type=Path, required=True)
+    parser.add_argument("--current-source", type=Path, required=True)
+    parser.add_argument("--baseline-jar", type=Path, required=True)
+    parser.add_argument("--current-jar", type=Path, required=True)
+    parser.add_argument("--original-exe", type=Path, required=True)
+    parser.add_argument("--current-exe", type=Path, required=True)
+    parser.add_argument("--current-dll", type=Path, required=True)
+    parser.add_argument("--report", type=Path, required=True)
+    args = parser.parse_args()
+
+    verify_baseline_checkout(args.baseline_source)
+    source_count, module_source_count, changed_sources = audit_sources(args.baseline_source, args.current_source)
+    native_count, native_changes = audit_tree(args.baseline_source, args.current_source,
+                                              "native", APPROVED_NATIVE, NATIVE_ADDITIONS,
+                                              ("README.md", "README_EN.md"))
+    resource_count, resource_changes = audit_tree(args.baseline_source, args.current_source,
+                                                  "src/main/resources", APPROVED_RESOURCES, set())
+    original = args.original_exe.read_bytes()
+    require(sha256(original) == ORIGINAL_SHA256, "Original EXE SHA-256 does not match the supplied hash")
+    release_dll = pe_resource(original, 422)
+    release_jar = pe_resource(release_dll, 421)
+
+    current_jar = args.current_jar.read_bytes()
+    current_exe = args.current_exe.read_bytes()
+    embedded_dll = pe_resource(current_exe, 422)
+    require(embedded_dll == args.current_dll.read_bytes(), "External DLL differs from embedded DLL")
+    require(pe_resource(embedded_dll, 421) == current_jar, "EXE does not embed the tested Java payload")
+    stats = audit_jars(args.baseline_jar.read_bytes(), current_jar, release_jar)
+    official_matches = stats["module_classes"] - len(stats["release_differences"])
+
+    lines = [
+        "Vape 4.21.58 English build: module parity audit",
+        "",
+        "Baseline source commit: " + BASE_COMMIT,
+        "Original release EXE SHA-256 verified: " + ORIGINAL_SHA256,
+        "English EXE SHA-256: " + sha256(current_exe),
+        "English DLL SHA-256: " + sha256(embedded_dll),
+        "English Java payload SHA-256: " + sha256(current_jar),
+        f"Java source files: {source_count}; module sources: {module_source_count}; reviewed localized files: {changed_sources}.",
+        "All module sources match the baseline after reversing the English default and spawner-label edits.",
+        f"Native files: {native_count} baseline files; {native_changes} reviewed localization/build/test changes or additions.",
+        f"Resource files: {resource_count} baseline files; {resource_changes} reviewed translation changes.",
+        f"Same-toolchain builds: {stats['matching_module_classes']}/{stats['module_classes']} module class files are byte-identical.",
+        "The only differing module classes are the GUI language default and spawner label:",
+        *("  " + name for name in stats["module_changes"]),
+        f"Owned class inventory ({stats['own_classes']} files) unchanged; no unreviewed class differences.",
+        f"Non-language product resources ({stats['resources']} files) unchanged.",
+        "Native bridge/loading files unchanged; EXE and optional DLL embed the tested JAR.",
+        f"Original release vs same-source baseline: {official_matches}/{stats['module_classes']} module class files byte-identical.",
+        f"Original release vs English build: {stats['release_english_matches']}/{stats['module_classes']} module class files byte-identical.",
+    ]
+    if stats["release_differences"]:
+        lines += ["Original-release differences (possibly compiler/build differences; not runtime-tested):"]
+        lines += ["  " + name for name in stats["release_differences"]]
+    lines += [
+        "",
+        "Scope: static source, class and resource checks only. Module behavior has not been",
+        "tested inside Minecraft; this report is not a guarantee of runtime equivalence.",
+        "",
+    ]
+    args.report.parent.mkdir(parents=True, exist_ok=True)
+    args.report.write_text("\n".join(lines), encoding="utf-8")
+    for line in lines:
+        print(line)
+    emit_notice("Module source parity", f"{module_source_count} module source files verified; only two localization edits.")
+    emit_notice("Module class parity", f"{stats['matching_module_classes']}/{stats['module_classes']} module class files byte-identical in same-toolchain builds; 2 localization exceptions.")
+    emit_notice("Original release comparison", f"Original EXE hash verified; {official_matches}/{stats['module_classes']} module class files match the baseline build, and {stats['release_english_matches']}/{stats['module_classes']} match the English build byte-for-byte.")
+    emit_notice("Runtime test limitation", "Static parity checks passed; module behavior was not tested in Minecraft.")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (ParityError, OSError, zipfile.BadZipFile, UnicodeError) as error:
+        print("PARITY CHECK FAILED: " + str(error), file=sys.stderr)
+        print("::error title=Module parity check::" + str(error).replace("%", "%25").replace("\n", "%0A"))
+        sys.exit(1)

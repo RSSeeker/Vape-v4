@@ -123,7 +123,9 @@ Outputs are written to `build/native/dist`:
 > the `-nogui` mode of the same exe (`injector.c` is compiled into it).
 
 `prepareInjectionBundle` copies those two artifacts plus this README into
-`build/injection/`, producing a single-file bundle ready to hand out.
+`build/injection/`. A successful Windows CI bundle also includes SHA-256 hashes
+and `MODULE-PARITY-REPORT.txt` with static source and payload comparison results.
+Those checks do not replace gameplay testing or guarantee identical behavior.
 
 ## Direct injection
 

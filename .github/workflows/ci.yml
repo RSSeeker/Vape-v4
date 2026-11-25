@@ -46,6 +46,15 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Set up Python for parity checks
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test the parity checker
+        shell: pwsh
+        run: python -B -X utf8 -m unittest discover -s tools/tests -v
+
       - name: Build and verify the Java 8-compatible payload
         shell: pwsh
         run: .\gradlew.bat clean build verifyInjectionPayload -PtargetRelease=8 -PnoObfuscation --stacktrace
@@ -57,6 +66,57 @@ jobs:
       - name: Run native tests
         shell: pwsh
         run: ctest --test-dir build/native -C Release --output-on-failure
+
+      # Rebuild the exact upstream tag's source using the same build script,
+      # dependencies and toolchain as the English payload, so class-byte
+      # comparisons are not distorted by a different compiler or build flags.
+      - name: Check out the pinned 4.21.58 baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 36aa9fb4890b2845de3452f008a334d0d08b774f
+          path: build/module-parity-baseline
+          persist-credentials: false
+
+      - name: Build the baseline Java payload
+        shell: pwsh
+        run: |
+          Copy-Item -LiteralPath 'build.gradle' -Destination 'build/module-parity-baseline/build.gradle' -Force
+          .\gradlew.bat -p build/module-parity-baseline injectionJar -PtargetRelease=8 -PnoObfuscation --stacktrace
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # Download only for offline byte inspection, never execute the original.
+      # Its hash is checked against the one supplied with the task before use.
+      - name: Download and verify the original release EXE
+        shell: pwsh
+        run: |
+          $original = Join-Path $env:RUNNER_TEMP 'Vape-v4.21.58-original.exe'
+          $url = 'https://github.com/RSSeeker/Vape-v4/releases/download/v4.21.58/Vape-v4.21.58.exe'
+          & curl.exe --silent --show-error --fail --location --retry 3 --retry-delay 3 --connect-timeout 30 --output $original $url
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download the original release for parity inspection.' }
+          $hash = (Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne '9b77e8ae1bddb6296e5d773d19ecada341fe93ac8ef39559bddcca7a4b945482') {
+            throw "Original release SHA-256 mismatch: $hash"
+          }
+          Write-Output "::notice title=Original release checksum::SHA-256 verified: $hash"
+
+      - name: Audit source, compiled modules, and embedded payload
+        shell: pwsh
+        run: |
+          $baseline = @(Get-ChildItem -Path 'build/module-parity-baseline/build/libs' -Filter '*-injection.jar' -File)
+          $current = @(Get-ChildItem -Path 'build/libs' -Filter '*-injection.jar' -File)
+          $executables = @(Get-ChildItem -Path 'build/injection' -Filter 'Vape-v*.exe' -File)
+          if ($baseline.Count -ne 1 -or $current.Count -ne 1 -or $executables.Count -ne 1) {
+            throw 'Expected exactly one baseline JAR, English JAR, and English EXE.'
+          }
+          python -B -X utf8 tools/verify_module_parity.py `
+            --baseline-source 'build/module-parity-baseline' --current-source '.' `
+            --baseline-jar $baseline[0].FullName --current-jar $current[0].FullName `
+            --original-exe (Join-Path $env:RUNNER_TEMP 'Vape-v4.21.58-original.exe') `
+            --current-exe $executables[0].FullName --current-dll 'build/injection/Vape-v4.21Native.dll' `
+            --report 'build/injection/MODULE-PARITY-REPORT.txt'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '## Module parity audit'
+          Get-Content -LiteralPath 'build/injection/MODULE-PARITY-REPORT.txt' | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
 
       - name: Record bundle checksums
         shell: pwsh

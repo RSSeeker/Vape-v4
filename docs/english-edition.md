@@ -1,6 +1,6 @@
 # English edition: source analysis
 
-The supplied release is `Vape-v4.21.58.exe` (the supplied SHA-256 is recorded in the [README](../README.md)). This checkout's `build.gradle` also identifies version 4.21.58. The linked release redirected to a binary host unavailable in this environment, so its bytes and checksum were **not** verified here. The changes below are based on the existing recovered source, not a claim that this build is byte-for-byte identical to the release.
+The supplied release is `Vape-v4.21.58.exe` (the supplied SHA-256 is recorded in the [README](../README.md)). This checkout's `build.gradle` also identifies version 4.21.58, and the upstream tag points to source commit `36aa9fb4890b2845de3452f008a334d0d08b774f`. The local sandbox could not download the release binary; Windows CI downloads it for hash verification and offline inspection. Consult the report from a successful run for the results. These changes are based on recovered source, not a claim that the English build is byte-for-byte identical to the release.
 
 ## How the project is assembled
 
@@ -18,7 +18,7 @@ The DLL carries the Java JAR as resource **421** (`native/payload.rc.in`); the E
 - `PublicProfileSettings` and the GUI module's `ClientSettings` now default to `FontSelector.j` (English); Chinese remains available as `FontSelector.c`.
 - `IndependentSettingsManager` omits default settings when saving. Consequently an absent Language entry now means English; an explicitly saved Chinese entry remains Chinese.
 - The launcher reads only `settings.otherData` from `<exe>/.vapeclient/config.json`. Its initial and failure fallback is English. It honors a saved Chinese entry and never changes the file itself. The bounded parser rejects malformed documents and ignores unrelated lookalike entries in profiles.
-- `Vape.initializeManagers` applies a saved language immediately after loading configuration, before the startup notification.
+- `Vape.initializeManagers` retains the original initialization order; a saved language is applied at the same point as in the 4.21.58 source.
 - `english.properties.txt` supplies English strings; paired Chinese strings are retained for switched-language use. Previously hard-coded Chinese cache, reconnection and spawner labels now use the localization mechanism. Console messages and renderer diagnostics were translated separately.
 
 An explicit non-default selection is serialized in the existing format, for example:
@@ -33,4 +33,6 @@ Do not replace an existing configuration with this example: it would omit your o
 
 `Vape421LoaderLanguageTest` covers the portable JSON selection logic, and `Vape421LoaderStringsTest` covers the Win32 loader's file-based selection and table contents. `verifyLocalization` validates the English resource strings and paired dynamic translations; `verifyFontCoverage` checks the Chinese font. The Windows CI workflow builds the Java 8-compatible payload and native bundle and runs the CTest suite.
 
-No Windows game session or end-to-end native injection was run in this environment, and no release binary was produced here. A Windows MSVC build and authorized runtime test are still required. Locally rebuilt binaries will not have the upstream release's hash or signature.
+The module-parity audit compares the pinned source with this branch, including all 460 Java files in the module tree. The only module source exceptions are the GUI language default in `ClientSettings` and the displayed label in `SpawnerFinder`; the audit reverses those exact edits and requires the originals to match. It also checks supporting Java sources, native code and resources against a reviewed list of localization changes. CI rebuilds the baseline with the same build script, JDK and flags, compares class and module inventories, checks the rebuilt EXE's embedded DLL and payload, and inspects the upstream EXE after verifying the supplied SHA-256. Results are placed in `MODULE-PARITY-REPORT.txt` in a successful bundle.
+
+These are static source and build checks, not proof of identical runtime behavior. No Minecraft game session, end-to-end injection or module-by-module gameplay test has been performed in this environment. An authorized runtime test on the intended Minecraft version is still required. Rebuilt binaries will not have the upstream release's hash or signature.

@@ -26,9 +26,9 @@ $jdk8 = 'C:\Program Files\Java\jdk1.8.0_301'
 ctest --test-dir build/native -C Release --output-on-failure
 ```
 
-The expected result is `build\injection\Vape-v4.21.58.exe`, a single-file loader containing the rebuilt DLL and Java payload. This checkout has not been built or run on Windows in this environment. The bundle also includes the matching optional DLL. Keep it separate from the original release: the rebuilt EXE has a different hash and is unsigned unless you configure your own signing certificate.
+The expected result is `build\injection\Vape-v4.21.58.exe`, a single-file loader containing the rebuilt DLL and Java payload. Windows CI builds the bundle and runs native tests; it does not test gameplay. The bundle also includes the matching optional DLL. Keep it separate from the original release: the rebuilt EXE has a different hash and is unsigned unless you configure your own signing certificate.
 
-Alternatively, after pushing the branch, run **Actions → Build and test → Run workflow** on that branch. A successful Windows run uploads the **windows-x64-english-bundle** artifact for 14 days, including `SHA256SUMS.txt` for the rebuilt EXE and DLL. GitHub Actions may need to be enabled on your fork first.
+Alternatively, push the branch or run **Actions → Build and test → Run workflow** on that branch. A successful Windows run uploads the **windows-x64-english-bundle** artifact for 14 days, including `SHA256SUMS.txt` and `MODULE-PARITY-REPORT.txt`. The report records source and payload comparisons against the pinned v4.21.58 baseline and the hash-verified upstream release; it is not an in-game functionality guarantee. GitHub Actions may need to be enabled on your fork first.
 
 To run the loader, start a supported 64-bit Minecraft instance, launch the EXE and select the process; Right Shift opens the in-game GUI by default. See the [compatibility notes](README_EN.md#minecraft-compatibility) and the [script security warning](README_EN.md#script-extensions) before use.
 
@@ -40,4 +40,4 @@ The supplied SHA-256 for the **original** `Vape-v4.21.58.exe` is:
 9b77e8ae1bddb6296e5d773d19ecada341fe93ac8ef39559bddcca7a4b945482
 ```
 
-Verify a downloaded original with `Get-FileHash .\Vape-v4.21.58.exe -Algorithm SHA256`. This checksum does **not** apply to the rebuilt English EXE. The release binary was not needed as an input to the source build and has not been independently verified in this checkout.
+Verify a downloaded original with `Get-FileHash .\Vape-v4.21.58.exe -Algorithm SHA256`. This checksum does **not** apply to the rebuilt English EXE. The original binary is not an input to the source build. The Windows CI parity step downloads it only for hash verification and offline payload comparison; consult the report from a successful run for that run's results.

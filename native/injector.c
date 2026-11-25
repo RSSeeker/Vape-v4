@@ -539,7 +539,7 @@ int console_main(int argc, wchar_t **argv) {
     _setmode(_fileno(stdout), _O_U8TEXT);
     _setmode(_fileno(stderr), _O_U8TEXT);
     setlocale(LC_ALL, ".UTF-8");
-    if (argc > 1) {
+    if (argc > 2) {
         usage();
         return 2;
     }

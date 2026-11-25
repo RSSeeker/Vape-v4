@@ -441,9 +441,6 @@ public class Vape {
         this.modManager.initializeAllModules();
         this.notificationManager = new NotificationManager();
         this.syncThread.loadConfig();
-        // Apply a saved language before module initialization and the startup
-        // notification are rendered; absent settings use the English default.
-        this.getFontSelector().N((FontOption)this.publicProfileSettings.language.getValue());
         this.traceStep(25);
         this.modManager.finishModuleInitialization();
         if (this.publicProfileSettings.getSelectedProfile() != null) {
@@ -469,6 +466,7 @@ public class Vape {
         this.initClientListeners();
         this.showLoadCompleteNotification();
         this.syncThread.clearPendingSave();
+        this.getFontSelector().N((FontOption)Vape.INSTANCE.getPublicProfileSettings().language.getValue());
         this.syncThread.start();
         this.traceStep(28);
         NativeBridge.dc();
