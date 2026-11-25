@@ -28,7 +28,7 @@ ctest --test-dir build/native -C Release --output-on-failure
 
 The expected result is `build\injection\Vape-v4.21.58.exe`, a single-file loader containing the rebuilt DLL and Java payload. This checkout has not been built or run on Windows in this environment. The bundle also includes the matching optional DLL. Keep it separate from the original release: the rebuilt EXE has a different hash and is unsigned unless you configure your own signing certificate.
 
-Alternatively, after pushing the branch, run **Actions → Build and test → Run workflow** on that branch. A successful Windows run uploads the **windows-x64-english-bundle** artifact for 14 days. GitHub Actions may need to be enabled on your fork first.
+Alternatively, after pushing the branch, run **Actions → Build and test → Run workflow** on that branch. A successful Windows run uploads the **windows-x64-english-bundle** artifact for 14 days, including `SHA256SUMS.txt` for the rebuilt EXE and DLL. GitHub Actions may need to be enabled on your fork first.
 
 To run the loader, start a supported 64-bit Minecraft instance, launch the EXE and select the process; Right Shift opens the in-game GUI by default. See the [compatibility notes](README_EN.md#minecraft-compatibility) and the [script security warning](README_EN.md#script-extensions) before use.
 

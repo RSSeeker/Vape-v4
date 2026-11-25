@@ -58,6 +58,20 @@ jobs:
         shell: pwsh
         run: ctest --test-dir build/native -C Release --output-on-failure
 
+      - name: Record bundle checksums
+        shell: pwsh
+        run: |
+          $executables = @(Get-ChildItem -Path build/injection -Filter 'Vape-v*.exe' -File)
+          if ($executables.Count -ne 1) { throw "Expected exactly one rebuilt EXE" }
+          $dll = Get-Item -LiteralPath 'build/injection/Vape-v4.21Native.dll'
+          $checksums = foreach ($file in ($executables + @($dll))) {
+            $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($file.Name)"
+          }
+          $checksums | Set-Content -LiteralPath 'build/injection/SHA256SUMS.txt' -Encoding ascii
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '## Rebuilt bundle SHA-256'
+          $checksums | ForEach-Object { Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- $_" }
+
       - name: Upload Java injection payload
         uses: actions/upload-artifact@v4
         with:

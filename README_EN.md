@@ -318,8 +318,8 @@ The DLL embeds the Java injection JAR as an `RCDATA` resource, so a separate pay
 Once these changes are pushed to the working branch, open **Actions → Build and
 test → Run workflow**, select that branch and run it (enable Actions on the fork
 if needed). The successful run publishes `windows-x64-english-bundle` as an
-artifact for 14 days. It contains the rebuilt EXE and a matching optional DLL;
-this is not the original signed release. The workflow also runs on pull requests
+artifact for 14 days. It contains the rebuilt EXE, a matching optional DLL and
+`SHA256SUMS.txt`; this is not the original signed release. The workflow also runs on pull requests
 and pushes to `arena/**`.
 
 ## Running in an isolated environment
