@@ -1,6 +1,7 @@
 import contextlib
 import io
 from pathlib import Path
+import re
 import struct
 import sys
 import tempfile
@@ -72,21 +73,33 @@ class JarComparisonTests(unittest.TestCase):
         self.gui = "gg/vape/module/none/ClientSettings.class"
         self.spawner = "gg/vape/module/render/SpawnerFinder.class"
         self.other = "gg/vape/module/combat/Example.class"
+        self.enhanced = "gg/vape/module/combat/Enhanced.class"
+        self.added = "gg/vape/rotation/Helper.class"
         self.support = "gg/vape/click/ClickEngine.class"
         self.resources = "mappings/example.srg"
         self.reference = {
             self.gui: b"old gui", self.spawner: b"old label", self.other: b"same module",
-            self.support: b"same support", self.resources: b"same mappings",
+            self.enhanced: b"old rotation", self.support: b"same support", self.resources: b"same mappings",
             "resources/english.properties.txt": b"old language",
         }
         self.english = dict(self.reference)
         self.english[self.gui] = b"new gui"
         self.english[self.spawner] = b"new label"
+        self.english[self.enhanced] = b"reviewed rotation"
+        self.english[self.added] = b"reviewed helper"
         self.english["resources/english.properties.txt"] = b"new language"
+        enhancements = {"gg/vape/module/combat/Enhanced.java": "hash",
+                        "gg/vape/rotation/Helper.java": "hash"}
+        patches = [mock.patch.object(parity, "APPROVED_ENHANCEMENTS", enhancements),
+                   mock.patch.object(parity, "ENHANCED_MODULE_SOURCES", {"gg/vape/module/combat/Enhanced.java"}),
+                   mock.patch.object(parity, "JAVA_ADDED_CLASSES", {self.added})]
+        for patch in patches:
+            patch.start()
+            self.addCleanup(patch.stop)
 
     def test_accepts_only_expected_changes(self):
         result = parity.audit_jars(jar(self.reference), jar(self.english), jar(self.reference))
-        self.assertEqual(result["module_classes"], 3)
+        self.assertEqual(result["module_classes"], 4)
         self.assertEqual(result["matching_module_classes"], 1)
         self.assertEqual(result["release_differences"], [])
         self.assertEqual(result["release_english_matches"], 1)
@@ -97,6 +110,15 @@ class JarComparisonTests(unittest.TestCase):
             parity.audit_jars(jar(self.reference), jar(self.english), jar(self.reference))
         self.english[self.other] = self.reference[self.other]
         self.english[self.support] = b"changed support"
+        with self.assertRaises(parity.ParityError):
+            parity.audit_jars(jar(self.reference), jar(self.english), jar(self.reference))
+
+    def test_requires_only_the_reviewed_added_classes(self):
+        del self.english[self.added]
+        with self.assertRaises(parity.ParityError):
+            parity.audit_jars(jar(self.reference), jar(self.english), jar(self.reference))
+        self.english[self.added] = b"reviewed helper"
+        self.english["gg/vape/rotation/Unexpected.class"] = b"unexpected"
         with self.assertRaises(parity.ParityError):
             parity.audit_jars(jar(self.reference), jar(self.english), jar(self.reference))
 
@@ -172,10 +194,11 @@ class ReportIntegrationTests(unittest.TestCase):
                     contextlib.redirect_stdout(io.StringIO()):
                 parity.main()
             report = (root / "report.txt").read_text(encoding="utf-8")
-            self.assertIn("1/3 module class files are byte-identical", report)
-            self.assertIn("3/3 module class files byte-identical", report)
+            self.assertIn("1/4 module class files are byte-identical", report)
+            self.assertIn("4/4 module class files byte-identical", report)
             self.assertIn(parity.sha256(english_exe), report)
             self.assertEqual((root / "extracted.jar").read_bytes(), baseline_jar)
+            self.assertIn("Rotation enhancements intentionally change behavior", report)
             self.assertIn("not a guarantee of runtime equivalence", report)
 
 
@@ -196,28 +219,53 @@ class SourceComparisonTests(unittest.TestCase):
         gui = "gg/vape/module/none/ClientSettings.java"
         spawner = "gg/vape/module/render/SpawnerFinder.java"
         other = "gg/vape/module/combat/Original.java"
+        enhanced = "gg/vape/module/combat/Enhanced.java"
+        added = "gg/vape/rotation/Helper.java"
         support = "gg/vape/Vape.java"
         edited_gui = b'(String)"Language", (ModeSelection)FontSelector.j, (ModeSelection[])new ModeSelection[]{FontSelector.j, FontSelector.c}'
         edited_spawner = ('import gg.vape.notification.NotificationText;\n'
                           '        String spawnerLabel = NotificationText.localize("Spawner");\n'
                           'x + " " + spawnerLabel;\ny + " " + spawnerLabel;\n').encode()
-        data = {gui: edited_gui, spawner: edited_spawner,
-                other: b"unchanged module\n", support: b"translated diagnostic\n"}
+        data = {gui: edited_gui, spawner: edited_spawner, other: b"unchanged module\n",
+                enhanced: b"reviewed rotation\n", added: b"reviewed helper\n", support: b"translated diagnostic\n"}
         original = dict(data)
+        del original[added]
         original[gui] = parity.module_original_form(gui, edited_gui)
         original[spawner] = parity.module_original_form(spawner, edited_spawner)
+        original[enhanced] = b"old rotation\n"
         original[support] = b"old diagnostic\n"
         for name, contents in data.items():
             self.put(self.current / "src/main/java", name, contents.replace(b"\n", b"\r\n"))
-            self.put(self.baseline / "src/main/java", name, original[name])
+            if name in original:
+                self.put(self.baseline / "src/main/java", name, original[name])
         approved = {name: parity.sha256(data[name]) for name in (gui, spawner, support)}
-        with mock.patch.object(parity, "APPROVED_SOURCES", approved):
-            self.assertEqual(parity.audit_sources(self.baseline, self.current), (4, 3, 3))
+        enhancements = {name: parity.sha256(data[name]) for name in (enhanced, added)}
+        with mock.patch.object(parity, "APPROVED_SOURCES", approved), \
+                mock.patch.object(parity, "APPROVED_ENHANCEMENTS", enhancements), \
+                mock.patch.object(parity, "ENHANCED_MODULE_SOURCES", {enhanced}), \
+                mock.patch.object(parity, "JAVA_ADDITIONS", {added}):
+            self.assertEqual(parity.audit_sources(self.baseline, self.current), (5, 4, 5))
             self.put(self.current / "src/main/java", other, b"changed behavior\n")
             with self.assertRaises(parity.ParityError):
                 parity.audit_sources(self.baseline, self.current)
             self.put(self.current / "src/main/java", other, data[other])
+            self.put(self.current / "src/main/java", enhanced, b"unreviewed behavior\n")
+            with self.assertRaises(parity.ParityError):
+                parity.audit_sources(self.baseline, self.current)
+            self.put(self.current / "src/main/java", enhanced, data[enhanced])
+            self.put(self.current / "src/main/java", added, b"unreviewed helper\n")
+            with self.assertRaises(parity.ParityError):
+                parity.audit_sources(self.baseline, self.current)
+            self.put(self.current / "src/main/java", added, data[added])
             self.put(self.current / "src/main/java", gui, edited_gui + b"unexpected")
+            with self.assertRaises(parity.ParityError):
+                parity.audit_sources(self.baseline, self.current)
+            self.put(self.current / "src/main/java", gui, data[gui])
+            (self.current / "src/main/java" / added).unlink()
+            with self.assertRaises(parity.ParityError):
+                parity.audit_sources(self.baseline, self.current)
+            self.put(self.current / "src/main/java", added, data[added])
+            self.put(self.current / "src/main/java", "gg/vape/rotation/Unexpected.java", b"extra")
             with self.assertRaises(parity.ParityError):
                 parity.audit_sources(self.baseline, self.current)
 
@@ -242,6 +290,15 @@ class SourceComparisonTests(unittest.TestCase):
         self.put(self.current, "native/new_injection.c", b"extra\n")
         with self.assertRaises(parity.ParityError):
             parity.audit_tree(self.baseline, self.current, "native", approved, {added})
+
+
+class ReviewManifestTests(unittest.TestCase):
+    def test_python_and_java_module_exceptions_agree(self):
+        java = (Path(__file__).resolve().parents[1] / "ObfuscatedClassAudit.java").read_text(encoding="utf-8")
+        section = java.split("EXPECTED_ENGLISH_MODULE_CHANGES =", 1)[1].split("));", 1)[0]
+        actual = set(re.findall(r'"(gg/vape/module/[^\"]+)"', section))
+        expected = {name[:-5] for name in parity.MODULE_EXCEPTIONS | parity.ENHANCED_MODULE_SOURCES}
+        self.assertEqual(actual, expected)
 
 
 if __name__ == "__main__":

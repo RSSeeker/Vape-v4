@@ -10,6 +10,7 @@ import gg.vape.module.none.ClientSettings;
 import gg.vape.rotation.PlayerMouseRotationApplier;
 import gg.vape.Vape;
 import gg.vape.rotation.RotationManager;
+import gg.vape.rotation.RotationMath;
 import gg.vape.unmap.ModeOption;
 import gg.vape.unmap.ModeSelection;
 import gg.vape.utils.MathUtil;
@@ -26,25 +27,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * KissClient AutoAim（KissV1.4 可读源码 {@code com/kiss/module/modules/combat/AutoAim.java}）的等价移植。
- *
- * <p>Kiss 的自动瞄准分两套控制器：</p>
- * <ul>
- *   <li><b>New</b>（默认）：把目标角速度做前馈，再用二阶弹簧（omega² 与 2·omega）积分出 yaw/pitch
- *       角速度与角度，带 deadzone 与 predict 预判；</li>
- *   <li><b>Old</b>：把角度差除以 Smooth 得到本帧目标角，pitch 侧再做距离/速度自适应的额外平滑、EMA
- *       与 deadzone，并叠加 0.01° 的自然漂移。</li>
- * </ul>
- * <p>两者最后都会按鼠标灵敏度 GCD 对齐（{@code snapToSensitivity}）再写回玩家朝向。</p>
- *
- * <p>Vape 侧只把"写回朝向"换成 {@link PlayerMouseRotationApplier#applyTrackedMouseDelta(float, float)}，
- * 目标搜索、预判、弹簧积分与 Old 模式的平滑全部按 Kiss 源码逐行移植。Kiss 的 Team Check / NPC Check
- * 依赖其自带的 EntityClassifier，本移植未接入，因此不提供这两项。</p>
+ * AimAssist's Kiss-inspired New and Old controllers. New uses a
+ * time-stepped spring and bounded target prediction; Old uses incremental
+ * smoothing and carries fractional mouse movement. Both apply relative
+ * sensitivity-sized changes unless the optional off-grid jitter is enabled.
+ * Target filtering still uses the parent module's existing settings.
  */
 public class AimAssistKissSubModule
 extends SubModule<AimAssist> {
     private static final int MAX_LOST_TICKS = 20;
-    private static final int MAX_NEW_LOST_FRAMES = 30;
     private static final float MAX_TARGET_ANG_VEL = 540.0f;
     private static final double MAX_TARGET_JUMP = 2.0;
     private static final double MAX_FRAME_DT = 0.1;
@@ -82,6 +73,7 @@ extends SubModule<AimAssist> {
 
     private boolean yStateInitialized;
     private double lastTargetY;
+    private long lastOldTargetNanos;
     private double targetVelocityY;
     private float smoothedPitchTarget = Float.NaN;
     private int targetLostTicks;
@@ -93,9 +85,11 @@ extends SubModule<AimAssist> {
     private int offTimer;
 
     private boolean newInit;
-    private Object newAimTargetObject;
-    private Vec3d lastNewTargetPoint;
-    private long lastNewTargetNanos;
+    private Object trackedTargetObject;
+    private ModeSelection trackedAimMode;
+    private final RotationMath.TargetPredictor newPredictor = new RotationMath.TargetPredictor(MAX_TARGET_JUMP, 20.0, 1.0);
+    private final RotationMath.StepQuantizer oldYawQuantizer = new RotationMath.StepQuantizer();
+    private final RotationMath.StepQuantizer oldPitchQuantizer = new RotationMath.StepQuantizer();
     private long lastNewDesiredNanos;
     private float lastNewDesiredYaw;
     private float lastNewDesiredPitch;
@@ -103,7 +97,6 @@ extends SubModule<AimAssist> {
     private float newPitch;
     private float newYawVel;
     private float newPitchVel;
-    private int newTargetLostFrames;
     private long lastNewFrameNanos;
     private float lastNewFrameDt;
 
@@ -152,19 +145,21 @@ extends SubModule<AimAssist> {
 
     private void resetState() {
         this.yStateInitialized = false;
+        this.lastOldTargetNanos = 0L;
         this.lastTargetY = 0.0;
         this.targetVelocityY = 0.0;
         this.smoothedPitchTarget = Float.NaN;
         this.targetLostTicks = 0;
         this.lastKnownVelocityY = 0.0;
         this.newInit = false;
-        this.lastNewTargetPoint = null;
-        this.lastNewTargetNanos = 0L;
+        this.newPredictor.reset();
+        this.oldYawQuantizer.reset();
+        this.oldPitchQuantizer.reset();
+        this.trackedTargetObject = null;
+        this.trackedAimMode = null;
         this.lastNewDesiredNanos = 0L;
         this.newYawVel = 0.0f;
         this.newPitchVel = 0.0f;
-        this.newTargetLostFrames = 0;
-        this.newAimTargetObject = null;
         this.lastNewFrameNanos = 0L;
         this.lastNewFrameDt = 0.0f;
     }
@@ -172,14 +167,19 @@ extends SubModule<AimAssist> {
     @EventHandler
     public void onPreRenderTick(EventPreRenderTick event) {
         if (event.getWorld().isNull()) {
+            this.target = null;
+            this.resetState();
             return;
         }
         EntityPlayerSP player = Minecraft.thePlayer();
         if (player.isNull() || Minecraft.currentScreen().getObject() != null) {
+            this.target = null;
+            this.resetState();
             return;
         }
         AimAssist aimAssist = this.getParent();
         if (!aimAssist.canAim() || !ClientSettings.INSTANCE.inputEnabled) {
+            this.target = null;
             this.resetState();
             return;
         }
@@ -208,19 +208,20 @@ extends SubModule<AimAssist> {
             this.target = null;
             return;
         }
+        ModeSelection selectedAimMode = (ModeSelection)this.aimMode.getValue();
+        if (this.trackedTargetObject != found.getObject() || this.trackedAimMode != selectedAimMode) {
+            this.resetState();
+            this.trackedTargetObject = found.getObject();
+            this.trackedAimMode = selectedAimMode;
+        }
         this.target = found;
         this.targetLostTicks = 0;
 
         Vec3d eye = this.eyePosition(player);
         Vec3d targetPoint = this.getTargetPoint(found);
-        float currentYaw = player.J();
-        float currentPitch = player.V();
-        if (this.aimMode.getValue() == this.newMode) {
-            if (this.newAimTargetObject != found.getObject()) {
-                this.newAimTargetObject = found.getObject();
-                this.lastNewTargetPoint = null;
-                this.lastNewDesiredNanos = 0L;
-            }
+        float currentYaw = RotationManager.getViewYaw(player);
+        float currentPitch = RotationManager.getViewPitch(player);
+        if (selectedAimMode == this.newMode) {
             this.runNewAim(targetPoint, currentYaw, currentPitch);
         } else {
             this.runOldAim(found, targetPoint, eye, currentYaw, currentPitch);
@@ -321,20 +322,20 @@ extends SubModule<AimAssist> {
         Vec3d eye = this.eyePosition(player);
         Vec3d point = this.getTargetPoint(candidate);
         float yaw = (float)(Math.toDegrees(Math.atan2(point.getZ() - eye.getZ(), point.getX() - eye.getX())) - 90.0);
-        return Math.abs(wrapDegrees(yaw - player.J()));
+        return Math.abs(wrapDegrees(yaw - RotationManager.getViewYaw(player)));
     }
 
     private Vec3d eyePosition(EntityPlayerSP player) {
-        return new Vec3d(player.z(), player.N() + player.X(), player.h());
+        return new Vec3d(player.c(), player.A() + player.X(), player.Z());
     }
 
     private Vec3d getTargetPoint(EntityLivingBase candidate) {
         double height = candidate.Y();
         double width = candidate.R$src$Lgg_vape_wrapper_impl_AxisAlignedBB_$r19dfl().getMaxX()
                 - candidate.R$src$Lgg_vape_wrapper_impl_AxisAlignedBB_$r19dfl().getMinX();
-        return new Vec3d(candidate.z() + this.aimX.getValue() * width,
-                candidate.N() + this.aimY.getValue() * height,
-                candidate.h() + this.aimZ.getValue() * width);
+        return new Vec3d(candidate.c() + this.aimX.getValue() * width,
+                candidate.A() + this.aimY.getValue() * height,
+                candidate.Z() + this.aimZ.getValue() * width);
     }
 
     // ------------------------------------------------------------------ Old mode
@@ -350,13 +351,16 @@ extends SubModule<AimAssist> {
 
     private float computeOptimizedPitch(EntityLivingBase living, Vec3d targetPoint, Vec3d eye, float currentPitch) {
         double targetY = targetPoint.getY();
+        long now = System.nanoTime();
         if (this.yStateInitialized) {
-            double deltaY = targetY - this.lastTargetY;
-            this.targetVelocityY = this.targetVelocityY * (1.0 - Y_PREDICT_ALPHA) + deltaY * 20.0 * Y_PREDICT_ALPHA;
+            double elapsed = (now - this.lastOldTargetNanos) / 1.0E9;
+            this.targetVelocityY = RotationMath.smoothVelocity(this.targetVelocityY, targetY - this.lastTargetY,
+                    elapsed, Y_PREDICT_ALPHA, 20.0, MAX_TARGET_JUMP);
         } else {
             this.yStateInitialized = true;
         }
         this.lastTargetY = targetY;
+        this.lastOldTargetNanos = now;
         double predictedY = targetY + this.targetVelocityY * this.yPredict.getValue() / 20.0;
         float rawPitchTarget = this.rotationTo(eye, new Vec3d(targetPoint.getX(), predictedY, targetPoint.getZ()))[1];
         double dynamicSmooth = this.computeDynamicPitchSmooth(living);
@@ -401,32 +405,36 @@ extends SubModule<AimAssist> {
     }
 
     private void handleTargetLost() {
+        this.oldYawQuantizer.reset();
+        this.oldPitchQuantizer.reset();
         EntityPlayerSP player = Minecraft.thePlayer();
         if (++this.targetLostTicks == 1) {
             this.lastKnownVelocityY = this.targetVelocityY;
-            this.smoothedPitchTarget = player.V();
+            this.smoothedPitchTarget = RotationManager.getViewPitch(player);
         } else if (this.targetLostTicks > MAX_LOST_TICKS) {
             this.resetState();
         } else {
-            this.smoothedPitchTarget = (float)(this.smoothedPitchTarget * 0.95 + player.V() * 0.05);
+            this.smoothedPitchTarget = (float)(this.smoothedPitchTarget * 0.95 + RotationManager.getViewPitch(player) * 0.05);
         }
     }
 
     // ------------------------------------------------------------------ New mode
 
     private void handleNewTargetLost() {
-        ++this.newTargetLostFrames;
-        this.lastNewTargetPoint = null;
+        // Reacquire from the current view rather than replaying a stale spring
+        // position after the player has moved during a target-loss frame.
+        this.newInit = false;
+        this.newPredictor.reset();
+        this.oldYawQuantizer.reset();
+        this.oldPitchQuantizer.reset();
         this.lastNewDesiredNanos = 0L;
-        this.newYawVel *= 0.5f;
-        this.newPitchVel *= 0.5f;
-        if (this.newTargetLostFrames > MAX_NEW_LOST_FRAMES) {
-            this.newInit = false;
-        }
+        this.lastNewFrameNanos = 0L;
+        this.lastNewFrameDt = 0.0f;
+        this.newYawVel = 0.0f;
+        this.newPitchVel = 0.0f;
     }
 
     private void runNewAim(Vec3d targetPoint, float currentYaw, float currentPitch) {
-        this.newTargetLostFrames = 0;
         long now = System.nanoTime();
         double elapsed = Math.max((now - this.lastNewFrameNanos) / 1.0E9, 0.0);
         boolean gapFrame = elapsed > 0.05 && this.lastNewFrameDt < 0.05;
@@ -436,26 +444,16 @@ extends SubModule<AimAssist> {
             this.newPitch = currentPitch;
             this.newYawVel = 0.0f;
             this.newPitchVel = 0.0f;
+            this.newPredictor.reset();
         }
         double dt = this.newInit ? (gapFrame ? 1.0 / 60.0 : Math.min(elapsed, MAX_FRAME_DT)) : 1.0 / 60.0;
         this.lastNewFrameNanos = now;
         Vec3d eye = this.eyePosition(Minecraft.thePlayer());
-        if (this.lastNewTargetPoint != null) {
-            double targetDt = Math.max((now - this.lastNewTargetNanos) / 1.0E9, 1.0E-6);
-            double vx = (targetPoint.getX() - this.lastNewTargetPoint.getX()) / targetDt;
-            double vy = (targetPoint.getY() - this.lastNewTargetPoint.getY()) / targetDt;
-            double vz = (targetPoint.getZ() - this.lastNewTargetPoint.getZ()) / targetDt;
-            double predict = this.newPredict.getValue();
-            if (predict > 0.0 && targetPoint.distanceTo(this.lastNewTargetPoint) <= MAX_TARGET_JUMP) {
-                targetPoint = new Vec3d(targetPoint.getX() + vx * predict * 0.05,
-                        targetPoint.getY() + vy * predict * 0.05,
-                        targetPoint.getZ() + vz * predict * 0.05);
-            }
-        }
-        this.lastNewTargetPoint = targetPoint;
-        this.lastNewTargetNanos = now;
+        double[] predicted = this.newPredictor.predict(targetPoint.getX(), targetPoint.getY(), targetPoint.getZ(),
+                now, this.newPredict.getValue() * 0.05);
+        Vec3d predictedTarget = new Vec3d(predicted[0], predicted[1], predicted[2]);
 
-        float[] desired = this.rotationTo(eye, targetPoint);
+        float[] desired = this.rotationTo(eye, predictedTarget);
         if (!this.newInit) {
             this.newYaw = currentYaw;
             this.newPitch = currentPitch;
@@ -490,16 +488,17 @@ extends SubModule<AimAssist> {
             deltaPitch = 0.0f;
         }
         double omega = Math.max(0.5, this.newResponse.getValue());
-        double omega2 = omega * omega;
         float feedforward = this.newFeedforward.getValue().floatValue();
-        float feedYaw = targetAngVelYaw * feedforward;
-        float feedPitch = targetAngVelPitch * feedforward;
-        float accelYaw = (float)(omega2 * deltaYaw - 2.0 * omega * (this.newYawVel - feedYaw));
-        float accelPitch = (float)(omega2 * deltaPitch - 2.0 * omega * (this.newPitchVel - feedPitch));
-        this.newYawVel += accelYaw * (float)dt;
-        this.newPitchVel += accelPitch * (float)dt;
-        this.newYaw = wrapDegrees(this.newYaw + this.newYawVel * (float)dt);
-        this.newPitch = MathUtil.clamp(this.newPitch + this.newPitchVel * (float)dt, -90.0f, 90.0f);
+        float[] yawStep = RotationMath.springStep(deltaYaw, this.newYawVel, targetAngVelYaw * feedforward, omega, dt);
+        float[] pitchStep = RotationMath.springStep(deltaPitch, this.newPitchVel, targetAngVelPitch * feedforward, omega, dt);
+        this.newYawVel = yawStep[1];
+        this.newPitchVel = pitchStep[1];
+        this.newYaw = wrapDegrees(this.newYaw + yawStep[0]);
+        float unclampedPitch = this.newPitch + pitchStep[0];
+        this.newPitch = MathUtil.clamp(unclampedPitch, -90.0f, 90.0f);
+        if (unclampedPitch != this.newPitch && Math.signum(this.newPitchVel) == Math.signum(unclampedPitch)) {
+            this.newPitchVel = 0.0f;
+        }
         this.applyRotation(this.newYaw, this.newPitch);
     }
 
@@ -517,36 +516,42 @@ extends SubModule<AimAssist> {
     }
 
     private void applyRotation(float absoluteYaw, float absolutePitch) {
-        float gcd = SensitivityUtil.gcdDegrees();
-        double jitterFactor = this.offGridJitter == null ? 0.0 : (double)this.offGridJitter.getValue();
-        float snappedYaw = SensitivityUtil.snapAngle(absoluteYaw, gcd) + SensitivityUtil.gcdJitter(gcd, jitterFactor);
-        float snappedPitch = SensitivityUtil.snapAngle(absolutePitch, gcd) + SensitivityUtil.gcdJitter(gcd, jitterFactor);
-        snappedPitch = MathUtil.clamp(snappedPitch, -90.0f, 90.0f);
         EntityPlayerSP player = Minecraft.thePlayer();
-        if (player == null) {
+        if (player == null || player.isNull()) {
             return;
         }
-        // applyTrackedMouseDelta 会按 0.15 的系数换算成 yaw/pitch 增量，并同步上一帧渲染朝向，
-        // 相机才会真正跟着转；直接 setLocalPlayerRotation 只改逻辑朝向，看起来"没拽动视角"。
+        float gcd = SensitivityUtil.gcdDegrees();
         float currentYaw = RotationManager.getViewYaw(player);
         float currentPitch = RotationManager.getViewPitch(player);
-        float yawDelta = SensitivityUtil.degreesToMouseDelta(wrapDegrees(snappedYaw - currentYaw));
-        float pitchDelta = SensitivityUtil.degreesToMouseDelta(currentPitch - snappedPitch);
-        PlayerMouseRotationApplier.applyTrackedMouseDelta(yawDelta, pitchDelta);
-    }
-
-    private float gcdStep() {
-        return SensitivityUtil.gcdDegrees();
+        float requestedYaw = wrapDegrees(absoluteYaw - currentYaw);
+        float requestedPitch = MathUtil.clamp(absolutePitch, -90.0f, 90.0f) - currentPitch;
+        boolean old = this.aimMode.getValue() == this.oldMode;
+        // New mode already integrates a continuous absolute angle. Old mode
+        // requests an incremental movement, so it must retain sub-step deltas.
+        float snappedYaw = old ? this.oldYawQuantizer.quantize(requestedYaw, gcd)
+                : RotationMath.snapDelta(requestedYaw, gcd);
+        float snappedPitch = old ? this.oldPitchQuantizer.quantize(requestedPitch, gcd)
+                : RotationMath.snapDelta(requestedPitch, gcd);
+        double jitterFactor = this.offGridJitter == null ? 0.0 : (double)this.offGridJitter.getValue();
+        if (snappedYaw != 0.0f) {
+            snappedYaw += SensitivityUtil.gcdJitter(gcd, jitterFactor);
+        }
+        if (snappedPitch != 0.0f) {
+            snappedPitch += SensitivityUtil.gcdJitter(gcd, jitterFactor);
+        }
+        float unclampedPitch = currentPitch + snappedPitch;
+        float finalPitch = MathUtil.clamp(unclampedPitch, -90.0f, 90.0f);
+        if (unclampedPitch != finalPitch) {
+            this.oldPitchQuantizer.reset();
+        }
+        if (snappedYaw != 0.0f || finalPitch != currentPitch) {
+            float yawDelta = SensitivityUtil.degreesToMouseDelta(snappedYaw);
+            float pitchDelta = SensitivityUtil.degreesToMouseDelta(currentPitch - finalPitch);
+            PlayerMouseRotationApplier.applyTrackedMouseDelta(yawDelta, pitchDelta);
+        }
     }
 
     private static float wrapDegrees(float degrees) {
-        float wrapped = degrees % 360.0f;
-        if (wrapped >= 180.0f) {
-            wrapped -= 360.0f;
-        }
-        if (wrapped < -180.0f) {
-            wrapped += 360.0f;
-        }
-        return wrapped;
+        return RotationMath.wrapDegrees(degrees);
     }
 }

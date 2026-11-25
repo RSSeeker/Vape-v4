@@ -174,7 +174,8 @@ public abstract class MouseRotationController {
                 this.jitterTimer = new TimerUtil();
                 this.jitterTimer.x(-1L);
             }
-            long elapsedMillis = this.jitterTimer.getLastMS();
+            long elapsedMillis = Math.min((long)RotationMath.MAX_CONTROLLER_ELAPSED_MILLIS,
+                    Math.max(0L, this.jitterTimer.getLastMS()));
             this.jitterTimer.reset();
             while (elapsedMillis-- > 0L) {
                 this.updateJitter();

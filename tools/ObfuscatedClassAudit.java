@@ -39,8 +39,13 @@ public final class ObfuscatedClassAudit {
     private static final Set<String> WHITELIST = new HashSet<>(Arrays.asList(
             "gg/vape/runtime/NativeBridge", "gg/vape/runtime/ForgePayloadClassLoader",
             "gg/vape/event/impl/EventRenderWorldPassExecutorDrain"));
+    // Localization-only edits and separately reviewed rotation behavior changes.
     private static final Set<String> EXPECTED_ENGLISH_MODULE_CHANGES = new HashSet<>(Arrays.asList(
-            "gg/vape/module/none/ClientSettings", "gg/vape/module/render/SpawnerFinder"));
+            "gg/vape/module/none/ClientSettings", "gg/vape/module/render/SpawnerFinder",
+            "gg/vape/module/combat/SilentAura",
+            "gg/vape/module/combat/aimassist/AimAssistKissSubModule",
+            "gg/vape/module/combat/aimassist/AimAssistRotationSubModule",
+            "gg/vape/module/combat/aimassist/AimAssistTargetingSubModule"));
 
     private static final class Metadata extends ClassVisitor {
         String source;

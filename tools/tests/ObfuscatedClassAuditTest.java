@@ -92,6 +92,7 @@ public final class ObfuscatedClassAuditTest {
             baseline.put(second, makeClass(second, "Second.java", "unchanged", first));
             baseline.put(helper, makeClass(helper, "Helper.java", "helper", null));
             Map<String, byte[]> english = new LinkedHashMap<>(baseline);
+            english.put(first, makeClass(first, "First.java", "reviewed rotation enhancement", helper));
             english.put(second, makeClass(second, "Second.java", "translated", first));
             Path baseFile = directory.resolve("baseline.jar");
             Path engFile = directory.resolve("english.jar");
@@ -103,9 +104,10 @@ public final class ObfuscatedClassAuditTest {
             check(identical.mappedProduct == 4 && identical.poolMatches == 4, "Product class mapping failed");
             check(identical.moduleCount == 3 && identical.mappedModules == 3, "Module inventory failed");
             check(identical.baselineEqual == 3 && identical.equalWithoutDebugOrFrames == 3, "Normalization failed");
-            check(identical.englishEqual == 2 && identical.englishDifferences.contains(second), "English change not detected");
-            check(ObfuscatedClassAudit.matchesExpected(identical, Set.of(second)), "Expected differences were rejected");
-            check(!ObfuscatedClassAudit.matchesExpected(identical, Set.of(first)), "Unexpected differences passed");
+            check(identical.englishEqual == 1 && identical.englishDifferences.contains(first)
+                    && identical.englishDifferences.contains(second), "Reviewed changes not detected");
+            check(ObfuscatedClassAudit.matchesExpected(identical, Set.of(first, second)), "Expected differences were rejected");
+            check(!ObfuscatedClassAudit.matchesExpected(identical, Set.of(second)), "Unexpected differences passed");
 
             writeJar(origFile, obfuscate(english));
             ObfuscatedClassAudit.Result embedded = ObfuscatedClassAudit.analyze(engFile, engFile, origFile);
@@ -118,7 +120,7 @@ public final class ObfuscatedClassAuditTest {
             ObfuscatedClassAudit.Result altered = ObfuscatedClassAudit.analyze(baseFile, engFile, origFile);
             check(altered.mappedModules == 3, "Changed module could not be identified");
             check(altered.baselineEqual == 2 && altered.baselineDifferences.contains(first), "Changed code was not detected");
-            check(!ObfuscatedClassAudit.matchesExpected(altered, Set.of(second)), "Original code change passed the guard");
+            check(!ObfuscatedClassAudit.matchesExpected(altered, Set.of(first, second)), "Original code change passed the guard");
             System.out.println("Obfuscated class audit: mapping and changed-code tests passed");
         } finally {
             try (Stream<Path> paths = Files.walk(directory)) {

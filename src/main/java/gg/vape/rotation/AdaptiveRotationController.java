@@ -453,11 +453,13 @@ implements WorldPointRotationTarget {
     }
 
     public void applyAiRotationDelta(float yawDelta, float pitchDelta) {
+        float step = this.getMouseScale() * 0.15f;
+        // The producer supplies a new per-tick command, not an absolute target.
+        // Preserve fractional mouse steps but do not replay stale whole steps.
+        this.pendingYawDelta = RotationMath.replacePendingSteps(this.pendingYawDelta, yawDelta, step, this.aiRotationActive);
+        this.pendingPitchDelta = RotationMath.replacePendingSteps(this.pendingPitchDelta, pitchDelta, step, this.aiRotationActive);
         this.aiRotationActive = true;
         this.target = null;
-        float conversion = 1.0f / (this.getMouseScale() * 0.15f);
-        this.pendingYawDelta = yawDelta * conversion;
-        this.pendingPitchDelta = pitchDelta * conversion;
         this.setComplete(false);
     }
 

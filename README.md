@@ -14,6 +14,10 @@ English is the default on a fresh install and when the language setting is absen
 
 The GUI launcher prefers an external `Vape-v4.21Native.dll` beside the EXE over its embedded DLL. Use the EXE in a clean directory, or use the matching DLL produced by this build; an older external DLL can restore the older Chinese client. Your settings are stored in `.vapeclient` beside the EXE.
 
+## Rotation updates
+
+This branch also changes selected AimAssist and SilentAura rotation paths and the shared rotation controller to reduce stale or abrupt movement. Saved setting names and values remain compatible, but aiming behavior can differ from the original. See the [rotation notes and test limits](docs/english-edition.md#rotation-changes). No in-game or anti-cheat testing has been performed, and detection avoidance is not guaranteed. Minecraft 26.2/Fabric remains experimental and requires OpenGL.
+
 ## Build the English EXE on Windows
 
 Requirements: Windows x64, Visual Studio 2022 C++ x64 and Windows SDK, CMake 3.21+, JDK 17 for Gradle, JDK 8 headers, and access to Gradle/Maven repositories. From PowerShell in the repository root:

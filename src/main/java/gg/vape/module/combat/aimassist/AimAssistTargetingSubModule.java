@@ -8,6 +8,7 @@ import gg.vape.module.combat.AimAssist;
 import gg.vape.module.none.ClientSettings;
 import gg.vape.rotation.PlayerMouseRotationApplier;
 import gg.vape.rotation.RotationManager;
+import gg.vape.rotation.RotationMath;
 import gg.vape.utils.MathUtil;
 import gg.vape.utils.RotationUtil;
 import gg.vape.utils.Vec3d;
@@ -27,7 +28,9 @@ extends SubModule<AimAssist> {
     private float airFactor;
     private boolean predictionInitialized;
     private static final float SNAP_ENTER_THRESHOLD = 5.0f;
+    private static final long MIN_SAMPLE_NANOS = 8333334L;
     private long lastFrameNanos;
+    private long lastRenderNanos;
     private double lastGroundEyeY;
     private float lastPlayerPitch;
     private float pitchBias;
@@ -116,12 +119,17 @@ extends SubModule<AimAssist> {
             return;
         }
         long nowNanos = System.nanoTime();
+        // The worker wakes roughly every millisecond. Integrating a minimum
+        // 1/120 s on every wake exaggerates movement; sample at most 120 Hz.
+        if (this.initialized && !RotationMath.isSampleDue(nowNanos, this.lastFrameNanos, MIN_SAMPLE_NANOS)) {
+            return;
+        }
         float deltaTime;
-        if (!this.initialized || this.lastFrameNanos == 0L) {
+        if (!this.initialized || this.lastFrameNanos == 0L || nowNanos < this.lastFrameNanos) {
             deltaTime = 0.016666668f;
         } else {
             deltaTime = (float)(nowNanos - this.lastFrameNanos) / 1.0E9f;
-            deltaTime = Math.max(0.008333334f, Math.min(0.12f, deltaTime));
+            deltaTime = Math.max(0.008333334f, Math.min(0.05f, deltaTime));
         }
         this.lastFrameNanos = nowNanos;
 
@@ -492,8 +500,9 @@ extends SubModule<AimAssist> {
     }
 
     @Override
-    public void onEnable() {
+    public synchronized void onEnable() {
         this.reset();
+        this.lastRenderNanos = System.nanoTime();
         if (!this.workerStarted) {
             this.workerStarted = true;
             new AimAssistWorkerThread(this).start();
@@ -504,9 +513,11 @@ extends SubModule<AimAssist> {
         return start + factor * (end - start);
     }
 
-    private void runTargetLoop() {
+    private synchronized void runTargetLoop() {
         AimAssist aimAssist = (AimAssist)this.getParent();
         if (Minecraft.theWorld().isNull() || Minecraft.thePlayer().isNull()) {
+            this.target = null;
+            this.reset();
             return;
         }
         if (!aimAssist.canAim()) {
@@ -604,8 +615,13 @@ extends SubModule<AimAssist> {
     }
 
     @EventHandler
-    public void onPreRenderTick(EventPreRenderTick eventPreRenderTick) {
-        if (eventPreRenderTick.getWorld().isNull() || this.target == null) {
+    public synchronized void onPreRenderTick(EventPreRenderTick eventPreRenderTick) {
+        long now = System.nanoTime();
+        boolean staleFrame = RotationMath.isStaleFrame(now, this.lastRenderNanos);
+        this.lastRenderNanos = now;
+        if (staleFrame || eventPreRenderTick.getWorld().isNull() || this.target == null
+                || Minecraft.currentScreen().isNotNull() || !ClientSettings.INSTANCE.inputEnabled) {
+            this.reset();
             return;
         }
         AimAssist aimAssist = (AimAssist)this.getParent();
@@ -637,11 +653,14 @@ extends SubModule<AimAssist> {
             double horizontalDistance = Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
             float targetYaw = (float)(Math.toDegrees(Math.atan2(deltaZ, deltaX)) - 90.0);
             float targetPitch = (float)(-Math.toDegrees(Math.atan2(deltaY, Math.max(horizontalDistance, 1.0E-4))));
+            float step = sensitivityScale * 0.15f;
             if (snapYaw) {
-                mouseDeltaX = MathUtil.wrapAngleTo180(targetYaw - RotationManager.getViewYaw(player)) / 0.15f;
+                float delta = MathUtil.wrapAngleTo180(targetYaw - RotationManager.getViewYaw(player));
+                mouseDeltaX = RotationMath.snapDelta(delta, step) / 0.15f;
             }
             if (snapPitch) {
-                mouseDeltaY = -MathUtil.wrapAngleTo180(targetPitch - RotationManager.getViewPitch(player)) / 0.15f;
+                float delta = targetPitch - RotationManager.getViewPitch(player);
+                mouseDeltaY = -RotationMath.snapDelta(delta, step) / 0.15f;
             }
         }
         PlayerMouseRotationApplier.applyTrackedMouseDelta(mouseDeltaX, mouseDeltaY);
@@ -692,7 +711,7 @@ extends SubModule<AimAssist> {
 
 
     @Nullable
-    public EntityLivingBase getTarget() {
+    public synchronized EntityLivingBase getTarget() {
         return this.target;
     }
 
@@ -741,7 +760,7 @@ extends SubModule<AimAssist> {
     }
 
     @Override
-    public void onDisable() {
+    public synchronized void onDisable() {
         this.target = null;
         this.reset();
     }

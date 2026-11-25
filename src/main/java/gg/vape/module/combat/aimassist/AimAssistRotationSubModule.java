@@ -8,6 +8,7 @@ import gg.vape.module.combat.AimAssist;
 import gg.vape.module.none.ClientSettings;
 import gg.vape.rotation.PlayerMouseRotationApplier;
 import gg.vape.rotation.RotationManager;
+import gg.vape.rotation.RotationMath;
 import gg.vape.utils.MathUtil;
 import gg.vape.utils.RotationUtil;
 import gg.vape.utils.SensitivityUtil;
@@ -51,6 +52,9 @@ extends SubModule<AimAssist> {
     private double targetX;
     private final Random sharedRandom = new Random();
     private double prevTargetX;
+    private boolean previousTargetPositionInitialized;
+    private Object motionTargetObject;
+    private long lastRenderNanos;
 
     private void computeTargetOffset() {
         Vec3d closestPoint = RotationUtil.T(Minecraft.thePlayer(), this.target.R$src$Lgg_vape_wrapper_impl_AxisAlignedBB_$r19dfl(), 0.0, 0.0, 0.0);
@@ -98,11 +102,13 @@ extends SubModule<AimAssist> {
     }
 
     @EventHandler
-    public void onPreRenderTick(EventPreRenderTick eventPreRenderTick) {
-        if (eventPreRenderTick.getWorld().isNull()) {
-            return;
-        }
-        if (this.target == null) {
+    public synchronized void onPreRenderTick(EventPreRenderTick eventPreRenderTick) {
+        long now = System.nanoTime();
+        boolean staleFrame = RotationMath.isStaleFrame(now, this.lastRenderNanos);
+        this.lastRenderNanos = now;
+        if (staleFrame || eventPreRenderTick.getWorld().isNull() || this.target == null
+                || Minecraft.currentScreen().isNotNull() || !ClientSettings.INSTANCE.inputEnabled) {
+            this.resetRotationState();
             return;
         }
         this.horizontalMouseAccumulator += (float)this.driftX;
@@ -177,15 +183,31 @@ extends SubModule<AimAssist> {
     void resetRotationState() {
         this.horizontalMouseAccumulator = 0.0f;
         this.verticalMouseAccumulator = 0.0f;
+        this.horizontalVelocity = 0.0f;
+        this.horizontalVelocityBuffer = 0.0f;
+        this.verticalVelocity = 0.0f;
+        this.verticalVelocityBuffer = 0.0f;
+        this.pitchBoost = 0.0f;
+        this.yawBoost = 0.0f;
+        this.swapTickCounter = 0;
+        this.sampleCounter = 0;
+        this.lastAngleDiff = 0.0;
+        this.prevOnLeft = false;
+        this.prevAbove = false;
+        this.previousTargetPositionInitialized = false;
+        this.motionTargetObject = null;
         this.randomOffsetX = 0;
         this.randomOffsetY = 0;
+        this.driftTimer = 0.0;
         this.driftX = 0;
         this.driftY = 0;
     }
 
-    private void tick() {
+    private synchronized void tick() {
         AimAssist aimAssist = (AimAssist)this.getParent();
         if (Minecraft.theWorld().isNull() || Minecraft.thePlayer().isNull()) {
+            this.target = null;
+            this.resetRotationState();
             return;
         }
         if (!aimAssist.canAim()) {
@@ -220,6 +242,10 @@ extends SubModule<AimAssist> {
             return;
         }
         if (this.target != null && Minecraft.currentScreen().getObject() == null && ClientSettings.INSTANCE.inputEnabled) {
+            if (this.motionTargetObject != this.target.getObject()) {
+                this.resetRotationState();
+                this.motionTargetObject = this.target.getObject();
+            }
             this.updateVelocityBuffers();
             this.applyRotation();
         } else {
@@ -228,7 +254,7 @@ extends SubModule<AimAssist> {
     }
 
     @Override
-    public void onDisable() {
+    public synchronized void onDisable() {
         this.target = null;
         this.resetRotationState();
     }
@@ -246,10 +272,13 @@ extends SubModule<AimAssist> {
             this.computeTargetOffset();
         }
 
-        double targetMotionX = this.targetX - this.prevTargetX;
-        double targetMotionZ = this.targetZ - this.prevTargetZ;
+        // The first sample for a target has no prior position. Treating (0, 0)
+        // or the previous target as its origin can produce a huge false lead.
+        double targetMotionX = this.previousTargetPositionInitialized ? this.targetX - this.prevTargetX : 0.0;
+        double targetMotionZ = this.previousTargetPositionInitialized ? this.targetZ - this.prevTargetZ : 0.0;
         this.prevTargetX = this.targetX;
         this.prevTargetZ = this.targetZ;
+        this.previousTargetPositionInitialized = true;
 
         EntityPlayerSP player = Minecraft.thePlayer();
         float viewYaw = RotationManager.getViewYaw(player);
@@ -349,7 +378,7 @@ extends SubModule<AimAssist> {
     }
 
     @Nullable
-    public EntityLivingBase getTarget() {
+    public synchronized EntityLivingBase getTarget() {
         return this.target;
     }
 
@@ -365,7 +394,8 @@ extends SubModule<AimAssist> {
     }
 
     @Override
-    public void onEnable() {
+    public synchronized void onEnable() {
+        this.lastRenderNanos = System.nanoTime();
         if (!this.threadStarted) {
             this.threadStarted = true;
             new AimAssistRotationWorkerThread(this).start();

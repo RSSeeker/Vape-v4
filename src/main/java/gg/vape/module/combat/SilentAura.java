@@ -150,6 +150,7 @@ extends Mod {
     private final NumberValue aiYawMultiplier;
     private final NumberValue aiPitchMultiplier;
     private final ModeOption rotationKissMode;
+    private ModeSelection lastRotationMode;
     private final NumberValue kissSpeed;
     private final NumberValue kissJitter;
     private final NumberValue kissOffGridJitter;
@@ -588,6 +589,10 @@ extends Mod {
             if (this.target == null || targetChanged) {
                 AttackKeyController.releaseAttackKey();
                 this.randomizeGainFactors();
+                if (targetChanged && this.rotationController != null) {
+                    this.rotationController.clearAiRotationMode();
+                    this.kissEngine.reset();
+                }
             }
             this.target = selectedTarget;
             if (!this.rotationClaim.isOwnedBy(this)) {
@@ -688,6 +693,12 @@ extends Mod {
                 jitteredTargetY += this.randomAimCurrentY;
                 jitteredTargetZ += this.randomAimCurrentZ;
             }
+            ModeSelection selectedRotationMode = (ModeSelection)this.rotationMode.getValue();
+            if (this.rotationController != null && this.lastRotationMode != selectedRotationMode) {
+                this.rotationController.clearAiRotationMode();
+                this.kissEngine.reset();
+            }
+            this.lastRotationMode = selectedRotationMode;
             if (this.rotationController == null) {
                 this.rotationController = new SilentAuraRotationController(this);
                 this.rotationController.setRelativeMode(false);
@@ -698,7 +709,6 @@ extends Mod {
                 this.rotationController.setLinearAcceleration(false);
                 RotationManager.INSTANCE.setController(this.rotationController);
             } else {
-                this.rotationController.clearAiRotationMode();
                 this.rotationController.setRelativeMode(false);
                 this.rotationController.setScaleAxesProportionally(false);
                 this.rotationController.setLinearAcceleration(false);
@@ -707,6 +717,7 @@ extends Mod {
                 } else if (this.rotationMode.getValue() == this.rotationKissMode) {
                     this.updateAimKiss(player, jitteredTargetX, jitteredTargetY, jitteredTargetZ, targetX, targetY, targetZ, distanceToTarget);
                 } else {
+                    this.rotationController.clearAiRotationMode();
                     RotationAngles desiredRotation = this.rotationController.calculateRotation(Vec3.create(jitteredTargetX, jitteredTargetY, jitteredTargetZ));
                 float targetPitch = (float)RotationUtil.h(player, targetX, jitteredTargetY, targetZ);
                 float managedYaw = RotationManager.INSTANCE.getManagedYaw();
@@ -771,7 +782,8 @@ extends Mod {
         float targetPitch = (float)RotationUtil.h(player, targetX, jitteredTargetY, targetZ);
         float managedYaw = RotationManager.INSTANCE.getManagedYaw();
         float managedPitch = RotationManager.INSTANCE.getManagedPitch();
-        this.kissEngine.setTarget(this.target);
+        // Entity wrappers are recreated during selection; use the underlying entity identity.
+        this.kissEngine.setTarget(this.target.getObject());
         this.kissEngine.setJitterScale(((Double)this.kissJitter.getValue()).floatValue());
         KissRotationEngine.setOffGridJitter(((Double)this.kissOffGridJitter.getValue()).floatValue());
         float[] step = this.kissEngine.compute(desiredRotation.getYaw(), targetPitch, managedYaw, managedPitch,
@@ -864,6 +876,8 @@ extends Mod {
     public void resetTargeting() {
         this.pitchIntegral = 0.0f;
         this.yawIntegral = 0.0f;
+        this.lastRotationMode = null;
+        this.kissEngine.reset();
         this.target = null;
         this.readyToAttack = false;
         if (this.rotationController != null && this.isControllingRotation()) {
@@ -901,6 +915,8 @@ extends Mod {
 
     @Override
     public void onDisable() {
+        this.lastRotationMode = null;
+        this.kissEngine.reset();
         if (this.rotationController != null) {
             this.rotationController.clearAiRotationMode();
             this.rotationController = null;

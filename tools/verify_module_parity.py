@@ -40,6 +40,27 @@ APPROVED_SOURCES = {
     "gg/vape/utils/render/RenderBatchManager.java": "645b1e34c96cf27758314f80cde946fa855e67c5f04abcfac94bdce02432be3b",
 }
 
+# Reviewed behavioral improvements, distinct from the historical
+# localization-only exceptions above. Complete content hashes remain mandatory.
+APPROVED_ENHANCEMENTS = {
+    "gg/vape/module/combat/SilentAura.java": "c07194c7e0c2b3bd94d80849e64f9998e97ce988a823719a628a14b6a57fe8fa",
+    "gg/vape/module/combat/aimassist/AimAssistKissSubModule.java": "4fecc8c662e8b632a25e0ed581366ceeb8a1b4266fb94f0e2b80ef8c6ac3b15e",
+    "gg/vape/module/combat/aimassist/AimAssistRotationSubModule.java": "cd5f36841866f280ee3e8b143549c73b4125bb2785d610d38886fea1917939fc",
+    "gg/vape/module/combat/aimassist/AimAssistTargetingSubModule.java": "8bebb812eece35f0fe667ff4b8f6f3de429c4751c6fb4179684c08cedc4a8a0c",
+    "gg/vape/rotation/AdaptiveRotationController.java": "c214a0358b332a0d27c7c41278d975af06e2b7d13b2c5ea48103f9a5f3bcc653",
+    "gg/vape/rotation/MouseRotationController.java": "7b90c8a8a3b279ceb06a9b12989fbf0c6e6256ae8074c041e5939f962d887923",
+    "gg/vape/rotation/RotationManager.java": "8d8f48842d2c93945b313a8136f504a0c8634c75aa4271d01bc0098e992eeff9",
+    "gg/vape/rotation/RotationMath.java": "ecec256ddc8bbd941725fc807f6a60e89d658dae4166433cdf893c0cd602b18b",
+}
+JAVA_ADDITIONS = {"gg/vape/rotation/RotationMath.java"}
+JAVA_ADDED_CLASSES = {
+    "gg/vape/rotation/RotationMath.class",
+    "gg/vape/rotation/RotationMath$StepQuantizer.class",
+    "gg/vape/rotation/RotationMath$TargetPredictor.class",
+}
+ENHANCED_MODULE_SOURCES = {
+    name for name in APPROVED_ENHANCEMENTS if name.startswith("gg/vape/module/")
+}
 MODULE_EXCEPTIONS = {
     "gg/vape/module/none/ClientSettings.java",
     "gg/vape/module/render/SpawnerFinder.java",
@@ -119,25 +140,29 @@ def audit_sources(reference, current):
     cur_root = current / "src/main/java"
     ref_files, cur_files = file_map(ref_root, ".java"), file_map(cur_root, ".java")
     require(ref_files and cur_files, "Java source trees are missing")
-    require(ref_files.keys() == cur_files.keys(), "Java source inventory changed")
+    require(not (ref_files.keys() & JAVA_ADDITIONS), "An expected addition exists in the baseline")
+    require(ref_files.keys() | JAVA_ADDITIONS == cur_files.keys(), "Java source inventory changed")
+    approved = {**APPROVED_SOURCES, **APPROVED_ENHANCEMENTS}
+    require(not (set(APPROVED_SOURCES) & set(APPROVED_ENHANCEMENTS)), "Overlapping review categories")
+    require(ENHANCED_MODULE_SOURCES <= set(APPROVED_ENHANCEMENTS), "Unreviewed module enhancement")
     changed = set()
     module_count = 0
-    for name, ref_path in ref_files.items():
+    for name, cur_path in cur_files.items():
         # Windows checkouts may use CRLF; compare canonical source text.
-        before = ref_path.read_bytes().replace(b"\r\n", b"\n")
-        after = cur_files[name].read_bytes().replace(b"\r\n", b"\n")
+        before = ref_files[name].read_bytes().replace(b"\r\n", b"\n") if name in ref_files else None
+        after = cur_path.read_bytes().replace(b"\r\n", b"\n")
         if name.startswith("gg/vape/module/"):
             module_count += 1
             if name in MODULE_EXCEPTIONS:
                 require(module_original_form(name, after) == before,
-                        "Unapproved logic change in module source " + name)
-            else:
+                        "Unapproved logic change in localized module source " + name)
+            elif name not in ENHANCED_MODULE_SOURCES:
                 require(before == after, "Unexpected module source change: " + name)
         if before != after:
             changed.add(name)
-            require(name in APPROVED_SOURCES, "Unexpected Java source change: " + name)
-            require(sha256(after) == APPROVED_SOURCES[name], "Unreviewed change in " + name)
-    require(changed == set(APPROVED_SOURCES), "The reviewed source-change set differs")
+            require(name in approved, "Unexpected Java source change: " + name)
+            require(sha256(after) == approved[name], "Unreviewed change in " + name)
+    require(changed == set(approved), "The reviewed source-change set differs")
     require(module_count > 0, "No module sources found")
     return len(ref_files), module_count, len(changed)
 
@@ -271,7 +296,7 @@ def own_class(name):
 
 
 def approved_class(name):
-    for source in APPROVED_SOURCES:
+    for source in set(APPROVED_SOURCES) | set(APPROVED_ENHANCEMENTS):
         stem = source[:-5]
         if name == stem + ".class" or name.startswith(stem + "$"):
             return True
@@ -337,13 +362,16 @@ def audit_jars(reference_jar, english_jar, release_jar):
     else:
         release_layout = inspect_unrecognized_release_layout(release_jar, ref_modules)
     module_changes = sorted(name for name in ref_modules if ref_modules[name] != eng_modules[name])
-    allowed_modules = {name[:-5] + ".class" for name in MODULE_EXCEPTIONS}
+    allowed_modules = {name[:-5] + ".class" for name in MODULE_EXCEPTIONS | ENHANCED_MODULE_SOURCES}
     require(set(module_changes) == allowed_modules,
             "Unexpected module class changes: " + str(module_changes))
 
     ref_classes = zip_hashes(reference_jar, own_class)
     eng_classes = zip_hashes(english_jar, own_class)
-    same_inventory(ref_classes, eng_classes, "Owned class")
+    require(not (ref_classes.keys() & JAVA_ADDED_CLASSES), "An expected added class exists in the baseline")
+    require(ref_classes.keys() | JAVA_ADDED_CLASSES == eng_classes.keys(),
+            "Owned class inventory changed; missing=" + str(sorted(ref_classes.keys() - eng_classes.keys())[:12])
+            + ", added=" + str(sorted(eng_classes.keys() - ref_classes.keys() - JAVA_ADDED_CLASSES)[:12]))
     extra = sorted(name for name in ref_classes
                    if ref_classes[name] != eng_classes[name] and not approved_class(name))
     require(not extra, "Unexpected changed supporting classes: " + str(extra[:20]))
@@ -423,14 +451,16 @@ def main():
         "English DLL SHA-256: " + sha256(embedded_dll),
         "English source-build Java payload SHA-256: " + sha256(current_jar),
         "English embedded Java payload SHA-256: " + sha256(embedded_jar),
-        f"Java source files: {source_count}; module sources: {module_source_count}; reviewed localized files: {changed_sources}.",
-        "All module sources match the baseline after reversing the English default and spawner-label edits.",
+        f"Java baseline sources: {source_count}; module sources: {module_source_count}; reviewed changes/additions: {changed_sources}.",
+        f"Module sources: {len(MODULE_EXCEPTIONS)} reviewed localization edits and {len(ENHANCED_MODULE_SOURCES)} reviewed rotation enhancements; all others match baseline.",
+        "Localization edits reverse to baseline; enhancement source contents are pinned by reviewed hashes.",
+        "Rotation enhancements intentionally change behavior; they are not baseline-equivalent.",
         f"Native files: {native_count} baseline files; {native_changes} reviewed localization/build/test changes or additions.",
         f"Resource files: {resource_count} baseline files; {resource_changes} reviewed translation changes.",
         f"Same-toolchain builds: {stats['matching_module_classes']}/{stats['module_classes']} module class files are byte-identical.",
-        "The only differing module classes are the GUI language default and spawner label:",
+        "Differing module classes (reviewed localization and rotation enhancements):",
         *("  " + name for name in stats["module_changes"]),
-        f"Owned class inventory ({stats['own_classes']} files) unchanged; no unreviewed class differences.",
+        f"Owned class inventory: {stats['own_classes']} baseline files plus {len(JAVA_ADDED_CLASSES)} reviewed additions; no unreviewed class differences.",
         f"Non-language product resources ({stats['resources']} files) unchanged.",
         f"Embedded payload has the same {embedded_resource_count} non-class resources as the English source build.",
         "Native bridge/loading files unchanged; EXE and optional DLL embed the expected JAR.",
@@ -464,8 +494,8 @@ def main():
     args.report.write_text("\n".join(lines), encoding="utf-8")
     for line in lines:
         print(line)
-    emit_notice("Module source parity", f"{module_source_count} module source files verified; only two localization edits.")
-    emit_notice("Module class parity", f"{stats['matching_module_classes']}/{stats['module_classes']} module class files byte-identical in same-toolchain builds; 2 localization exceptions.")
+    emit_notice("Module source review", f"{module_source_count} module source files checked; {len(MODULE_EXCEPTIONS)} localization edits and {len(ENHANCED_MODULE_SOURCES)} reviewed rotation enhancements.")
+    emit_notice("Module class comparison", f"{stats['matching_module_classes']}/{stats['module_classes']} module class files byte-identical in same-toolchain builds; reviewed enhancements intentionally differ.")
     if stats["release_layout"] is None:
         emit_notice("Original release comparison", f"Original EXE hash verified; {official_matches}/{stats['module_classes']} module class files match the baseline build, and {stats['release_english_matches']}/{stats['module_classes']} match the English build byte-for-byte.")
     else:

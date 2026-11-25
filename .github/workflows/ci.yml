@@ -55,6 +55,18 @@ jobs:
         shell: pwsh
         run: python -B -X utf8 -m unittest discover -s tools/tests -v
 
+      - name: Test rotation math and headless controller lifecycles
+        shell: pwsh
+        run: |
+          $classes = Join-Path $env:RUNNER_TEMP 'rotation-math-tests'
+          New-Item -ItemType Directory -Force -Path $classes | Out-Null
+          & javac --release 8 -encoding UTF-8 -d $classes src/main/java/gg/vape/rotation/RotationMath.java tools/tests/RotationMathTest.java
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & java -cp $classes RotationMathTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & python -B -X utf8 tools/tests/run_rotation_controller_tests.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       # JDK 17 contains ASM, used only by the offline obfuscation auditor.
       - name: Compile and test the obfuscated-class auditor
         shell: pwsh

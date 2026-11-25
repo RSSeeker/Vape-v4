@@ -842,7 +842,9 @@ implements EventListener {
         double timerSpeed = Minecraft.getTimer().getTimerSpeed();
         double elapsedGameMillis = this.controllerUpdateTimer.getElapsedMilliseconds() * timerSpeed;
         this.controllerUpdateTimer.reset();
-        double scaledUpdates = elapsedGameMillis * (double)this.getSensitivityTimeScale();
+        // A pause or stalled frame must not be replayed as a huge one-frame turn.
+        double scaledUpdates = RotationMath.boundedElapsedMillis(elapsedGameMillis)
+                * (double)this.getSensitivityTimeScale();
         this.advanceControllerUpdates(scaledUpdates, player, event.getCurrentScreen());
         this.controllerHooksPending = true;
         this.activeController.capturePlayerRotation(event);
