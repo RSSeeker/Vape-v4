@@ -152,7 +152,8 @@ class ReportIntegrationTests(unittest.TestCase):
             arguments = [
                 "verify_module_parity.py", "--baseline-source", str(root), "--current-source", str(root),
                 "--baseline-jar", str(root / "original.jar"), "--current-jar", str(root / "english.jar"),
-                "--original-exe", str(root / "original.exe"), "--current-exe", str(root / "english.exe"),
+                "--original-exe", str(root / "original.exe"), "--original-jar-output", str(root / "extracted.jar"),
+                "--current-exe", str(root / "english.exe"),
                 "--current-dll", str(root / "english.dll"), "--report", str(root / "report.txt"),
             ]
             with mock.patch.object(sys, "argv", arguments), \
@@ -166,6 +167,7 @@ class ReportIntegrationTests(unittest.TestCase):
             self.assertIn("1/3 module class files are byte-identical", report)
             self.assertIn("3/3 module class files byte-identical", report)
             self.assertIn(parity.sha256(english_exe), report)
+            self.assertEqual((root / "extracted.jar").read_bytes(), baseline_jar)
             self.assertIn("not a guarantee of runtime equivalence", report)
 
 

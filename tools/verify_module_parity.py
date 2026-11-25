@@ -371,6 +371,8 @@ def main():
     parser.add_argument("--baseline-jar", type=Path, required=True)
     parser.add_argument("--current-jar", type=Path, required=True)
     parser.add_argument("--original-exe", type=Path, required=True)
+    parser.add_argument("--original-jar-output", type=Path,
+                        help="Optional temporary output for further offline inspection; do not distribute")
     parser.add_argument("--current-exe", type=Path, required=True)
     parser.add_argument("--current-dll", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
@@ -387,6 +389,9 @@ def main():
     require(sha256(original) == ORIGINAL_SHA256, "Original EXE SHA-256 does not match the supplied hash")
     release_dll = pe_resource(original, 422)
     release_jar = pe_resource(release_dll, 421)
+    if args.original_jar_output:
+        args.original_jar_output.parent.mkdir(parents=True, exist_ok=True)
+        args.original_jar_output.write_bytes(release_jar)
 
     current_jar = args.current_jar.read_bytes()
     current_exe = args.current_exe.read_bytes()
@@ -426,7 +431,7 @@ def main():
     else:
         layout = stats["release_layout"]
         lines += [
-            "Original release module-class byte comparison: INCONCLUSIVE (class paths differ).",
+            "Original release path-based module comparison: INCONCLUSIVE (class paths differ).",
             f"Original JAR has {layout['classes']} classes; most frequent package roots: {layout['roots']}.",
             f"Its class data references {layout['referenced_module_names']} baseline module-class names;",
             "references are not proof of class inventory or equivalent behavior.",
@@ -449,10 +454,10 @@ def main():
         emit_notice("Original release comparison", f"Original EXE hash verified; {official_matches}/{stats['module_classes']} module class files match the baseline build, and {stats['release_english_matches']}/{stats['module_classes']} match the English build byte-for-byte.")
     else:
         layout = stats["release_layout"]
-        message = (f"Original EXE hash verified, but direct module-class comparison is inconclusive: "
+        message = (f"Original EXE hash verified; path-based comparison requires class-name normalization: "
                    f"{layout['classes']} class files, roots {layout['roots']}, "
                    f"{layout['referenced_module_names']} baseline module names referenced in class data.")
-        print("::warning title=Original release layout::" + message)
+        emit_notice("Original release layout", message)
         if layout["example"]:
             emit_notice("Original class layout example", layout["example"])
     emit_notice("Runtime test limitation", "Static parity checks passed; module behavior was not tested in Minecraft.")
