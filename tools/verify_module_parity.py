@@ -7,9 +7,11 @@ it cannot replace a Minecraft runtime test or prove identical behavior.
 """
 
 import argparse
+from collections import Counter
 import hashlib
 import io
 from pathlib import Path
+import re
 import struct
 import subprocess
 import sys
@@ -282,13 +284,48 @@ def product_resource(name):
             and name not in {"resources/english.properties.txt", "resources/chinese.properties.txt"})
 
 
+def inspect_unrecognized_release_layout(data, ref_modules):
+    """Describe an original JAR whose module names do not match our build.
+
+    Referenced names are diagnostic strings, not proof the corresponding class
+    or behavior is present. In particular, an obfuscator may retain old names
+    in constant pools even when it changes the actual class entry paths.
+    """
+    expected = {name[:-6] for name in ref_modules}
+    references = set()
+    roots = Counter()
+    example = None
+    pattern = re.compile(rb"gg/vape/module/[A-Za-z0-9_$/]+")
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        names = [entry for entry in archive.namelist() if entry.endswith(".class")]
+        require(names and len(names) == len(set(names)), "Original JAR has no classes or duplicate classes")
+        for name in names:
+            roots[name.split("/", 1)[0]] += 1
+            raw = archive.read(name)
+            found = {match.decode("ascii") for match in pattern.findall(raw)} & expected
+            if found and example is None:
+                example = name + " references " + ", ".join(sorted(found)[:3])
+            references.update(found)
+    return {
+        "classes": len(names),
+        "roots": ", ".join(f"{name}: {count}" for name, count in roots.most_common(6)),
+        "referenced_module_names": len(references),
+        "example": example,
+    }
+
+
 def audit_jars(reference_jar, english_jar, release_jar):
     ref_modules = zip_hashes(reference_jar, module_class)
     eng_modules = zip_hashes(english_jar, module_class)
     release_modules = zip_hashes(release_jar, module_class)
-    require(ref_modules and eng_modules and release_modules, "Module class inventory missing")
+    require(ref_modules, "Baseline module class inventory missing")
+    require(eng_modules, "English module class inventory missing")
     same_inventory(ref_modules, eng_modules, "English module class")
-    same_inventory(release_modules, ref_modules, "Original release module class")
+    release_layout = None
+    if release_modules:
+        same_inventory(release_modules, ref_modules, "Original release module class")
+    else:
+        release_layout = inspect_unrecognized_release_layout(release_jar, ref_modules)
     module_changes = sorted(name for name in ref_modules if ref_modules[name] != eng_modules[name])
     allowed_modules = {name[:-5] + ".class" for name in MODULE_EXCEPTIONS}
     require(set(module_changes) == allowed_modules,
@@ -307,8 +344,9 @@ def audit_jars(reference_jar, english_jar, release_jar):
     resource_changes = [name for name in ref_resources if ref_resources[name] != eng_resources[name]]
     require(not resource_changes, "Unexpected resource changes: " + str(resource_changes[:20]))
 
-    release_differences = sorted(name for name in release_modules
-                                 if release_modules[name] != ref_modules[name])
+    release_differences = (sorted(name for name in release_modules
+                                  if release_modules[name] != ref_modules[name])
+                           if release_modules else None)
     return {
         "module_classes": len(ref_modules),
         "matching_module_classes": len(ref_modules) - len(module_changes),
@@ -316,7 +354,9 @@ def audit_jars(reference_jar, english_jar, release_jar):
         "own_classes": len(ref_classes),
         "resources": len(ref_resources),
         "release_differences": release_differences,
-        "release_english_matches": sum(release_modules[name] == eng_modules[name] for name in release_modules),
+        "release_english_matches": (sum(release_modules[name] == eng_modules[name] for name in release_modules)
+                                    if release_modules else None),
+        "release_layout": release_layout,
     }
 
 
@@ -354,7 +394,6 @@ def main():
     require(embedded_dll == args.current_dll.read_bytes(), "External DLL differs from embedded DLL")
     require(pe_resource(embedded_dll, 421) == current_jar, "EXE does not embed the tested Java payload")
     stats = audit_jars(args.baseline_jar.read_bytes(), current_jar, release_jar)
-    official_matches = stats["module_classes"] - len(stats["release_differences"])
 
     lines = [
         "Vape 4.21.58 English build: module parity audit",
@@ -374,12 +413,26 @@ def main():
         f"Owned class inventory ({stats['own_classes']} files) unchanged; no unreviewed class differences.",
         f"Non-language product resources ({stats['resources']} files) unchanged.",
         "Native bridge/loading files unchanged; EXE and optional DLL embed the tested JAR.",
-        f"Original release vs same-source baseline: {official_matches}/{stats['module_classes']} module class files byte-identical.",
-        f"Original release vs English build: {stats['release_english_matches']}/{stats['module_classes']} module class files byte-identical.",
     ]
-    if stats["release_differences"]:
-        lines += ["Original-release differences (possibly compiler/build differences; not runtime-tested):"]
-        lines += ["  " + name for name in stats["release_differences"]]
+    if stats["release_layout"] is None:
+        official_matches = stats["module_classes"] - len(stats["release_differences"])
+        lines += [
+            f"Original release vs same-source baseline: {official_matches}/{stats['module_classes']} module class files byte-identical.",
+            f"Original release vs English build: {stats['release_english_matches']}/{stats['module_classes']} module class files byte-identical.",
+        ]
+        if stats["release_differences"]:
+            lines += ["Original-release differences (possibly compiler/build differences; not runtime-tested):"]
+            lines += ["  " + name for name in stats["release_differences"]]
+    else:
+        layout = stats["release_layout"]
+        lines += [
+            "Original release module-class byte comparison: INCONCLUSIVE (class paths differ).",
+            f"Original JAR has {layout['classes']} classes; most frequent package roots: {layout['roots']}.",
+            f"Its class data references {layout['referenced_module_names']} baseline module-class names;",
+            "references are not proof of class inventory or equivalent behavior.",
+        ]
+        if layout["example"]:
+            lines.append("Original class data example: " + layout["example"])
     lines += [
         "",
         "Scope: static source, class and resource checks only. Module behavior has not been",
@@ -392,7 +445,16 @@ def main():
         print(line)
     emit_notice("Module source parity", f"{module_source_count} module source files verified; only two localization edits.")
     emit_notice("Module class parity", f"{stats['matching_module_classes']}/{stats['module_classes']} module class files byte-identical in same-toolchain builds; 2 localization exceptions.")
-    emit_notice("Original release comparison", f"Original EXE hash verified; {official_matches}/{stats['module_classes']} module class files match the baseline build, and {stats['release_english_matches']}/{stats['module_classes']} match the English build byte-for-byte.")
+    if stats["release_layout"] is None:
+        emit_notice("Original release comparison", f"Original EXE hash verified; {official_matches}/{stats['module_classes']} module class files match the baseline build, and {stats['release_english_matches']}/{stats['module_classes']} match the English build byte-for-byte.")
+    else:
+        layout = stats["release_layout"]
+        message = (f"Original EXE hash verified, but direct module-class comparison is inconclusive: "
+                   f"{layout['classes']} class files, roots {layout['roots']}, "
+                   f"{layout['referenced_module_names']} baseline module names referenced in class data.")
+        print("::warning title=Original release layout::" + message)
+        if layout["example"]:
+            emit_notice("Original class layout example", layout["example"])
     emit_notice("Runtime test limitation", "Static parity checks passed; module behavior was not tested in Minecraft.")
 
 

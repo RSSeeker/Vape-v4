@@ -121,6 +121,14 @@ class JarComparisonTests(unittest.TestCase):
         with self.assertRaises(parity.ParityError):
             parity.audit_jars(jar(self.reference), jar(self.english), jar(official))
 
+    def test_unrecognized_original_layout_is_explicitly_inconclusive(self):
+        official = jar({"different/package/A.class": b"gg/vape/module/combat/Example"})
+        result = parity.audit_jars(jar(self.reference), jar(self.english), official)
+        self.assertIsNone(result["release_differences"])
+        self.assertIsNone(result["release_english_matches"])
+        self.assertEqual(result["release_layout"]["classes"], 1)
+        self.assertEqual(result["release_layout"]["referenced_module_names"], 1)
+
 
 class ReportIntegrationTests(unittest.TestCase):
     def setUp(self):
