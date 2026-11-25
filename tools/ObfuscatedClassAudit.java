@@ -39,6 +39,8 @@ public final class ObfuscatedClassAudit {
     private static final Set<String> WHITELIST = new HashSet<>(Arrays.asList(
             "gg/vape/runtime/NativeBridge", "gg/vape/runtime/ForgePayloadClassLoader",
             "gg/vape/event/impl/EventRenderWorldPassExecutorDrain"));
+    private static final Set<String> EXPECTED_ENGLISH_MODULE_CHANGES = new HashSet<>(Arrays.asList(
+            "gg/vape/module/none/ClientSettings", "gg/vape/module/render/SpawnerFinder"));
 
     private static final class Metadata extends ClassVisitor {
         String source;
@@ -294,6 +296,15 @@ public final class ObfuscatedClassAudit {
         return result;
     }
 
+    static boolean matchesExpected(Result result, Set<String> expectedEnglishDifferences) {
+        return result.mappedProduct == result.randomCount
+                && result.ambiguous == 0 && result.unmatched == 0
+                && result.mappedModules == result.moduleCount
+                && result.baselineEqual == result.moduleCount
+                && result.englishDifferences.size() == expectedEnglishDifferences.size()
+                && new HashSet<>(result.englishDifferences).equals(expectedEnglishDifferences);
+    }
+
     public static void main(String[] args) throws Exception {
         if (args.length != 4) {
             throw new IllegalArgumentException("Expected: baseline.jar english.jar original.jar report.txt");
@@ -334,5 +345,10 @@ public final class ObfuscatedClassAudit {
                 + result.randomCount + " randomized product classes; " + result.poolMatches
                 + " copied constant-pool prefixes match; " + result.ambiguous + " ambiguous, "
                 + result.unmatched + " unmatched.");
+        if (!matchesExpected(result, EXPECTED_ENGLISH_MODULE_CHANGES)) {
+            System.out.println("::error title=Normalized module parity::Original module mapping or "
+                    + "class differences are not the reviewed localization-only set; see the report.");
+            System.exit(1);
+        }
     }
 }

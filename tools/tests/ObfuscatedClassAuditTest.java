@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.stream.Stream;
@@ -103,6 +104,8 @@ public final class ObfuscatedClassAuditTest {
             check(identical.moduleCount == 3 && identical.mappedModules == 3, "Module inventory failed");
             check(identical.baselineEqual == 3 && identical.equalWithoutDebugOrFrames == 3, "Normalization failed");
             check(identical.englishEqual == 2 && identical.englishDifferences.contains(second), "English change not detected");
+            check(ObfuscatedClassAudit.matchesExpected(identical, Set.of(second)), "Expected differences were rejected");
+            check(!ObfuscatedClassAudit.matchesExpected(identical, Set.of(first)), "Unexpected differences passed");
 
             Map<String, byte[]> alteredOriginal = new LinkedHashMap<>(baseline);
             alteredOriginal.put(first, makeClass(first, "First.java", "different logic", helper));
@@ -110,6 +113,7 @@ public final class ObfuscatedClassAuditTest {
             ObfuscatedClassAudit.Result altered = ObfuscatedClassAudit.analyze(baseFile, engFile, origFile);
             check(altered.mappedModules == 3, "Changed module could not be identified");
             check(altered.baselineEqual == 2 && altered.baselineDifferences.contains(first), "Changed code was not detected");
+            check(!ObfuscatedClassAudit.matchesExpected(altered, Set.of(second)), "Original code change passed the guard");
             System.out.println("Obfuscated class audit: mapping and changed-code tests passed");
         } finally {
             try (Stream<Path> paths = Files.walk(directory)) {

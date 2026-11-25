@@ -145,11 +145,21 @@ jobs:
           $output | ForEach-Object { Write-Output $_ }
           if ($code -ne 0) {
             $detail = ($output | Where-Object { "$_" -match '(Exception|Error)' } | Select-Object -First 1)
-            Write-Output "::warning title=Normalized release comparison::INCONCLUSIVE: $detail"
-            Add-Content -LiteralPath 'build/injection/MODULE-PARITY-REPORT.txt' -Value "`nNormalized original comparison: INCONCLUSIVE (auditor could not complete)."
+            Write-Output "::error title=Normalized release comparison::Parity was not verified. $detail"
+            Add-Content -LiteralPath 'build/injection/MODULE-PARITY-REPORT.txt' -Value "`nNormalized original comparison did not pass; see the workflow log."
+            exit $code
           }
           Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '## Module parity audit'
           Get-Content -LiteralPath 'build/injection/MODULE-PARITY-REPORT.txt' | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload parity diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: module-parity-diagnostics
+          path: build/injection/MODULE-PARITY-REPORT.txt
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Record bundle checksums
         shell: pwsh
