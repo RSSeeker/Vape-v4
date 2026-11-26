@@ -87,7 +87,6 @@ private:
     static std::string httpPostJson(const std::wstring& baseUrl,
         const wchar_t* path, const std::string& body);
     static std::string jsonString(const std::string& json, const char* key);
-    bool materializeEmbeddedDll(std::uint32_t processId, std::wstring& output);
     void initializeAutoInject();
     void tickAutoInject();
     void resetAutoInjectTarget();

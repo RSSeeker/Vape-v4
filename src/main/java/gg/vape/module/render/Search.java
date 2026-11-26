@@ -13,8 +13,8 @@ import gg.vape.utils.RotationUtil;
 import gg.vape.utils.TimerUtil;
 import gg.vape.utils.Vec3d;
 import gg.vape.utils.datas.SearchResultData;
-import gg.vape.utils.datas.SearchResultDataPool;
 import gg.vape.utils.processors.SearchProcessor;
+import gg.vape.utils.processors.SearchResultIndex;
 import gg.vape.utils.render.BufferedGuiRenderPrimitives;
 import gg.vape.utils.render.BufferedRenderPrimitives;
 import gg.vape.utils.render.GuiRenderPrimitives;
@@ -43,8 +43,8 @@ extends Mod {
     private final NumberValue range;
     private final TimerUtil resultRefreshTimer;
     private final NumberValue dummyRange;
-    private ArrayList<SearchBlockRenderEntry> pendingScanEntries;
-    private final List<SearchBlock> searchBlocks = new ArrayList<SearchBlock>();
+    private volatile ArrayList<SearchBlockRenderEntry> pendingScanEntries;
+    private final List<SearchBlock> searchBlocks = new CopyOnWriteArrayList<SearchBlock>();
     private final BooleanValue onlyCaves;
     private final List<SearchResultData> searchResults;
     private final BooleanValue useTracers;
@@ -53,8 +53,14 @@ extends Mod {
     @Override
     public void onEnable() {
         if (ForgeVersion.MC_1_8_9.A()) {
-            this.primaryProcessor = new SearchProcessor(this.searchResults, this.searchBlocks, this.range);
-            this.secondaryProcessor = new SearchProcessor(this.searchResults, this.searchBlocks, this.dummyRange);
+            if (ForgeVersion.MC_1_16_5.d()) {
+                SearchResultIndex index = new SearchResultIndex(this.searchResults);
+                this.primaryProcessor = new SearchProcessor(this.searchResults, this.searchBlocks, this.range, this.range, index);
+                this.secondaryProcessor = new SearchProcessor(this.searchResults, this.searchBlocks, this.dummyRange, this.range, index);
+            } else {
+                this.primaryProcessor = new SearchProcessor(this.searchResults, this.searchBlocks, this.range);
+                this.secondaryProcessor = new SearchProcessor(this.searchResults, this.searchBlocks, this.dummyRange);
+            }
             this.primaryProcessor.X(this.onlyCaves.getEffectiveValue());
             this.secondaryProcessor.X(this.onlyCaves.getEffectiveValue());
             this.primaryProcessor.n();
@@ -65,33 +71,33 @@ extends Mod {
     private void updateSearchResults() {
         // Modern versions: SearchProcessor fills searchResults directly; this
         // char[]-based path would clear them and show nothing.
-        if (ForgeVersion.MC_1_16_5.d() || this.pendingScanEntries == null) {
+        ArrayList<SearchBlockRenderEntry> entries = this.pendingScanEntries;
+        if (ForgeVersion.MC_1_16_5.d() || entries == null) {
             return;
         }
-        if (Minecraft.theWorld().isNull()) {
+        if (Minecraft.theWorld().isNull() || Minecraft.thePlayer().isNull()) {
             return;
         }
-            this.searchResults.clear();
-            EntityPlayerSP entityPlayerSP = Minecraft.thePlayer();
-            for (SearchBlockRenderEntry object : this.pendingScanEntries) {
-                SearchBlock searchBlock = this.findSearchBlock(object.getBlockId(), object.getMetadata());
-                if (searchBlock != null) {
-                    int n = object.getWorldX();
-                    int n2 = object.getWorldY();
-                    int n3 = object.getWorldZ();
-                    int n4 = (int)RotationUtil.p(entityPlayerSP, n, n2, n3);
-                    SearchResultData searchResultData = SearchResultDataPool.acquire(n, n2, n3, object.getBlockId(), searchBlock, searchBlock.I$src$Ljava_util_concurrent_atomic_AtomicBoolean_$10pq3bz(), n4);
-                    if ((double)n4 < (Double)this.range.getValue() + 10.0) {
-                        this.searchResults.add(searchResultData);
-                    } else {
-                        SearchResultDataPool.release(searchResultData);
-                    }
+        ArrayList<SearchResultData> updated = new ArrayList<SearchResultData>();
+        EntityPlayerSP entityPlayerSP = Minecraft.thePlayer();
+        for (SearchBlockRenderEntry object : entries) {
+            SearchBlock searchBlock = this.findSearchBlock(object.getBlockId(), object.getMetadata());
+            if (searchBlock != null) {
+                int x = object.getWorldX();
+                int y = object.getWorldY();
+                int z = object.getWorldZ();
+                int distance = (int)RotationUtil.p(entityPlayerSP, x, y, z);
+                if ((double)distance < (Double)this.range.getValue() + 10.0) {
+                    // Do not return published objects to a pool: render or a
+                    // copy-on-write iterator may still hold references to them.
+                    updated.add(new SearchResultData(x, y, z, object.getBlockId(), searchBlock,
+                            searchBlock.I$src$Ljava_util_concurrent_atomic_AtomicBoolean_$10pq3bz(), distance));
                 }
+            }
             SearchBlockChunkScanner.recycle(object);
         }
-        for (SearchResultData searchResultData : this.searchResults) {
-            SearchResultDataPool.release(searchResultData);
-        }
+        this.searchResults.clear();
+        this.searchResults.addAll(updated);
         this.pendingScanEntries = null;
     }
 
@@ -121,11 +127,12 @@ extends Mod {
 
     @Override
     public void onDisable() {
-        if (ForgeVersion.MC_1_8_9.A()) {
-            this.primaryProcessor.w();
-            this.secondaryProcessor.w();
-        }
-        this.searchResults.clear();
+        if (this.primaryProcessor != null) this.primaryProcessor.w();
+        if (this.secondaryProcessor != null) this.secondaryProcessor.w();
+        if (this.primaryProcessor != null) this.primaryProcessor.clearResults();
+        else this.searchResults.clear();
+        this.primaryProcessor = null;
+        this.secondaryProcessor = null;
         RenderBatchState.cleanupInstance();
     }
 
@@ -152,15 +159,14 @@ extends Mod {
     }
 
     private void onOnlyCavesChanged(BooleanValue booleanValue) {
-        if (this.primaryProcessor != null) {
-            this.primaryProcessor.X(this.onlyCaves.getEffectiveValue());
-            this.secondaryProcessor.X(this.onlyCaves.getEffectiveValue());
-        }
+        if (this.primaryProcessor != null) this.primaryProcessor.X(this.onlyCaves.getEffectiveValue());
+        if (this.secondaryProcessor != null) this.secondaryProcessor.X(this.onlyCaves.getEffectiveValue());
     }
 
     public void removeSearchBlock(SearchBlock searchBlock) {
         this.searchBlocks.remove(searchBlock);
-        this.searchResults.clear();
+        if (this.primaryProcessor != null) this.primaryProcessor.clearResults();
+        else this.searchResults.clear();
     }
 
     @EventHandler

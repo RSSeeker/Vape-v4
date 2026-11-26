@@ -7,6 +7,8 @@ import gg.vape.module.Mod;
 import gg.vape.wrapper.impl.ForgeVersion;
 import gg.vape.wrapper.impl.KeyBinding;
 import gg.vape.wrapper.impl.Minecraft;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 public class AttackKeyController {
     public static void releaseAttackKey() {
@@ -28,6 +30,35 @@ public class AttackKeyController {
             return true;
         }
         return AttackKeyController.requestSyntheticAttackNow(module);
+    }
+
+    /**
+     * A queued request is not the same as a completed attack. Recheck the
+     * caller's state at execution time and report whether the key was pressed,
+     * including event cancellation. Completion may run inline or on the tick
+     * executor; callers must invalidate old requests on disable/world changes.
+     */
+    public static void requestValidatedSyntheticAttack(Mod module, BooleanSupplier stillValid,
+                                                        Consumer<Boolean> completed) {
+        Runnable request = () -> {
+            boolean pressed = false;
+            try {
+                if (stillValid.getAsBoolean()) {
+                    SyntheticAttackRequestEvent event = new SyntheticAttackRequestEvent(module);
+                    if (!event.fire() && stillValid.getAsBoolean()) {
+                        AttackKeyController.pressAttackKeyNow();
+                        pressed = true;
+                    }
+                }
+            } finally {
+                completed.accept(pressed);
+            }
+        };
+        if (AttackKeyController.shouldRunOnClientTick()) {
+            EventTickBase.PRE_TICK_EXECUTOR.execute(request);
+        } else {
+            request.run();
+        }
     }
 
     private static boolean requestSyntheticAttackNow(Mod module) {

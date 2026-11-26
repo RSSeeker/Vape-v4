@@ -43,47 +43,95 @@ APPROVED_SOURCES = {
 # Reviewed behavioral improvements, distinct from the historical
 # localization-only exceptions above. Complete content hashes remain mandatory.
 APPROVED_ENHANCEMENTS = {
+    "gg/vape/input/AttackKeyController.java": "38d5baeefc4cb441fde2c9823628f53ae031a3f46b01a179db1caf1fb2f31d8c",
     "gg/vape/module/combat/SilentAura.java": "c07194c7e0c2b3bd94d80849e64f9998e97ce988a823719a628a14b6a57fe8fa",
-    "gg/vape/module/combat/aimassist/AimAssistKissSubModule.java": "4fecc8c662e8b632a25e0ed581366ceeb8a1b4266fb94f0e2b80ef8c6ac3b15e",
-    "gg/vape/module/combat/aimassist/AimAssistRotationSubModule.java": "cd5f36841866f280ee3e8b143549c73b4125bb2785d610d38886fea1917939fc",
+    "gg/vape/module/combat/AimAssist.java": "2a81e9bdfecf9a363cf4414ea138b658e203e234fd216c9ec016cd5a0d22ee35",
+    "gg/vape/module/combat/AutoMace.java": "75393638865c4618f7fb5d31b09b8ec600950bc62ec2b3845d0e11fbb5b9b0c7",
+    "gg/vape/module/combat/HitSwap.java": "1c548a931acdb9c64de21cb0c7a10a2bd99b333aa7655e087b05aeec6a492a88",
+    "gg/vape/module/combat/Triggerbot.java": "6be6b8b2590fdf29a2a3a8eb08fd2d5fbc8f819abee3e0c1601ab244e87240c7",
+    "gg/vape/module/combat/aimassist/AimAssistKissSubModule.java": "31ff65af290fb0af673f23383a362eb9e71321dfd30be131456560565062247c",
+    "gg/vape/module/combat/aimassist/AimAssistRotationSubModule.java": "a9b4a0bb9392facc5029d165d9f8936981012609079aa52f4c57570c7e6f1686",
     "gg/vape/module/combat/aimassist/AimAssistTargetingSubModule.java": "8bebb812eece35f0fe667ff4b8f6f3de429c4751c6fb4179684c08cedc4a8a0c",
+    "gg/vape/module/combat/automace/AutoMaceRotationController.java": "875eb671fd24c13467ac5a12f9d15eb5e53e9bf4a4d95eae1c021b5488fed1fc",
+    "gg/vape/module/combat/automace/AimSelectionRules.java": "8b25748d4dd7a2db2697c6397f86c428f7ee8c1f38aa202996f2674e480b946d",
+    "gg/vape/module/render/Search.java": "05378e2f59303c2bb7407bc7a436b31e3f64fc05dfc800f868cb317508769df5",
+    "gg/vape/module/render/search/SearchBlockChunkScanner.java": "30bc10d3baa17c3dc17ffee4d958f933871b35a9fa29b716b641d54e62eee505",
+    "gg/vape/utils/processors/SearchProcessor.java": "a8b6ede1a4765967da3c216f7e3cfc3166e7c197cab82ec549f29671fea7a180",
+    "gg/vape/utils/processors/SearchResultIndex.java": "b9ebe577f062c0648aa638aed2e4a72bc3c9ed3747b2f341715b6d9a76d16045",
     "gg/vape/rotation/AdaptiveRotationController.java": "c214a0358b332a0d27c7c41278d975af06e2b7d13b2c5ea48103f9a5f3bcc653",
     "gg/vape/rotation/MouseRotationController.java": "7b90c8a8a3b279ceb06a9b12989fbf0c6e6256ae8074c041e5939f962d887923",
     "gg/vape/rotation/RotationManager.java": "8d8f48842d2c93945b313a8136f504a0c8634c75aa4271d01bc0098e992eeff9",
     "gg/vape/rotation/RotationMath.java": "ecec256ddc8bbd941725fc807f6a60e89d658dae4166433cdf893c0cd602b18b",
 }
-JAVA_ADDITIONS = {"gg/vape/rotation/RotationMath.java"}
+JAVA_ADDITIONS = {
+    "gg/vape/rotation/RotationMath.java",
+    "gg/vape/module/combat/automace/AimSelectionRules.java",
+    "gg/vape/utils/processors/SearchResultIndex.java",
+}
 JAVA_ADDED_CLASSES = {
     "gg/vape/rotation/RotationMath.class",
     "gg/vape/rotation/RotationMath$StepQuantizer.class",
     "gg/vape/rotation/RotationMath$TargetPredictor.class",
+    "gg/vape/module/combat/AutoMace$AimSelection.class",
+    "gg/vape/module/combat/automace/AimSelectionRules.class",
+    "gg/vape/utils/processors/SearchResultIndex.class",
+    "gg/vape/utils/processors/SearchResultIndex$1.class",
+    "gg/vape/utils/processors/SearchResultIndex$Entry.class",
+    "gg/vape/utils/processors/SearchResultIndex$Position.class",
 }
 ENHANCED_MODULE_SOURCES = {
-    name for name in APPROVED_ENHANCEMENTS if name.startswith("gg/vape/module/")
+    name for name in APPROVED_ENHANCEMENTS
+    if name.startswith("gg/vape/module/") and name not in JAVA_ADDITIONS
 }
 MODULE_EXCEPTIONS = {
     "gg/vape/module/none/ClientSettings.java",
     "gg/vape/module/render/SpawnerFinder.java",
 }
 
-# All other native files (including bridge, manual-map and controller code)
-# must match the baseline. These reviewed exceptions are translations, the
-# language reader, and its build/tests. Binary assets are compared byte-for-byte.
+# All other native files, including the reflective-loader implementation and
+# bridge, must match the baseline. Reviewed translations and loader integrity
+# changes are pinned by content; binary assets are compared byte-for-byte.
 APPROVED_NATIVE = {
-    "native/CMakeLists.txt": "5db5897b37927b5cb1e0dfb057cd48084f41d9b16cbbae1e6c504f5343be5dac",
-    "native/injector.c": "1e34fa9d34f84aa4052f2039bdaee93ee39c2cd2e998686f621376f37414708f",
+    "native/dllmain.c": "a5209eb87399c7e058d97c6a3223028c620b32ee5a6d8e55910a341b33e4fffc",
+    "native/loader_gui/controller_model.h": "3beafc76870575c7776836987eca4b2aeded6769e2674aae8281ef58aee004f5",
+    "native/loader_gui/embedded_dll_materializer.cpp": "a09ed8f2e0f210fcc08a2853e6d3db34f54fe8546b8610477aab637088cb0ce5",
+    "native/loader_gui/embedded_dll_materializer.h": "61b6dbe7d36f68e7e4b454f984cd08ba3a369226ea650b21027f97e328f30d9e",
+    "native/safe_file_materialization.c": "db608a9b7fec00024ddf7d322e8842fab059bec5a28f3b18186dd1047c8f3bc0",
+    "native/safe_file_materialization.h": "bb9a84dda8d1a25afaae878ce1b2e605e13983d3c3297ae4d9cc3f5ea18bed7b",
+    "native/tests/embedded_dll_materializer_test.cpp": "0bb065f036e09442104ca91a45efafc26e3102b1815d7430020f0c83e2a21af9",
+    "native/tests/materializer_fixture.rc": "e5039e8de87d856490b1bcd4c23f5011a604d090982b21713e0aec229ce9bbfd",
+    "native/tests/safe_file_materialization_test.cpp": "2330079c724d0a50778f85e3916a203db485ae5b655dae2f6ac0b90840620383",
+    "native/CMakeLists.txt": "37f2a913c0ffda5f05e591a71076fa995cc62abfa69a372201a0324871590c81",
+    "native/injector.c": "e475006406272bcfcb9ad24c8c8d977b3a6e624281dc15f14352f16bf9e13d17",
+    "native/loader_gui/controller_model.cpp": "9587e6e1ec36817fb75719b7a3b507418127970ad3e64f935133a0d4a30334f4",
+    "native/loader_gui/injection_coordinator.cpp": "323649297428bb83928e9426893294e6e3292edc8c29189bc47298903b55bc86",
+    "native/loader_gui/embedded_resource_integrity.h": "f05b3c7e458e647768b15cade70e6ffb7e8cc03a582df6b046cd236e3ae80385",
+    "native/loader_gui/locked_resource_file.h": "962de2b110e7b4350fef1caff4194d78eefff4fe3243c6c8c3a362575bd30583",
     "native/loader_gui/loader_language.cpp": "2ab4680092e008f9f547e9960a0f0c738c9dda7631f0a812b51617322c9e823a",
     "native/loader_gui/loader_language.h": "06ec241e8626d994baeba1a5b54f723baa8fc7f27bb13b46ca5c0b0e73d8b2f7",
-    "native/loader_gui/loader_strings.cpp": "6bb6a6aeee3ec681db8504d593002568e18f60540ed03fcc2abc9efad6431dd5",
-    "native/loader_gui/loader_strings.h": "e96cd08aef7e49e127a9b3755e829ed5aafe3b6723f5be84a46b682c3e992132",
+    "native/loader_gui/loader_strings.cpp": "8496489450bd6767642f20650b2ae562cda700219ea34982b2c8d574b4f6f3bc",
+    "native/loader_gui/loader_strings.h": "252956b897d714475779f7d246b47f526e3804f7b4d4706c154918954b7d1892",
     "native/loader_gui/main.cpp": "b7cc364bfef52e32d9b31497af891630a8041e3ed44a04159b7ba73ae2128f97",
+    "native/tests/embedded_resource_integrity_test.cpp": "614d4692e7cb85b1c4a712b88a3e9b0401627caa15e2e76b93c2ef04498bc2b8",
+    "native/tests/locked_resource_file_test.cpp": "61da7589b3249cfa5d608773291de2ff42a8e1cd6bb9964d927929f6420dca5d",
     "native/tests/loader_language_test.cpp": "b21e9c690c90d9618ad0bc8b936b91fe6b67ef40cf40e7c8c22419fa4859d741",
     "native/tests/loader_strings_test.cpp": "0d60fd78fda307e493b703997203d92633194fa9d4d246f45481690cce048de0",
 }
 NATIVE_ADDITIONS = {
+    "native/loader_gui/embedded_dll_materializer.cpp",
+    "native/loader_gui/embedded_dll_materializer.h",
+    "native/safe_file_materialization.c",
+    "native/safe_file_materialization.h",
+    "native/tests/embedded_dll_materializer_test.cpp",
+    "native/tests/materializer_fixture.rc",
+    "native/tests/safe_file_materialization_test.cpp",
     "native/loader_gui/loader_language.cpp",
     "native/loader_gui/loader_language.h",
     "native/tests/loader_language_test.cpp",
+    "native/loader_gui/embedded_resource_integrity.h",
+    "native/loader_gui/locked_resource_file.h",
+    "native/tests/embedded_resource_integrity_test.cpp",
+    "native/tests/locked_resource_file_test.cpp",
 }
 APPROVED_RESOURCES = {
     "src/main/resources/resources/chinese.properties.txt": "deffbc7f8dd1f4b39f254865d2c9302e0403e8d0360b9e4459dd67beebcdba20",
@@ -156,7 +204,7 @@ def audit_sources(reference, current):
             if name in MODULE_EXCEPTIONS:
                 require(module_original_form(name, after) == before,
                         "Unapproved logic change in localized module source " + name)
-            elif name not in ENHANCED_MODULE_SOURCES:
+            elif name not in ENHANCED_MODULE_SOURCES and name not in JAVA_ADDITIONS:
                 require(before == after, "Unexpected module source change: " + name)
         if before != after:
             changed.add(name)
@@ -355,15 +403,20 @@ def audit_jars(reference_jar, english_jar, release_jar):
     release_modules = zip_hashes(release_jar, module_class)
     require(ref_modules, "Baseline module class inventory missing")
     require(eng_modules, "English module class inventory missing")
-    same_inventory(ref_modules, eng_modules, "English module class")
+    added_modules = {name for name in JAVA_ADDED_CLASSES if module_class(name)}
+    require(not (ref_modules.keys() & added_modules), "An expected added module class exists in the baseline")
+    require(ref_modules.keys() | added_modules == eng_modules.keys(),
+            "English module class inventory changed; missing=" + str(sorted(ref_modules.keys() - eng_modules.keys())[:12])
+            + ", added=" + str(sorted(eng_modules.keys() - ref_modules.keys() - added_modules)[:12]))
     release_layout = None
     if release_modules:
         same_inventory(release_modules, ref_modules, "Original release module class")
     else:
         release_layout = inspect_unrecognized_release_layout(release_jar, ref_modules)
     module_changes = sorted(name for name in ref_modules if ref_modules[name] != eng_modules[name])
-    allowed_modules = {name[:-5] + ".class" for name in MODULE_EXCEPTIONS | ENHANCED_MODULE_SOURCES}
-    require(set(module_changes) == allowed_modules,
+    required_modules = {name[:-5] + ".class" for name in MODULE_EXCEPTIONS | ENHANCED_MODULE_SOURCES}
+    allowed_modules = {name for name in ref_modules if approved_class(name)}
+    require(required_modules <= set(module_changes) <= allowed_modules,
             "Unexpected module class changes: " + str(module_changes))
 
     ref_classes = zip_hashes(reference_jar, own_class)
@@ -452,18 +505,18 @@ def main():
         "English source-build Java payload SHA-256: " + sha256(current_jar),
         "English embedded Java payload SHA-256: " + sha256(embedded_jar),
         f"Java baseline sources: {source_count}; module sources: {module_source_count}; reviewed changes/additions: {changed_sources}.",
-        f"Module sources: {len(MODULE_EXCEPTIONS)} reviewed localization edits and {len(ENHANCED_MODULE_SOURCES)} reviewed rotation enhancements; all others match baseline.",
+        f"Module sources: {len(MODULE_EXCEPTIONS)} reviewed localization edits and {len(ENHANCED_MODULE_SOURCES)} reviewed behavioral changes, plus pinned additions; all others match baseline.",
         "Localization edits reverse to baseline; enhancement source contents are pinned by reviewed hashes.",
-        "Rotation enhancements intentionally change behavior; they are not baseline-equivalent.",
-        f"Native files: {native_count} baseline files; {native_changes} reviewed localization/build/test changes or additions.",
+        "Behavioral improvements intentionally differ from the baseline; they require runtime testing.",
+        f"Native files: {native_count} baseline files; {native_changes} reviewed localization/integrity/build/test changes or additions.",
         f"Resource files: {resource_count} baseline files; {resource_changes} reviewed translation changes.",
         f"Same-toolchain builds: {stats['matching_module_classes']}/{stats['module_classes']} module class files are byte-identical.",
-        "Differing module classes (reviewed localization and rotation enhancements):",
+        "Differing baseline module classes (reviewed localization and behavioral changes):",
         *("  " + name for name in stats["module_changes"]),
         f"Owned class inventory: {stats['own_classes']} baseline files plus {len(JAVA_ADDED_CLASSES)} reviewed additions; no unreviewed class differences.",
         f"Non-language product resources ({stats['resources']} files) unchanged.",
         f"Embedded payload has the same {embedded_resource_count} non-class resources as the English source build.",
-        "Native bridge/loading files unchanged; EXE and optional DLL embed the expected JAR.",
+        "Native loading changes are pinned above; the EXE and optional DLL embed the expected JAR. This audit does not establish safety.",
     ]
     if stats["release_layout"] is None:
         official_matches = stats["module_classes"] - len(stats["release_differences"])
@@ -494,7 +547,7 @@ def main():
     args.report.write_text("\n".join(lines), encoding="utf-8")
     for line in lines:
         print(line)
-    emit_notice("Module source review", f"{module_source_count} module source files checked; {len(MODULE_EXCEPTIONS)} localization edits and {len(ENHANCED_MODULE_SOURCES)} reviewed rotation enhancements.")
+    emit_notice("Module source review", f"{module_source_count} module source files checked; {len(MODULE_EXCEPTIONS)} localization edits and {len(ENHANCED_MODULE_SOURCES)} reviewed behavioral changes, plus pinned additions.")
     emit_notice("Module class comparison", f"{stats['matching_module_classes']}/{stats['module_classes']} module class files byte-identical in same-toolchain builds; reviewed enhancements intentionally differ.")
     if stats["release_layout"] is None:
         emit_notice("Original release comparison", f"Original EXE hash verified; {official_matches}/{stats['module_classes']} module class files match the baseline build, and {stats['release_english_matches']}/{stats['module_classes']} match the English build byte-for-byte.")

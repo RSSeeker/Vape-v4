@@ -31,7 +31,7 @@ The project is started and maintained independently by one individual; all views
 
 ## Security Notice
 
-Verify the origin, signatures and hashes of downloaded programs before running them. A locally rebuilt binary differs from the upstream release and is unsigned unless you supply a code-signing certificate. No distribution channel can guarantee safety.
+Verify the origin, signatures and hashes of downloaded programs before running them. A locally rebuilt binary differs from the upstream release and is unsigned unless you supply a code-signing certificate. No distribution channel can guarantee safety. A reported VirusTotal alert on an earlier build remains unexplained; a negative ClamAV scan is not proof of safety. See the [security investigation](docs/security-investigation.md), and do not run a flagged file or add an antivirus exclusion until independently investigated.
 
 ## Main artifact
 
@@ -39,7 +39,7 @@ Verify the origin, signatures and hashes of downloaded programs before running t
 | --- | --- |
 | `Vape-v4.21.*.exe` | Single-file GUI loader (embeds the complete DLL, Java payload and icon) |
 
-**Optional external DLL**: if `Vape-v4.21Native.dll` sits next to the exe it is loaded preferentially (handy for replacing/updating the native layer yourself); otherwise the embedded copy is extracted, so no extra files are required.
+**Optional external DLL**: GUI and console modes use `Vape-v4.21Native.dll` next to the EXE only if it matches the EXE's embedded DLL byte-for-byte. Otherwise they extract the embedded copy; replacing the adjacent DLL is no longer a way to update the native layer independently.
 
 **Language and compatibility:** The loader reads `.vapeclient\config.json` next
 to the executable. An explicitly saved Chinese selection remains Chinese; choose
@@ -48,8 +48,8 @@ change it. Configurations from older versions that omitted their default languag
 now start in English. The console messages are English regardless of this setting.
 
 Run the rebuilt EXE on its own or next to the **matching rebuilt DLL**. A stale
-external `Vape-v4.21Native.dll` takes precedence over the embedded payload and
-can otherwise bring back the older Chinese in-game UI.
+external `Vape-v4.21Native.dll` is not injected. Matching the embedded resource
+is an integrity check, not evidence that the EXE or DLL is safe.
 
 **Usage**:
 
@@ -63,14 +63,14 @@ can otherwise bring back the older Chinese in-game UI.
 
 - Integrated VapeLoader GUI (GDI+ self-drawn, English by default): process selection / injection progress / load complete
 - Removed the login page and cache prompt: it starts straight to process selection and injection, generating a token locally
-- **External DLL support**: if `Vape-v4.21Native.dll` sits next to the exe it is injected preferentially; otherwise the embedded copy is extracted and injected — both modes need no extra files
+- **Matching DLL support**: an adjacent DLL is accepted only if it matches the embedded resource; otherwise the embedded DLL is extracted without overwriting existing recovery files
 - Window title "Vape v4", icon consistent with the product
 - All dropped files are kept inside the hidden `.vapeclient` directory next to the exe (extracted DLL/JAR, logs, config, service data, texture cache)
 
 **Injection**
 
-- Uses **manual map** injection by default: the injector writes the DLL image into the target process and performs section mapping, relocations, import resolution and section protection itself before calling the entry point. The DLL is **never loaded through `LoadLibrary`**, so it does not appear in the Minecraft process module list (Process Explorer and `EnumProcessModules` cannot see it) and leaves no image-load trace
-- **Automatic fallback**: if any manual-map step fails, injection falls back to the classic `CreateRemoteThread` + `LoadLibraryW` path so availability comes first. Both paths load the same DLL, so in-game behavior, performance and version compatibility are identical
+- GUI mode attempts **manual mapping** with a reflective loader and thread hijacking; console mode uses `LoadLibraryW`. Manual mapping does not create a normal loader-module entry, but that is not a claim of invisibility or detection avoidance.
+- **Automatic fallback**: GUI injection can fall back to `CreateRemoteThread` + `LoadLibraryW` if manual mapping fails. Both use the checked DLL, but their runtime behavior and compatibility have not been proven identical.
 - The verified upstream EXE and this branch's CI bundle use build-time randomized product class names. This does not establish any particular detection or anti-cheat outcome — see FAQ 10.
 
 **Motion Blur (MotionBlur)**
@@ -208,7 +208,7 @@ If the first injection failed, restart Minecraft and inject again.
 
 ### 3. The loader reports "Vape421Native.dll was not found beside the Loader"
 
-That message refers to `Vape-v4.21Native.dll` in the loader's directory (the optional external DLL described under "Main artifact"): the DLL must sit in the same directory as the loader.
+The DLL could not be opened or verified. An adjacent DLL is optional and must match the embedded resource; check that extraction succeeded and that the recovery directory is accessible. Do not bypass a security warning to make it load.
 
 ### 4. The loader reports "Product DLL did not acknowledge…" or "Unexpected…"
 

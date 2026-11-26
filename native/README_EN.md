@@ -79,9 +79,8 @@ loopback. The full design is documented at
 The GUI and Java payload default to English. An explicit Chinese setting in
 `<exe>\.vapeclient\config.json` is honored on the next launch; missing,
 unreadable or malformed settings default to English. The `-nogui` console is
-English. To use the embedded English payload, keep older external
-`Vape-v4.21Native.dll` files out of the executable's directory or replace them
-with the DLL from this build.
+English. Both GUI and console modes reject an adjacent DLL unless it matches
+the executable's embedded DLL; an older external copy cannot replace it.
 
 ## Build
 
@@ -141,9 +140,9 @@ Vape-v4.21.<version>.exe
 With no arguments this opens the GUI loader (window title "Vape v4"): it
 auto-refreshes the visible Java windows, shows their window titles (for example
 `Minecraft` or `Lunar Client`), and injects into the process you pick.
-In GUI mode an external `Vape-v4.21Native.dll` **next to the exe is preferred**;
-the embedded copy is extracted only when it is absent, so the bundle can be
-carried as a single file.
+In GUI mode an adjacent `Vape-v4.21Native.dll` is used only if it matches the
+embedded copy. Otherwise the embedded resource is extracted to an unused
+recovery filename; existing files are not recursively deleted or truncated.
 
 Console mode requires `-nogui` as the first argument:
 
@@ -152,16 +151,16 @@ Vape-v4.21.<version>.exe -nogui <minecraft-pid>
 ```
 
 Without a pid it opens the auto-refreshing Java window picker (Up/Down to select,
-Enter to inject, Esc to quit). Console mode **always uses the embedded
-`Vape-v4.21Native.dll` and never loads an external DLL**; the embedded copy is
-extracted to `<exe>\.vapeclient\Vape-v4.21Recovery\Vape-v4.21Native-<pid>.dll`
-before injection.
+Enter to inject, Esc to quit). Console mode uses the same byte-checked DLL
+materializer as GUI mode. In both modes the final DLL is reverified while a
+read handle is held through injection. Parent-directory/junction races and
+payload trust are not fully addressed; see the [security investigation](../docs/security-investigation.md).
 
-The injector only performs `LoadLibraryW`. Once loaded, the DLL worker waits
-for the JVM and Minecraft `Client thread`, extracts its embedded product JAR to
-`<exe>\.vapeclient\Vape-v4.21Recovery\Vape-v4.21-product-<pid>.jar` (every
-artifact stays inside the `.vapeclient` tree; nothing is written to `%TEMP%`),
-and then attaches it per runtime:
+Console injection uses `LoadLibraryW`; GUI mode first attempts reflective
+mapping and falls back to `LoadLibraryW`. The DLL worker waits for the JVM and
+Minecraft `Client thread`. The product JAR is written to an unused path (which
+can have a numeric suffix); previously existing JAR paths are not truncated.
+It is then attached per runtime:
 
 - Vanilla: appended to the system ClassLoader search path
 - Forge / NeoForge: payload package routes installed on the ModLauncher

@@ -1,6 +1,7 @@
 #include "vape421_native.h"
 #include "loader_bootstrap.h"
 #include "manual_map.h"
+#include "safe_file_materialization.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -286,9 +287,7 @@ static int materialize_embedded_product_jar(
     DWORD size;
     wchar_t temp_root[MAX_PATH];
     wchar_t temp_directory[MAX_PATH];
-    HANDLE file = INVALID_HANDLE_VALUE;
-    DWORD offset = 0;
-    int result = 0;
+    wchar_t jar_base[MAX_PATH];
 
     resource = FindResourceW(g_module,
             MAKEINTRESOURCEW(VAPE421_PRODUCT_JAR_RESOURCE_ID),
@@ -319,47 +318,19 @@ static int materialize_embedded_product_jar(
         vape_log(L"CreateDirectoryW failed: %lu", GetLastError());
         return 0;
     }
-    if (_snwprintf_s(jar_path, jar_capacity, _TRUNCATE,
-            L"%ls\\Vape-v4.21-product-%lu.jar", temp_directory,
-            GetCurrentProcessId()) < 0) {
+    if (_snwprintf_s(jar_base, MAX_PATH, _TRUNCATE,
+            L"%ls\\Vape-v4.21-product-%lu", temp_directory,
+            (unsigned long)GetCurrentProcessId()) < 0) {
         vape_log(L"temporary product JAR path is too long");
         return 0;
     }
-    file = CreateFileW(jar_path, GENERIC_WRITE,
-            FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, CREATE_ALWAYS,
-            FILE_ATTRIBUTE_NORMAL, NULL);
-    if (file == INVALID_HANDLE_VALUE) {
-        vape_log(L"CreateFileW for embedded product JAR failed: %lu",
-                GetLastError());
+    if (!vape421_write_unique_file(jar_base, L".jar", bytes, size,
+            jar_path, jar_capacity)) {
+        vape_log(L"Could not safely write embedded product JAR: %lu", GetLastError());
         return 0;
     }
-    while (offset < size) {
-        DWORD written = 0;
-        DWORD remaining = size - offset;
-        if (!WriteFile(file, bytes + offset, remaining, &written, NULL)
-                || written == 0) {
-            vape_log(L"WriteFile for embedded product JAR failed: %lu",
-                    GetLastError());
-            goto cleanup;
-        }
-        offset += written;
-    }
-    if (!FlushFileBuffers(file)) {
-        vape_log(L"FlushFileBuffers for embedded product JAR failed: %lu",
-                GetLastError());
-        goto cleanup;
-    }
-    result = 1;
-
-cleanup:
-    CloseHandle(file);
-    if (!result) {
-        DeleteFileW(jar_path);
-    } else {
-        vape_log(L"materialized embedded product JAR: %ls (%lu bytes)",
-                jar_path, size);
-    }
-    return result;
+    vape_log(L"materialized embedded product JAR: %ls (%lu bytes)", jar_path, size);
+    return 1;
 }
 
 static jobject find_client_class_loader(JNIEnv *env) {

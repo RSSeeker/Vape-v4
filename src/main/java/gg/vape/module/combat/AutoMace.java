@@ -15,6 +15,7 @@ import gg.vape.module.Mod;
 import gg.vape.module.blatant.blockin.BlockPathPlanner;
 import gg.vape.module.blatant.blockin.BlockPlacementGraph;
 import gg.vape.module.combat.automace.AutoMaceRotationController;
+import gg.vape.module.combat.automace.AimSelectionRules;
 import gg.vape.module.control.AttackCancellationAdapter;
 import gg.vape.module.control.PhysicalAttackCancellationAdapter;
 import gg.vape.module.control.SharedModuleControlClaims;
@@ -395,27 +396,26 @@ public class AutoMace extends Mod {
             return;
         }
 
-        EntityLivingBase target = this.findNearestTarget(player, world);
-        if (target == null) {
-            this.releaseRotation();
-            return;
-        }
-
         double reach = this.getMaceReach();
-        boolean fallingForSmash = RotationUtil.u(player);
-        boolean directlyReachable = fallingForSmash
-                && distanceToTarget(player.z(), player.N() + player.X(), player.h(), target, 0.0, 0.0, 0.0) <= reach;
-        ImpactPrediction prediction = this.findImpact(this.simulateTrajectory(player, world, false, 0), target, reach);
-        if (!(prediction.valid && prediction.tick <= MAX_AIM_IMPACT_TICK || directlyReachable)) {
+        AimSelection selection = this.findReachableAimTarget(player, world, reach);
+        if (selection == null) {
             this.releaseRotation();
             return;
         }
+        EntityLivingBase target = selection.target;
+        ImpactPrediction prediction = selection.prediction;
+        boolean directlyReachable = selection.directlyReachable;
 
         if (this.rotationClaim.isBlockedFor(this)) {
             this.releaseRotation();
             return;
         }
         boolean silent = this.silentAim.getEffectiveValue().booleanValue();
+        // The controller's mode is fixed at construction. Release and recreate
+        // it when the setting changes, rather than retaining the previous mode.
+        if (this.rotationController != null && this.rotationController.isSilent() != silent) {
+            this.releaseRotation();
+        }
         if (!this.rotationClaim.isOwnedBy(this) && !this.rotationClaim.acquire(this, silent)) {
             return;
         }
@@ -980,10 +980,12 @@ public class AutoMace extends Mod {
                 && stack.getItem().equals(this.cachedElytra);
     }
 
-    private EntityLivingBase findNearestTarget(EntityPlayerSP player, WorldClient world) {
+    private AimSelection findReachableAimTarget(EntityPlayerSP player, WorldClient world, double reach) {
         double range = this.aimRange.getValue();
-        EntityLivingBase best = null;
         double bestDistance = Double.MAX_VALUE;
+        AimSelection best = null;
+        List<FallSample> samples = null;
+        boolean fallingForSmash = RotationUtil.u(player);
         for (Object entityObject : new ArrayList<Object>(world.z())) {
             Entity entity = new Entity(entityObject);
             if (!entity.isInstance(MappedClasses.zm)) {
@@ -997,7 +999,20 @@ public class AutoMace extends Mod {
             if (!this.isValidTarget(player, candidate) || horizontalDistance > range || distance >= bestDistance) {
                 continue;
             }
-            best = candidate;
+            // Simulate the player's movement once, then evaluate every nearer
+            // valid candidate. An unreachable nearest entity must not mask a
+            // slightly farther entity that can actually be hit.
+            if (samples == null) {
+                samples = this.simulateTrajectory(player, world, false, 0);
+            }
+            boolean direct = fallingForSmash
+                    && distanceToTarget(player.z(), player.N() + player.X(), player.h(), candidate, 0.0, 0.0, 0.0) <= reach;
+            ImpactPrediction prediction = this.findImpact(samples, candidate, reach);
+            if (!AimSelectionRules.isBetterCandidate(distance, bestDistance, direct,
+                    prediction.valid, prediction.tick, MAX_AIM_IMPACT_TICK)) {
+                continue;
+            }
+            best = new AimSelection(candidate, prediction, direct);
             bestDistance = distance;
         }
         return best;
@@ -1354,6 +1369,18 @@ public class AutoMace extends Mod {
             this.fallDistance = fallDistance;
             this.onGround = onGround;
             this.fallFlying = fallFlying;
+        }
+    }
+
+    private static final class AimSelection {
+        private final EntityLivingBase target;
+        private final ImpactPrediction prediction;
+        private final boolean directlyReachable;
+
+        private AimSelection(EntityLivingBase target, ImpactPrediction prediction, boolean directlyReachable) {
+            this.target = target;
+            this.prediction = prediction;
+            this.directlyReachable = directlyReachable;
         }
     }
 

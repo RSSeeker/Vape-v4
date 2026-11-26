@@ -35,7 +35,7 @@ public class Triggerbot
 extends Mod {
     public final EntityTargetFilterValue targetFilter = EntityTargetFilterValue.createForModule(this);
     private final TimerUtil attackTimer;
-    private boolean waitingForFirstHit = false;
+    private volatile boolean waitingForFirstHit = false;
     public final NumberValue earlyHitChance;
     private boolean missAttackPending = false;
     private final BooleanValue selectFirstHit;
@@ -45,17 +45,20 @@ extends Mod {
     public final LimitValue allowedItems;
     private boolean graceActive = false;
     private long mouseOverDelayMs = 0L;
-    private boolean mouseDown = false;
-    private int selectTargetId = -1;
+    private volatile boolean mouseDown = false;
+    private volatile int selectTargetId = -1;
     private static final long MODULE_ID = -4105462348079232239L;
     public final BooleanValue requireMouseDown;
     private final TimerUtil mouseOverTimer;
     private final Random random;
-    private boolean releasePending = false;
+    private volatile boolean releasePending = false;
+    private final Object requestLock = new Object();
+    private long requestEpoch;
+    private volatile boolean requestInFlight;
     private final RandomValue extraDelay = RandomValue.createWithDescription(this, "Extra delay", "#", "ticks", -20.0, 0.0, 0.0, 20.0, 0.1, "Extra delay after attack cooldown(in ticks)\nNegative values will attack before cooldown is complete");
     public final NumberValue targetMissChance;
     public final BooleanValue airCrits;
-    private int mouseOverTargetId = -1;
+    private volatile int mouseOverTargetId = -1;
     private final RandomValue mouseOverDelayValue = RandomValue.createWithDescription(this, "Mouse over delay", "#", "ms", 0.0, 0.0, 0.0, 200.0, 10.0, "Delay after your crosshair reaches a target before attacking");
     private int earlyHitTicks = 0;
     public final BooleanValue ignoreActivationClick;
@@ -63,7 +66,11 @@ extends Mod {
 
     @EventHandler
     public void onTick(EventPreTick event) {
+        boolean releasedThisTick = this.releasePendingAttack();
         if (event.getThePlayer().isNull()) {
+            this.resetMouseOverState();
+            this.resetSelectState();
+            this.lastHurtTime = 0;
             return;
         }
         int hurtTime = event.getThePlayer().c$src$I$15a9iwo();
@@ -77,41 +84,86 @@ extends Mod {
                 && this.selectTargetId != -1 && wasJustHurt) {
             this.waitingForFirstHit = false;
         }
-        if (!this.attackTimer.hasTimeElapsed(50L)) {
-            return;
-        }
-        if (this.releasePending) {
-            AttackKeyController.releaseAttackKey();
-            this.releasePending = false;
-            return;
-        }
         if (!this.canAttack(true)) {
+            this.resetMouseOverState();
             return;
         }
-        float cooldownOffset = (float)(-this.extraDelay.getRandomValue()) + this.earlyHitTicks;
+
+        // Track crosshair changes even while the attack timer or cooldown is
+        // blocking a hit. Otherwise a brief miss can retain an old delay.
         RayTraceResult crosshairHit = RotationManager.INSTANCE.getExtendedReachRayTrace();
-        if (crosshairHit.isNotNull() && crosshairHit.getTypeOfHit().equals(RayTraceResult_type.entity())) {
-            Entity entity = crosshairHit.getEntity();
-            if (this.isValidTarget(entity)) {
-                if (this.updateSelectFirstHit(entity, wasJustHurt)
-                        && this.hasMouseOverDelayElapsed(entity) && this.isAttackReady(cooldownOffset)) {
-                    AttackKeyController.releaseAttackKey();
-                    this.releasePending = AttackKeyController.requestSyntheticAttack(this);
-                }
-            } else {
-                this.resetMouseOverState();
-                this.updateSelectGrace();
-            }
+        boolean entityHit = crosshairHit != null && crosshairHit.isNotNull()
+                && crosshairHit.getTypeOfHit().equals(RayTraceResult_type.entity());
+        Entity entity = entityHit ? crosshairHit.getEntity() : null;
+        boolean validTarget = entity != null && entity.isNotNull() && this.isValidTarget(entity);
+        boolean selectReady = false;
+        boolean delayReady = false;
+        if (validTarget) {
+            selectReady = this.updateSelectFirstHit(entity, wasJustHurt);
+            delayReady = this.hasMouseOverDelayElapsed(entity);
         } else {
             this.resetMouseOverState();
             this.updateSelectGrace();
-            if (this.missAttackPending && this.isSelectFirstHitSatisfied()
-                    && this.isAttackReady(cooldownOffset)) {
-                AttackKeyController.releaseAttackKey();
-                this.releasePending = AttackKeyController.requestSyntheticAttack(this);
-                this.missAttackPending = false;
-            }
         }
+        if (releasedThisTick || this.requestInFlight || !this.attackTimer.hasTimeElapsed(50L)) {
+            return;
+        }
+        float cooldownOffset = (float)(-this.extraDelay.getRandomValue()) + this.earlyHitTicks;
+        if (validTarget && selectReady && delayReady && this.isAttackReady(cooldownOffset)) {
+            this.queueAttack(entity.getObject(), false, cooldownOffset);
+        } else if (!entityHit && this.missAttackPending && this.isSelectFirstHitSatisfied()
+                && this.isAttackReady(cooldownOffset)) {
+            this.missAttackPending = false;
+            this.queueAttack(null, true, cooldownOffset);
+        }
+    }
+
+    private boolean releasePendingAttack() {
+        boolean release;
+        synchronized (this.requestLock) {
+            release = this.releasePending;
+            this.releasePending = false;
+        }
+        if (release) AttackKeyController.releaseAttackKey();
+        return release;
+    }
+
+    private void queueAttack(Object expectedTarget, boolean intentionalMiss, float cooldownOffset) {
+        final long epoch;
+        final Object playerObject = Minecraft.thePlayer().getObject();
+        synchronized (this.requestLock) {
+            if (this.requestInFlight) return;
+            epoch = this.requestEpoch;
+            this.requestInFlight = true;
+        }
+        AttackKeyController.releaseAttackKey();
+        AttackKeyController.requestValidatedSyntheticAttack(this, () -> {
+            synchronized (this.requestLock) {
+                if (epoch != this.requestEpoch || !this.requestInFlight) return false;
+            }
+            if (!this.isEnabled() || Minecraft.thePlayer().isNull()
+                    || Minecraft.thePlayer().getObject() != playerObject || !this.canAttack(true)
+                    || !this.isSelectFirstHitSatisfied() || !this.isAttackReady(cooldownOffset)) return false;
+            RayTraceResult hit = RotationManager.INSTANCE.getExtendedReachRayTrace();
+            boolean entityHit = hit != null && hit.isNotNull()
+                    && hit.getTypeOfHit().equals(RayTraceResult_type.entity());
+            if (intentionalMiss) return !entityHit;
+            if (!entityHit) return false;
+            Entity entity = hit.getEntity();
+            return entity.isNotNull() && entity.getObject() == expectedTarget
+                    && entity.S() == this.mouseOverTargetId && this.isValidTarget(entity);
+        }, pressed -> {
+            boolean releaseLate = false;
+            synchronized (this.requestLock) {
+                if (epoch != this.requestEpoch) {
+                    releaseLate = pressed;
+                } else {
+                    this.requestInFlight = false;
+                    this.releasePending = pressed;
+                }
+            }
+            if (releaseLate) AttackKeyController.releaseAttackKey();
+        });
     }
 
     private void resetMouseOverState() {
@@ -181,7 +233,7 @@ extends Mod {
             return true;
         }
         HitSwap hitSwap = Vape.INSTANCE.getModManager().getMod(HitSwap.class);
-        if (!hitSwap.isEnabled()) {
+        if (hitSwap == null || !hitSwap.isEnabled()) {
             ItemStack mainHandItem = Minecraft.thePlayer().i(EnumHand.mainHand());
             return mainHandItem.isNotNull() && mainHandItem.getItem().isInstance(MappedClasses.zx)
                     && RotationUtil.u(Minecraft.thePlayer());
@@ -232,11 +284,14 @@ extends Mod {
         this.earlyHitTicks = 0;
         this.resetMouseOverState();
         this.resetSelectState();
-        if (this.releasePending) {
-            AttackKeyController.releaseAttackKey();
+        boolean release;
+        synchronized (this.requestLock) {
+            ++this.requestEpoch;
+            this.requestInFlight = false;
+            release = this.releasePending;
             this.releasePending = false;
-            return;
         }
+        if (release) AttackKeyController.releaseAttackKey();
     }
 
     public Triggerbot() {
@@ -304,16 +359,11 @@ extends Mod {
         if (this.requireMouseDown.getEffectiveValue() && pressed && !this.mouseDown) {
             this.mouseDown = true;
             if (this.ignoreActivationClick.getEffectiveValue().booleanValue() && this.canAttack(false)) {
-                boolean cancelActivationClick = false;
-                if (!this.isAttackReady(-this.extraDelay.getMinimumInt())) {
-                    cancelActivationClick = true;
-                }
                 RayTraceResult crosshairHit = RotationManager.INSTANCE.getExtendedReachRayTrace();
-                if (crosshairHit.isNotNull()
-                        && crosshairHit.getTypeOfHit().equals(RayTraceResult_type.miss())) {
-                    cancelActivationClick = true;
-                }
-                if (cancelActivationClick) {
+                boolean validTarget = crosshairHit != null && crosshairHit.isNotNull()
+                        && crosshairHit.getTypeOfHit().equals(RayTraceResult_type.entity())
+                        && crosshairHit.getEntity().isNotNull() && this.isValidTarget(crosshairHit.getEntity());
+                if (!validTarget || !this.isAttackReady(-this.extraDelay.getMinimumInt())) {
                     event.setCancelled(true);
                 }
             }
@@ -326,7 +376,7 @@ extends Mod {
                     ? 2 + this.random.nextInt(2) : 0;
             RayTraceResult crosshairHit = RotationManager.INSTANCE.getExtendedReachRayTrace();
             boolean hoveringValidTarget = false;
-            if (crosshairHit.isNotNull()
+            if (crosshairHit != null && crosshairHit.isNotNull()
                     && crosshairHit.getTypeOfHit().equals(RayTraceResult_type.entity())) {
                 Entity entity = crosshairHit.getEntity();
                 hoveringValidTarget = entity.isNotNull() && this.isValidTarget(entity);

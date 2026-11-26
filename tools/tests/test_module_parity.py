@@ -122,6 +122,27 @@ class JarComparisonTests(unittest.TestCase):
         with self.assertRaises(parity.ParityError):
             parity.audit_jars(jar(self.reference), jar(self.english), jar(self.reference))
 
+    def test_allows_only_pinned_new_module_classes(self):
+        addition = "gg/vape/module/combat/Enhanced$Selection.class"
+        self.english[addition] = b"new reviewed nested class"
+        with mock.patch.object(parity, "JAVA_ADDED_CLASSES", {self.added, addition}):
+            result = parity.audit_jars(jar(self.reference), jar(self.english), jar(self.reference))
+            self.assertEqual(result["module_classes"], 4)
+            self.english["gg/vape/module/combat/Unexpected.class"] = b"unexpected"
+            with self.assertRaises(parity.ParityError):
+                parity.audit_jars(jar(self.reference), jar(self.english), jar(self.reference))
+
+    def test_changed_nested_class_must_belong_to_a_reviewed_module(self):
+        nested = "gg/vape/module/combat/Enhanced$State.class"
+        self.reference[nested] = b"old nested"
+        self.english[nested] = b"reviewed nested"
+        parity.audit_jars(jar(self.reference), jar(self.english), jar(self.reference))
+        other = "gg/vape/module/combat/Example$State.class"
+        self.reference[other] = b"old unrelated"
+        self.english[other] = b"new unrelated"
+        with self.assertRaises(parity.ParityError):
+            parity.audit_jars(jar(self.reference), jar(self.english), jar(self.reference))
+
     def test_rejects_changed_resources_or_missing_modules(self):
         self.english[self.resources] = b"changed mapping"
         with self.assertRaises(parity.ParityError):
@@ -198,7 +219,7 @@ class ReportIntegrationTests(unittest.TestCase):
             self.assertIn("4/4 module class files byte-identical", report)
             self.assertIn(parity.sha256(english_exe), report)
             self.assertEqual((root / "extracted.jar").read_bytes(), baseline_jar)
-            self.assertIn("Rotation enhancements intentionally change behavior", report)
+            self.assertIn("Behavioral improvements intentionally differ from the baseline", report)
             self.assertIn("not a guarantee of runtime equivalence", report)
 
 
@@ -220,7 +241,7 @@ class SourceComparisonTests(unittest.TestCase):
         spawner = "gg/vape/module/render/SpawnerFinder.java"
         other = "gg/vape/module/combat/Original.java"
         enhanced = "gg/vape/module/combat/Enhanced.java"
-        added = "gg/vape/rotation/Helper.java"
+        added = "gg/vape/module/combat/Helper.java"
         support = "gg/vape/Vape.java"
         edited_gui = b'(String)"Language", (ModeSelection)FontSelector.j, (ModeSelection[])new ModeSelection[]{FontSelector.j, FontSelector.c}'
         edited_spawner = ('import gg.vape.notification.NotificationText;\n'
@@ -244,7 +265,7 @@ class SourceComparisonTests(unittest.TestCase):
                 mock.patch.object(parity, "APPROVED_ENHANCEMENTS", enhancements), \
                 mock.patch.object(parity, "ENHANCED_MODULE_SOURCES", {enhanced}), \
                 mock.patch.object(parity, "JAVA_ADDITIONS", {added}):
-            self.assertEqual(parity.audit_sources(self.baseline, self.current), (5, 4, 5))
+            self.assertEqual(parity.audit_sources(self.baseline, self.current), (5, 5, 5))
             self.put(self.current / "src/main/java", other, b"changed behavior\n")
             with self.assertRaises(parity.ParityError):
                 parity.audit_sources(self.baseline, self.current)

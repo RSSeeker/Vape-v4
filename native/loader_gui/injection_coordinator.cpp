@@ -1,7 +1,9 @@
 #include "injection_coordinator.h"
 #include "loader_bootstrap.h"
 #include "loader_strings.h"
+#include "locked_resource_file.h"
 #include "manual_map.h"
+#include "safe_file_materialization.h"
 
 #include <windows.h>
 #include <tlhelp32.h>
@@ -164,13 +166,6 @@ bool readFileBytes(const std::wstring& path, std::vector<unsigned char>& bytes) 
     return !bytes.empty();
 }
 
-bool writeFileBytes(const std::wstring& path, const unsigned char* data, std::size_t size) {
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
-    if (!output) return false;
-    output.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(size));
-    return output.good();
-}
-
 bool writeTextFile(const std::wstring& path, const std::wstring& text) {
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     if (!output) return false;
@@ -218,7 +213,8 @@ void writeInjectionMarker(const std::wstring& installDirectory, bool manualMappe
 /* Manual map: the DLL never reaches LoadLibraryW, so it cannot extract its own
  * embedded product JAR (FindResourceW needs a loader module). The injector
  * extracts RCDATA 421 from the DLL file and hands the path to the loader. */
-bool extractEmbeddedJar(const std::wstring& dllPath, const std::wstring& jarPath) {
+bool extractEmbeddedJar(const std::wstring& dllPath, const std::wstring& jarBase,
+        std::wstring& jarPath) {
     /* The product JAR is stored as `421 RCDATA "<file>"`: the resource TYPE is
      * RT_RCDATA (10) and 421 is the resource NAME, which mirrors the DLL's
      * FindResourceW(g_module, MAKEINTRESOURCEW(421), RT_RCDATA) lookup. */
@@ -276,7 +272,11 @@ bool extractEmbeddedJar(const std::wstring& dllPath, const std::wstring& jarPath
     if (!dataEntry || dataEntry->OffsetToData == 0 || dataEntry->Size == 0) return false;
     const unsigned char* payload = rvaPointer(image, nt, dataEntry->OffsetToData);
     if (!payload || payload + dataEntry->Size > image.data() + image.size()) return false;
-    return writeFileBytes(jarPath, payload, dataEntry->Size);
+    wchar_t path[MAX_PATH]{};
+    if (!vape421_write_unique_file(jarBase.c_str(), L".jar", payload, dataEntry->Size,
+            path, std::size(path))) return false;
+    jarPath = path;
+    return true;
 }
 
 }  // namespace
@@ -299,11 +299,19 @@ bool InjectionCoordinator::injectProductDll(std::uint32_t processId,
         error = ls(Ls::ZeusAddressFormat);
         return false;
     }
-    if (GetFileAttributesW(dllPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        error = ls(Ls::NativeDllNotFoundBesideLoader);
+    // Recheck using a locked handle immediately before either injection path.
+    // The handle remains open until this function returns, denying writes and
+    // deletion during the DLL read, manual mapping and normal fallback load.
+    const HRSRC resource = FindResourceW(nullptr, MAKEINTRESOURCEW(422), MAKEINTRESOURCEW(10));
+    const DWORD resourceSize = resource == nullptr ? 0 : SizeofResource(nullptr, resource);
+    const HGLOBAL loaded = resource == nullptr ? nullptr : LoadResource(nullptr, resource);
+    const auto* resourceBytes = loaded == nullptr ? nullptr
+            : static_cast<const unsigned char*>(LockResource(loaded));
+    embedded_resource_integrity::LockedResourceFile verifiedDll;
+    if (!verifiedDll.open(dllPath, resourceBytes, resourceSize)) {
+        error = ls(Ls::NativeDllIntegrityFailed);
         return false;
     }
-
 
     /* The handshake block and ack event stay unnamed for the manual-map path:
      * duplicate handles travel inside Vape421ManualMapParams, so an anticheat
@@ -339,11 +347,12 @@ bool InjectionCoordinator::injectProductDll(std::uint32_t processId,
      * process module list. Fall back to the LoadLibraryW loader when the
      * reflective loader is unavailable or refuses the image. */
     const std::wstring installDirectory = parentDirectory(dllPath);
-    const std::wstring manualJarPath = installDirectory + L"\\Vape-v4.21-product-" +
-        std::to_wstring(processId) + L".jar";
+    const std::wstring manualJarBase = installDirectory + L"\\Vape-v4.21-product-" +
+        std::to_wstring(processId);
+    std::wstring manualJarPath;
     bool manualMapped = false;
     std::wstring manualMapError;
-    if (extractEmbeddedJar(dllPath, manualJarPath)) {
+    if (extractEmbeddedJar(dllPath, manualJarBase, manualJarPath)) {
         manualMapped = injectReflectiveDll(processId, dllPath, installDirectory,
             manualJarPath, mapping, ack, manualMapError);
     } else {

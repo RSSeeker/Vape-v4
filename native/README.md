@@ -114,8 +114,8 @@ Vape-v4.21.<版本>.exe
 
 不带参数就是 GUI 加载器（窗口标题「Vape v4」）：自动刷新可见的 Java 窗口并显示
 窗口标题（例如 `Minecraft`、`Lunar Client`），选中进程即可注入。
-GUI 模式**优先加载 exe 旁的外部 `Vape-v4.21Native.dll`**，旁边没有时才解压内嵌
-副本，因此整个包可以只带一个文件。
+GUI 和控制台仅在 exe 旁的 `Vape-v4.21Native.dll` 与内嵌副本逐字节一致时使用它；
+否则解压内嵌副本，不递归删除恢复目录，也不覆盖已有 DLL。此检查不能证明文件安全。
 
 命令行（控制台）模式要求第一个参数为 `-nogui`：
 
@@ -124,13 +124,12 @@ Vape-v4.21.<版本>.exe -nogui <minecraft-pid>
 ```
 
 不指定 PID 时会打开自动刷新的 Java 窗口选择器（↑/↓ 选择、回车注入、Esc 退出）。
-控制台模式**始终使用内嵌的 `Vape-v4.21Native.dll`，不加载外部 DLL**；内嵌副本会
-解压到 `<exe>\.vapeclient\Vape-v4.21Recovery\Vape-v4.21Native-<pid>.dll` 再注入。
+控制台与 GUI 使用同一 DLL 检查逻辑。内嵌副本可能解压到恢复目录中的带后缀文件；
+父目录链接和产品 JAR 路径的所有竞态尚未解决，详见安全调查文档。
 
-注入器只做 `LoadLibraryW`。加载之后，DLL 工作线程等待 JVM 与 Minecraft 的
-`Client thread`，把内嵌的产品 JAR 解压到
-`<exe>\.vapeclient\Vape-v4.21Recovery\Vape-v4.21-product-<pid>.jar`（所有落盘都收在
-`.vapeclient` 目录树内，不写 `%TEMP%`），再按运行时分别接入：
+控制台使用 `LoadLibraryW`；GUI 首先尝试反射映射，失败时可能回退。加载之后，
+DLL 工作线程等待 JVM 与 Minecraft 的 `Client thread`，将产品 JAR 写入未占用的
+路径（可能带数字后缀），再按运行时分别接入：
 
 - Vanilla：追加到 system ClassLoader 的搜索路径
 - Forge / NeoForge：在 ModLauncher 的 `ModuleClassLoader` 上安装载荷包路由

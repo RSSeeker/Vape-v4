@@ -211,6 +211,7 @@ extends SubModule<AimAssist> {
             return;
         }
         if (!aimAssist.canAim()) {
+            this.target = null;
             this.resetRotationState();
             return;
         }
@@ -249,6 +250,7 @@ extends SubModule<AimAssist> {
             this.updateVelocityBuffers();
             this.applyRotation();
         } else {
+            this.target = null;
             this.resetRotationState();
         }
     }

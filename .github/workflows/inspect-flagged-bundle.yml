@@ -6,6 +6,8 @@ on:
   push:
     branches:
       - 'arena/5340de08-vape-v421'
+    paths:
+      - '.github/workflows/inspect-flagged-bundle.yml'
   workflow_dispatch:
 
 permissions:

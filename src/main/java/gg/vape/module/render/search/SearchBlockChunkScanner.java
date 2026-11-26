@@ -13,14 +13,14 @@ import gg.vape.wrapper.impl.Minecraft;
 import gg.vape.wrapper.impl.WorldClient;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Predicate;
 
 public class SearchBlockChunkScanner {
-    public static final Queue<SearchBlockRenderEntry> entryPool = new LinkedList<SearchBlockRenderEntry>();
+    public static final Queue<SearchBlockRenderEntry> entryPool = new ConcurrentLinkedQueue<SearchBlockRenderEntry>();
 
     public static SearchBlockRenderEntry obtain(int blockId, int metadata, int worldX, int worldY, int worldZ) {
         SearchBlockRenderEntry searchBlockRenderEntry = entryPool.poll();

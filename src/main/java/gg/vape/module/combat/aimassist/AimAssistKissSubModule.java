@@ -67,7 +67,7 @@ extends SubModule<AimAssist> {
     private final NumberValue newDeadzone;
     private final NumberValue offGridJitter;
 
-    private EntityLivingBase target;
+    private volatile EntityLivingBase target;
     private Object lockedTargetObject;
     private boolean wasAttackDown;
 
@@ -129,6 +129,10 @@ extends SubModule<AimAssist> {
         this.addValue(this.targetMode, this.aimMode, this.aimX, this.aimY, this.aimZ, this.range, this.optimalRange,
                 this.fov, this.smooth, this.pitchSmooth, this.yPredict, this.yEmaAlpha, this.yDeadzone,
                 this.newResponse, this.newFeedforward, this.newPredict, this.newDeadzone, this.offGridJitter);
+    }
+
+    public EntityLivingBase getTarget() {
+        return this.target;
     }
 
     @Override
@@ -280,10 +284,10 @@ extends SubModule<AimAssist> {
             double compare;
             if (this.targetMode.getValue() == this.healthMode) {
                 compare = candidate.w$src$F$15l9epb();
-            } else if (this.targetMode.getValue() == this.singleMode) {
-                compare = this.distanceTo(candidate, player);
             } else {
-                compare = yawDiff;
+                // Both Distance and Single choose the closest eligible target.
+                // Yaw is only an FOV filter, not the distance ranking.
+                compare = this.distanceTo(candidate, player);
             }
             if (compare < bestValue) {
                 bestValue = compare;

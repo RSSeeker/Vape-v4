@@ -1,0 +1,4 @@
+// A tiny non-executable resource; the test only checks materialization as data.
+422 RCDATA BEGIN
+    0x5a4d, 0x1000
+END

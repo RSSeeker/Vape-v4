@@ -97,6 +97,7 @@ enum class Ls {
     OnlineBaseUrlTooLong,
     ZeusAddressFormat,
     NativeDllNotFoundBesideLoader,
+    NativeDllIntegrityFailed,
     BootstrapBlockExists,
     CannotCreateBootstrapObject,
     CannotOpenMinecraftProcess,

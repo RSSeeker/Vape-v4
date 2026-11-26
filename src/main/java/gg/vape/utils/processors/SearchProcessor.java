@@ -15,13 +15,21 @@ import java.util.List;
 
 public class SearchProcessor
 implements Runnable {
-    private boolean P;
+    private volatile boolean P;
     private final List<SearchResultData> c;
     private final List<Integer> y;
     private final List<SearchBlock> H;
     private final int[][] X = new int[][]{{0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}};
-    private boolean o;
+    private volatile boolean o;
     private final NumberValue j;
+    private final NumberValue maximumRange;
+    private final SearchResultIndex index;
+    private volatile Thread worker;
+    private volatile long workerGeneration;
+
+    private boolean isRunning(long generation) {
+        return this.o && this.workerGeneration == generation;
+    }
 
     public boolean h(int n, int n2, int n3) {
         WorldClient worldClient = Minecraft.theWorld();
@@ -42,13 +50,29 @@ implements Runnable {
         return null;
     }
 
-    public void w() {
-        this.o = false;
+    public synchronized void w() {
+        if (this.index == null) {
+            this.o = false;
+            ++this.workerGeneration;
+        } else {
+            // Serialize stop with publication. A generation also prevents an
+            // old blocked worker from reviving after a rapid stop/start.
+            synchronized (this.index) {
+                this.o = false;
+                ++this.workerGeneration;
+            }
+        }
+        Thread running = this.worker;
+        if (running != null) running.interrupt();
     }
 
-    public void n() {
+    public synchronized void n() {
+        if (this.o) return;
         this.o = true;
-        new Thread(this).start();
+        final long generation = ++this.workerGeneration;
+        this.worker = new Thread(() -> this.runForGeneration(generation), "Vape-Search");
+        this.worker.setDaemon(true);
+        this.worker.start();
     }
 
     public NumberValue F() {
@@ -64,10 +88,22 @@ implements Runnable {
     }
 
     public SearchProcessor(List<SearchResultData> list, List<SearchBlock> list2, NumberValue numberValue) {
+        this(list, list2, numberValue, numberValue, null);
+    }
+
+    public SearchProcessor(List<SearchResultData> list, List<SearchBlock> list2, NumberValue scanRange,
+                           NumberValue maximumRange, SearchResultIndex index) {
         this.y = Arrays.asList(0, 8, 9, 30);
         this.c = list;
         this.H = list2;
-        this.j = numberValue;
+        this.j = scanRange;
+        this.maximumRange = maximumRange;
+        this.index = index;
+    }
+
+    public void clearResults() {
+        if (this.index == null) this.c.clear();
+        else this.index.clear();
     }
 
     public List<SearchResultData> b() {
@@ -80,6 +116,7 @@ implements Runnable {
 
     public void X(boolean bl) {
         this.P = bl;
+        if (this.index != null) this.index.setOnlyCaves(bl);
     }
 
     public boolean u() {
@@ -90,11 +127,115 @@ implements Runnable {
         return exception;
     }
 
+    private boolean exposedToCave(WorldClient world, int x, int y, int z) {
+        for (int[] offset : this.X) {
+            Block neighbor = world.getBlockByPos(x + offset[0], y + offset[1], z + offset[2]);
+            if (neighbor != null && neighbor.isNotNull() && this.y.contains(Block.R(neighbor))) return true;
+        }
+        return false;
+    }
+
+    private void runIndexedScan(long workerGeneration) {
+        try {
+            while (this.isRunning(workerGeneration)) {
+                try {
+                    Thread.sleep(50L);
+                } catch (InterruptedException ignored) {
+                    if (!this.isRunning(workerGeneration)) break;
+                }
+                if (this.isRunning(workerGeneration)) this.scanIndexedPass(workerGeneration);
+            }
+        } catch (Exception exception) {
+            Vape.logThrowable(exception);
+        } finally {
+            synchronized (this) {
+                if (this.workerGeneration == workerGeneration) this.o = false;
+            }
+        }
+    }
+
+    // One processor scans nearby blocks frequently and another scans the full
+    // configured range. Both update the same coordinate index atomically.
+    private void scanIndexedPass() {
+        this.scanIndexedPass(this.workerGeneration);
+    }
+
+    private void scanIndexedPass(long workerGeneration) {
+        WorldClient world = Minecraft.theWorld();
+        EntityPlayerSP player = Minecraft.thePlayer();
+        if (world.isNull() || player.isNull()) {
+            synchronized (this.index) {
+                if (this.isRunning(workerGeneration)) this.index.enterWorld(null);
+            }
+            return;
+        }
+        Object worldObject = world.getObject();
+        Object playerObject = player.getObject();
+        if (Minecraft.theWorld().getObject() != worldObject) return;
+        int centerX = (int)Math.floor(player.z());
+        int centerY = (int)Math.floor(player.N());
+        int centerZ = (int)Math.floor(player.h());
+        int maximum = Math.max(0, this.maximumRange.getValue().intValue());
+        int radius = Math.max(0, Math.min(maximum, this.j.getValue().intValue()));
+        long generation;
+        boolean caves;
+        synchronized (this.index) {
+            if (!this.isRunning(workerGeneration) || Minecraft.theWorld().getObject() != worldObject
+                    || Minecraft.thePlayer().getObject() != playerObject) return;
+            generation = this.index.enterWorld(worldObject);
+            caves = this.index.onlyCaves();
+            this.index.prune(generation, worldObject, centerX, centerY, centerZ, maximum, this.H);
+        }
+        SearchBlock[] targets = this.H.toArray(new SearchBlock[0]);
+        if (targets.length == 0) return;
+        for (int dx = -radius; dx <= radius; ++dx) {
+            for (int dy = -radius; dy <= radius; ++dy) {
+                if (!this.isRunning(workerGeneration) || this.index.generation() != generation
+                        || Minecraft.theWorld().getObject() != worldObject
+                        || Minecraft.thePlayer().getObject() != playerObject) return;
+                int liveX = (int)Math.floor(player.z());
+                int liveY = (int)Math.floor(player.N());
+                int liveZ = (int)Math.floor(player.h());
+                int liveMaximum = Math.max(0, this.maximumRange.getValue().intValue());
+                for (int dz = -radius; dz <= radius; ++dz) {
+                    int x = centerX + dx, y = centerY + dy, z = centerZ + dz;
+                    if (Math.abs((long)x - liveX) > liveMaximum || Math.abs((long)y - liveY) > liveMaximum
+                            || Math.abs((long)z - liveZ) > liveMaximum) continue;
+                    Block block = world.getBlockByPos(x, y, z);
+                    int id = 0;
+                    SearchBlock match = null;
+                    if (block != null && block.isNotNull() && block.U() != null) {
+                        id = Block.R(block);
+                        int metadata = ForgeVersion.MC_1_16_5.d() ? -1 : block.d(x, y, z);
+                        for (SearchBlock target : targets) {
+                            if (target.b(id, metadata)) { match = target; break; }
+                        }
+                        if (match != null && caves && !this.exposedToCave(world, x, y, z)) match = null;
+                    }
+                    synchronized (this.index) {
+                        if (!this.isRunning(workerGeneration)
+                                || Minecraft.theWorld().getObject() != worldObject
+                                || Minecraft.thePlayer().getObject() != playerObject) return;
+                        this.index.update(generation, worldObject, x, y, z, id, match);
+                    }
+                }
+            }
+        }
+    }
+
     @Override
     public void run() {
+        this.runForGeneration(this.workerGeneration);
+    }
+
+    private void runForGeneration(long workerGeneration) {
+        if (this.index != null) {
+            this.runIndexedScan(workerGeneration);
+            return;
+        }
         block11: {
             try {
-                block4: while (this.o) {
+                block4: while (this.isRunning(workerGeneration)) {
                     try {
                         Thread.sleep(50L);
                     }
@@ -109,16 +250,19 @@ implements Runnable {
                     for (int i = -n; i < n; ++i) {
                         for (int j = -n; j < n; ++j) {
                             for (int k = -n; k < n; ++k) {
-                                if (this.o) {
+                                if (this.isRunning(workerGeneration)) {
                                     boolean bl;
                                     int n2;
                                     int n3;
                                     if (Minecraft.theWorld().isNull() || !Minecraft.theWorld().equals(worldClient) || Minecraft.thePlayer().isNull() || !Minecraft.thePlayer().equals(entityPlayerSP)) {
-                                        this.c.clear();
+                                        synchronized (this) {
+                                            if (!this.isRunning(workerGeneration)) break block11;
+                                            this.c.clear();
+                                        }
                                         continue block4;
                                     }
-                                    int n4 = (int)entityPlayerSP.z() + i;
-                                    Block block = worldClient.getBlockByPos(n4, n3 = (int)entityPlayerSP.N() + k, n2 = (int)entityPlayerSP.h() + j);
+                                    int n4 = (int)Math.floor(entityPlayerSP.z()) + i;
+                                    Block block = worldClient.getBlockByPos(n4, n3 = (int)Math.floor(entityPlayerSP.N()) + k, n2 = (int)Math.floor(entityPlayerSP.h()) + j);
                                     if (block.U() == null) continue;
                                     int n5 = Block.R(block);
                                     int n6 = ForgeVersion.MC_1_16_5.d() ? -1 : block.d(n4, n3, n2);
@@ -127,11 +271,17 @@ implements Runnable {
                                     if (!bl) {
                                         SearchBlock searchBlock = this.S(n5, n6);
                                         if (searchBlock == null || this.P && !this.h(n4, n3, n2)) continue;
-                                        this.c.add(new SearchResultData(n4, n3, n2, n5, searchBlock, searchBlock.I$src$Ljava_util_concurrent_atomic_AtomicBoolean_$10pq3bz(), 0));
+                                        synchronized (this) {
+                                            if (!this.isRunning(workerGeneration)) break block11;
+                                            this.c.add(new SearchResultData(n4, n3, n2, n5, searchBlock, searchBlock.I$src$Ljava_util_concurrent_atomic_AtomicBoolean_$10pq3bz(), 0));
+                                        }
                                         continue;
                                     }
                                     if (n5 == searchResultData.N && !(RotationUtil.p(entityPlayerSP, n4, n3, n2) > 200.0)) continue;
-                                    this.c.remove(searchResultData);
+                                    synchronized (this) {
+                                        if (!this.isRunning(workerGeneration)) break block11;
+                                        this.c.remove(searchResultData);
+                                    }
                                     continue;
                                 }
                                 break block11;
@@ -142,6 +292,10 @@ implements Runnable {
             }
             catch (Exception exception) {
                 Vape.logThrowable(exception);
+            } finally {
+                synchronized (this) {
+                    if (this.workerGeneration == workerGeneration) this.o = false;
+                }
             }
         }
     }

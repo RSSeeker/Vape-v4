@@ -14,10 +14,11 @@
 #include <string.h>
 #include <wchar.h>
 
+#include "embedded_dll_materializer.h"
+
 #define MAX_CANDIDATES 256
 #define WINDOW_TITLE_CAPACITY 256
 #define REFRESH_INTERVAL_MS 750
-#define INJECTOR_DLL_RESOURCE_ID 422
 
 typedef struct process_candidate {
     DWORD process_id;
@@ -42,144 +43,6 @@ static void print_last_error(const wchar_t *operation) {
     if (message != NULL) {
         LocalFree(message);
     }
-}
-
-/* Deletes every entry under directory (recursively) but keeps the directory
- * itself, so the recovery folder only ever holds the current session's
- * per-pid artifacts. */
-static void sweep_directory_contents(const wchar_t *directory) {
-    WIN32_FIND_DATAW data;
-    wchar_t pattern[MAX_PATH];
-    wchar_t child[MAX_PATH];
-    HANDLE found;
-
-    _snwprintf_s(pattern, sizeof(pattern) / sizeof(pattern[0]), _TRUNCATE,
-            L"%ls\\*", directory);
-    found = FindFirstFileW(pattern, &data);
-    if (found == INVALID_HANDLE_VALUE) {
-        return;
-    }
-    do {
-        if (wcscmp(data.cFileName, L".") == 0
-                || wcscmp(data.cFileName, L"..") == 0) {
-            continue;
-        }
-        _snwprintf_s(child, sizeof(child) / sizeof(child[0]), _TRUNCATE,
-                L"%ls\\%ls", directory, data.cFileName);
-        if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-            sweep_directory_contents(child);
-            RemoveDirectoryW(child);
-        } else {
-            SetFileAttributesW(child, FILE_ATTRIBUTE_NORMAL);
-            DeleteFileW(child);
-        }
-    } while (FindNextFileW(found, &data));
-    FindClose(found);
-}
-
-static int materialize_embedded_dll(
-        DWORD process_id, wchar_t *output, DWORD capacity) {
-    HRSRC resource;
-    HGLOBAL loaded;
-    const unsigned char *bytes;
-    DWORD size;
-    wchar_t exe_path[MAX_PATH];
-    wchar_t client_root[MAX_PATH];
-    wchar_t directory[MAX_PATH];
-    wchar_t *separator;
-    HANDLE file = INVALID_HANDLE_VALUE;
-    DWORD offset = 0;
-    int result = 0;
-
-    /* Prefer an external DLL placed beside the exe (e.g. the published
-     * bundle); fall back to the embedded copy only when it is absent. */
-    if (GetModuleFileNameW(NULL, exe_path, MAX_PATH) != 0
-            && exe_path[0] != L'\0') {
-        separator = wcsrchr(exe_path, L'\\');
-        if (separator != NULL) {
-            *separator = L'\0';
-        }
-        _snwprintf_s(output, capacity, _TRUNCATE,
-                L"%ls\\Vape-v4.21Native.dll", exe_path);
-        if (GetFileAttributesW(output) != INVALID_FILE_ATTRIBUTES) {
-            return 1;
-        }
-    }
-
-    resource = FindResourceW(NULL, MAKEINTRESOURCEW(INJECTOR_DLL_RESOURCE_ID),
-            MAKEINTRESOURCEW(10));
-    if (resource == NULL) {
-        return 0;
-    }
-    size = SizeofResource(NULL, resource);
-    loaded = LoadResource(NULL, resource);
-    bytes = loaded == NULL ? NULL
-            : (const unsigned char *)LockResource(loaded);
-    if (bytes == NULL || size < 4) {
-        return 0;
-    }
-    /* Extract into <exe>\.vapeclient\Vape-v4.21Recovery so the injected DLL can
-     * derive the client directory from its own module path; nothing is ever
-     * written to %TEMP%. */
-    if (GetModuleFileNameW(NULL, exe_path, MAX_PATH) == 0
-            || exe_path[0] == L'\0') {
-        return 0;
-    }
-    separator = wcsrchr(exe_path, L'\\');
-    if (separator != NULL) {
-        *separator = L'\0';
-    }
-    _snwprintf_s(client_root,
-            sizeof(client_root) / sizeof(client_root[0]), _TRUNCATE,
-            L"%ls\\.vapeclient", exe_path);
-    if (!CreateDirectoryW(client_root, NULL)
-            && GetLastError() != ERROR_ALREADY_EXISTS) {
-        return 0;
-    }
-    {
-        DWORD attributes = GetFileAttributesW(client_root);
-        if (attributes != INVALID_FILE_ATTRIBUTES
-                && (attributes & FILE_ATTRIBUTE_HIDDEN) == 0) {
-            SetFileAttributesW(client_root,
-                    attributes | FILE_ATTRIBUTE_HIDDEN);
-        }
-    }
-    _snwprintf_s(directory,
-            sizeof(directory) / sizeof(directory[0]), _TRUNCATE,
-            L"%ls\\Vape-v4.21Recovery", client_root);
-    if (!CreateDirectoryW(directory, NULL)
-            && GetLastError() != ERROR_ALREADY_EXISTS) {
-        return 0;
-    }
-    /* Sweep stale per-pid artifacts from previous injections so the recovery
-     * directory only ever holds the current session's files. */
-    sweep_directory_contents(directory);
-    _snwprintf_s(output, capacity, _TRUNCATE,
-            L"%ls\\Vape-v4.21Native-%lu.dll", directory,
-            (unsigned long)process_id);
-    file = CreateFileW(output, GENERIC_WRITE,
-            FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, CREATE_ALWAYS,
-            FILE_ATTRIBUTE_NORMAL, NULL);
-    if (file == INVALID_HANDLE_VALUE) {
-        return 0;
-    }
-    while (offset < size) {
-        DWORD written = 0;
-        DWORD remaining = size - offset;
-        if (!WriteFile(file, bytes + offset, remaining, &written, NULL)
-                || written == 0) {
-            goto cleanup;
-        }
-        offset += written;
-    }
-    result = 1;
-
-cleanup:
-    CloseHandle(file);
-    if (!result) {
-        DeleteFileW(output);
-    }
-    return result;
 }
 
 static int is_java_process(const wchar_t *executable) {
@@ -445,8 +308,13 @@ static int inject_library(DWORD process_id, const wchar_t *dll_path) {
     DWORD wait_result;
     int attempt;
     int result = 0;
-
+    void *verified_dll = vape421_lock_dll(dll_path);
+    if (verified_dll == NULL) {
+        fwprintf(stderr, L"Native DLL does not match the embedded resource; injection was refused.\n");
+        return 0;
+    }
     if (remote_module_by_path(process_id, dll_path) != 0) {
+        vape421_unlock_dll(verified_dll);
         return 2;
     }
 
@@ -513,6 +381,7 @@ cleanup:
         VirtualFreeEx(process, remote_path, 0, MEM_RELEASE);
     }
     if (process != NULL) CloseHandle(process);
+    vape421_unlock_dll(verified_dll);
     return result;
 }
 
@@ -525,8 +394,8 @@ static void usage(void) {
     fwprintf(stderr,
             L"Usage: \"%ls\" -nogui [minecraft-pid]\n"
             L"Without a PID, an auto-refreshing Java window picker is shown.\n"
-            L"Console mode always uses the embedded Vape-v4.21Native.dll, not an external DLL.\n"
-            L"The embedded DLL is extracted to <exe>\\.vapeclient\\Vape-v4.21Recovery.\n",
+            L"An adjacent DLL is used only when it matches the embedded DLL.\n"
+            L"Otherwise, the embedded DLL is extracted to <exe>\\.vapeclient\\Vape-v4.21Recovery.\n",
             executable);
 }
 
@@ -550,8 +419,8 @@ int console_main(int argc, wchar_t **argv) {
             return 2;
         }
     }
-    /* Always extract the embedded DLL; never load an external copy. */
-    if (!materialize_embedded_dll((DWORD)process_id, dll_path, MAX_PATH)) {
+    /* Use the same checked, non-destructive materializer as GUI mode. */
+    if (!vape421_materialize_dll(process_id, dll_path, MAX_PATH)) {
         fwprintf(stderr, L"Could not extract the embedded Vape-v4.21Native.dll.\n");
         return 2;
     }

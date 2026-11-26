@@ -108,6 +108,16 @@ public final class ObfuscatedClassAuditTest {
                     && identical.englishDifferences.contains(second), "Reviewed changes not detected");
             check(ObfuscatedClassAudit.matchesExpected(identical, Set.of(first, second)), "Expected differences were rejected");
             check(!ObfuscatedClassAudit.matchesExpected(identical, Set.of(second)), "Unexpected differences passed");
+            english.put(nested, makeClass(nested, "First.java", "reviewed nested change", first));
+            writeJar(engFile, english);
+            ObfuscatedClassAudit.Result nestedChange = ObfuscatedClassAudit.analyze(baseFile, engFile, origFile);
+            check(ObfuscatedClassAudit.matchesExpected(nestedChange, Set.of(first, second)),
+                    "Nested class of a reviewed module was rejected");
+            nestedChange.englishDifferences.add("gg/vape/module/other/Unexpected$State");
+            check(!ObfuscatedClassAudit.matchesExpected(nestedChange, Set.of(first, second)),
+                    "Nested class of an unreviewed module was accepted");
+            english.put(nested, baseline.get(nested));
+            writeJar(engFile, english);
 
             writeJar(origFile, obfuscate(english));
             ObfuscatedClassAudit.Result embedded = ObfuscatedClassAudit.analyze(engFile, engFile, origFile);

@@ -3,6 +3,8 @@ import gg.vape.module.combat.AimAssist;
 import gg.vape.module.combat.aimassist.AimAssistKissSubModule;
 import gg.vape.module.combat.aimassist.AimAssistRotationSubModule;
 import gg.vape.module.combat.aimassist.AimAssistTargetingSubModule;
+import gg.vape.module.combat.automace.AutoMaceRotationController;
+import gg.vape.module.combat.automace.AimSelectionRules;
 import gg.vape.rotation.AdaptiveRotationController;
 import gg.vape.unmap.ModeSelection;
 import gg.vape.utils.RotationUtil;
@@ -91,6 +93,7 @@ public final class RotationControllerTest {
         close(RotationUtil.predictedZ, second.z, 1.0E-9, "target switch clears previous Z history");
         parent.allowed = false;
         AimAssistRotationSubModule.runWorkerTick(simple);
+        check(simple.getTarget() == null, "disabled aiming does not expose a stale target");
         second.x += 3.0;
         parent.allowed = true;
         AimAssistRotationSubModule.runWorkerTick(simple);
@@ -142,6 +145,7 @@ public final class RotationControllerTest {
         adaptive.onPreRenderTick(new EventPreRenderTick());
         float yawSteps = (Minecraft.player.yaw - 0.13f) / 0.15f;
         float pitchSteps = (Minecraft.player.pitch - 0.07f) / 0.15f;
+        check(Math.abs(yawSteps) > 0.5f, "adaptive snap moves toward the target");
         close(yawSteps, Math.round(yawSteps), 1.0E-4, "adaptive snap uses relative yaw steps");
         close(pitchSteps, Math.round(pitchSteps), 1.0E-4, "adaptive snap uses relative pitch steps");
         float before = Minecraft.player.yaw;
@@ -201,6 +205,75 @@ public final class RotationControllerTest {
         close(Minecraft.player.yaw, 0.0, 0.0, "new tracking state discards old remainder");
     }
 
+    private static void testKissDistanceRanking() {
+        Minecraft.world.present = true;
+        Minecraft.screen.open = false;
+        Minecraft.world.entities.clear();
+        Minecraft.player.x = 0.0;
+        Minecraft.player.y = 0.0;
+        Minecraft.player.z = 0.0;
+        Minecraft.player.yaw = 0.0f;
+        Minecraft.player.pitch = 0.0f;
+        EntityLivingBase centeredButFar = new EntityLivingBase();
+        centeredButFar.z = 4.0;
+        EntityLivingBase closeButOffCenter = new EntityLivingBase();
+        closeButOffCenter.x = 2.0;
+        Minecraft.world.entities.add(centeredButFar);
+        Minecraft.world.entities.add(closeButOffCenter);
+        AimAssistKissSubModule kiss = new AimAssistKissSubModule(new AimAssist(), "Kiss");
+        kiss.onPreRenderTick(new EventPreRenderTick());
+        check(kiss.getTarget() != null && kiss.getTarget().getObject() == closeButOffCenter,
+                "Kiss Distance mode selects the closest target, not the smallest yaw error");
+        Minecraft.world.entities.clear();
+        kiss.onPreRenderTick(new EventPreRenderTick());
+        check(kiss.getTarget() == null, "Kiss target is cleared when no candidates remain");
+    }
+
+    private static void testAutoMaceSelectionRules() {
+        double best = Double.MAX_VALUE;
+        check(!AimSelectionRules.isBetterCandidate(2.0, best, false, false, 0, 6),
+                "unreachable nearest candidate is rejected without taking the best rank");
+        check(AimSelectionRules.isBetterCandidate(3.0, best, false, true, 4, 6),
+                "farther reachable candidate is still eligible");
+        best = 3.0;
+        check(!AimSelectionRules.isBetterCandidate(4.0, best, true, false, 0, 6),
+                "farther direct candidate does not replace a nearer reachable candidate");
+        check(AimSelectionRules.isBetterCandidate(1.0, best, true, false, 0, 6),
+                "nearer directly reachable candidate wins");
+        check(!AimSelectionRules.isBetterCandidate(1.0, best, false, true, 7, 6),
+                "impact beyond the aiming horizon is rejected");
+        check(!AimSelectionRules.isBetterCandidate(Double.NaN, best, true, true, 1, 6),
+                "non-finite distances are rejected");
+    }
+
+    private static void testAutoMaceControllerLifecycle() {
+        Minecraft.player.yaw = 0.0f;
+        Minecraft.player.pitch = 0.0f;
+        AutoMaceRotationController controller = new AutoMaceRotationController(false);
+        check(!controller.isSilent(), "AutoMace exposes the constructed visible mode");
+        check(new AutoMaceRotationController(true).isSilent(), "AutoMace exposes the constructed silent mode");
+        EntityLivingBase first = new EntityLivingBase();
+        controller.setTargetEntity(first);
+        controller.setPrediction(true, 1, 0, 0, 0, 4, 0, 4, true);
+        controller.refreshTargetRotation();
+        check(controller.isCommittedToAim(), "directly reachable target commits aim");
+        controller.pendingYawDelta = 3.0f;
+        controller.pendingPitchDelta = -2.0f;
+        controller.setTargetEntity(new EntityLivingBase(first.getObject()));
+        check(controller.isCommittedToAim(), "a new wrapper for the same entity preserves commitment");
+        EntityLivingBase second = new EntityLivingBase();
+        controller.setTargetEntity(second);
+        check(!controller.isCommittedToAim(), "new entity clears the previous commitment");
+        close(controller.pendingYawDelta, 0.0, 0.0, "new entity clears pending yaw");
+        close(controller.pendingPitchDelta, 0.0, 0.0, "new entity clears pending pitch");
+        controller.setPrediction(true, 6, 0, 0, 0, 4, 0, 4, false);
+        controller.refreshTargetRotation();
+        check(!controller.isCommittedToAim(), "far impact does not inherit immediate commitment");
+        controller.pendingYawDelta = 4.0f;
+        controller.clearTarget();
+        close(controller.pendingYawDelta, 0.0, 0.0, "clearing target drops pending movement");
+    }
+
     private static void testWorkerRenderConcurrency() throws Exception {
         final AimAssist parent = new AimAssist();
         parent.selected = new EntityLivingBase();
@@ -232,6 +305,9 @@ public final class RotationControllerTest {
         testSimpleTargetLifecycle();
         testAdaptiveSnap();
         testKissOutput();
+        testKissDistanceRanking();
+        testAutoMaceSelectionRules();
+        testAutoMaceControllerLifecycle();
         testWorkerRenderConcurrency();
         System.out.println("Rotation controllers: " + checks + " headless integration assertions passed");
     }

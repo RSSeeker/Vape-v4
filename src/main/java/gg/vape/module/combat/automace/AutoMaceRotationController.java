@@ -36,7 +36,20 @@ public class AutoMaceRotationController extends AdaptiveRotationController {
         this.setRetainAfterCompletion(true);
     }
 
+    public boolean isSilent() {
+        return this.silent;
+    }
+
     public void setTargetEntity(EntityLivingBase target) {
+        Object previous = this.target == null ? null : this.target.getObject();
+        Object next = target == null ? null : target.getObject();
+        if (previous != next) {
+            this.committedToAim = false;
+            this.predictionValid = false;
+            this.directlyReachable = false;
+            this.pendingYawDelta = 0.0f;
+            this.pendingPitchDelta = 0.0f;
+        }
         this.target = target;
     }
 
@@ -68,6 +81,8 @@ public class AutoMaceRotationController extends AdaptiveRotationController {
         this.directlyReachable = false;
         this.committedToAim = false;
         this.target = null;
+        this.pendingYawDelta = 0.0f;
+        this.pendingPitchDelta = 0.0f;
         if (!this.silent) {
             this.retainVisibleRotation = false;
             super.setRetainAfterCompletion(false);

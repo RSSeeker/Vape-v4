@@ -7,6 +7,7 @@ import gg.vape.event.impl.EventMouseButton;
 import gg.vape.event.impl.EventPreTick;
 import gg.vape.event.impl.SyntheticAttackRequestEvent;
 import gg.vape.input.AttackKeyController;
+import gg.vape.input.InputEventDispatcher;
 import gg.vape.mapping.MappedClasses;
 import gg.vape.module.Category;
 import gg.vape.module.Mod;
@@ -20,6 +21,7 @@ import gg.vape.utils.RotationUtil;
 import gg.vape.value.BooleanValue;
 import gg.vape.value.LimitValue;
 import gg.vape.wrapper.impl.EnchantmentHelper;
+import gg.vape.wrapper.impl.Entity;
 import gg.vape.wrapper.impl.EntityOtherPlayerMP;
 import gg.vape.wrapper.impl.EntityPlayerSP;
 import gg.vape.wrapper.impl.EnumHand;
@@ -28,12 +30,19 @@ import gg.vape.wrapper.impl.Item;
 import gg.vape.wrapper.impl.ItemStack;
 import gg.vape.wrapper.impl.Minecraft;
 import gg.vape.wrapper.impl.RayTraceResult;
+import gg.vape.wrapper.impl.RayTraceResult_type;
 import java.util.Arrays;
 
 public class HitSwap
 extends Mod {
     public final BooleanValue breachMaces;
-    private boolean swingReleasePending = false;
+    private volatile boolean swingReleasePending = false;
+    private final Object swapRequestLock = new Object();
+    private long swapRequestEpoch;
+    private volatile boolean swapAttackInFlight;
+    private int swapAttackOutcome;
+    private int queuedAttackTicks;
+    private boolean pendingStunTransition;
     public final BooleanValue stunSlam;
     private int tickCounter;
     public final BooleanValue axes;
@@ -43,10 +52,12 @@ extends Mod {
     public final LimitValue allowedItems;
     private boolean swapAttackPending = false;
     public final BooleanValue limitToItems = BooleanValue.create(this, "Limit to items", false);
-    private boolean swapActive;
+    private volatile boolean swapActive;
     public final BooleanValue smashOnly;
     public final BooleanValue densityMaces;
     private int originalSlot = -1;
+    private volatile int swappedSlot = -1;
+    private volatile Object swapTargetObject;
     private static final long MODULE_ID = -7666507152973844357L;
     public final BooleanValue maces = BooleanValue.create(this, "Maces", true);
     public final BooleanValue swords;
@@ -75,17 +86,7 @@ extends Mod {
 
     @Override
     public void onDisable() {
-        this.swapAttackPending = false;
-        this.stunSlamSecondPhase = false;
-        if (this.swingReleasePending) {
-            AttackKeyController.releaseAttackKey();
-        }
-        this.swingReleasePending = false;
-        this.swapActive = false;
-        this.originalSlot = -1;
-        this.tickCounter = 0;
-        this.breachSwapPending = false;
-        this.stunSlamActive = false;
+        this.finishSwap(Minecraft.thePlayer());
     }
 
     private boolean isTargetSmashReady(EntityOtherPlayerMP targetPlayer) {
@@ -94,6 +95,7 @@ extends Mod {
             return false;
         }
         ItemStack activeItem = targetPlayer.i(activeHand);
+        if (activeItem.isNull() || activeItem.getItem().isNull()) return false;
         float useDuration = targetPlayer.d(activeHand);
         if (useDuration <= 0.0f) {
             return false;
@@ -118,11 +120,128 @@ extends Mod {
     }
 
     private EntityOtherPlayerMP getTargetPlayer() {
-        return RotationUtil.m(Minecraft.thePlayer(), 5.0, 90.0, true);
+        RayTraceResult hit = RotationManager.INSTANCE.getExtendedReachRayTrace();
+        if (hit == null || hit.isNull() || !hit.getTypeOfHit().equals(RayTraceResult_type.entity())) return null;
+        Entity target = hit.getEntity();
+        return target.isNotNull() && target.isInstance(MappedClasses.lG)
+                ? new EntityOtherPlayerMP(target.getObject()) : null;
+    }
+
+    private boolean isOriginalTargetUnderCrosshair() {
+        RayTraceResult hit = RotationManager.INSTANCE.getExtendedReachRayTrace();
+        return this.swapTargetObject != null && hit != null && hit.isNotNull()
+                && hit.getTypeOfHit().equals(RayTraceResult_type.entity())
+                && hit.getEntity().isNotNull() && hit.getEntity().getObject() == this.swapTargetObject;
+    }
+
+    private void finishSwap(EntityPlayerSP player) {
+        int restoreSlot;
+        int expectedSlot;
+        boolean release;
+        synchronized (this.swapRequestLock) {
+            restoreSlot = this.swapActive ? this.originalSlot : -1;
+            expectedSlot = this.swappedSlot;
+            ++this.swapRequestEpoch;
+            release = this.swingReleasePending;
+            this.swingReleasePending = false;
+            this.swapAttackInFlight = false;
+            this.swapAttackOutcome = 0;
+            this.queuedAttackTicks = 0;
+            this.pendingStunTransition = false;
+            this.swapActive = false;
+            this.originalSlot = -1;
+            this.swappedSlot = -1;
+            this.swapTargetObject = null;
+            this.tickCounter = 0;
+            this.swapAttackPending = false;
+            this.breachSwapPending = false;
+            this.stunSlamActive = false;
+            this.stunSlamSecondPhase = false;
+        }
+        if (player != null && player.isNotNull() && restoreSlot >= 0) {
+            InventoryPlayer inventory = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6();
+            // Do not undo a manual slot change made while the swap was pending.
+            if (inventory.v() == expectedSlot && restoreSlot != expectedSlot) inventory.g(restoreSlot);
+        }
+        if (release) AttackKeyController.releaseAttackKey();
+    }
+
+    private void releasePendingSwing() {
+        boolean release;
+        synchronized (this.swapRequestLock) {
+            release = this.swingReleasePending;
+            this.swingReleasePending = false;
+        }
+        if (release) AttackKeyController.releaseAttackKey();
+    }
+
+    private void queueSwapAttack(boolean firstStunPhase) {
+        final long epoch;
+        final int slot;
+        final Object target;
+        final Object playerObject = Minecraft.thePlayer().getObject();
+        synchronized (this.swapRequestLock) {
+            if (!this.swapActive) return;
+            epoch = this.swapRequestEpoch;
+            slot = this.swappedSlot;
+            target = this.swapTargetObject;
+            this.swapAttackInFlight = true;
+            this.swapAttackOutcome = 0;
+            this.queuedAttackTicks = 0;
+            this.pendingStunTransition = firstStunPhase;
+        }
+        AttackKeyController.releaseAttackKey();
+        AttackKeyController.requestValidatedSyntheticAttack(this, () -> {
+            synchronized (this.swapRequestLock) {
+                if (epoch != this.swapRequestEpoch || !this.swapActive
+                        || slot != this.swappedSlot || target != this.swapTargetObject) return false;
+            }
+            EntityPlayerSP player = Minecraft.thePlayer();
+            return this.isEnabled() && player != null && player.isNotNull()
+                    && player.getObject() == playerObject && Minecraft.currentScreen().isNull()
+                    && InputEventDispatcher.getInstance().getFocusState().isFocused()
+                    && player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().v() == slot
+                    && this.isOriginalTargetUnderCrosshair();
+        }, pressed -> {
+            boolean releaseLate = false;
+            synchronized (this.swapRequestLock) {
+                if (epoch != this.swapRequestEpoch || !this.swapActive) {
+                    releaseLate = pressed;
+                } else {
+                    this.swingReleasePending = pressed;
+                    this.swapAttackOutcome = pressed ? 1 : -1;
+                }
+            }
+            if (releaseLate) AttackKeyController.releaseAttackKey();
+        });
+    }
+
+    // False means still queued or rejected. A successful completion is the
+    // only event that may advance the stun/slam state machine.
+    private boolean settleSwapAttack(EntityPlayerSP player) {
+        int outcome;
+        boolean firstStunPhase;
+        synchronized (this.swapRequestLock) {
+            if (!this.swapAttackInFlight) return true;
+            outcome = this.swapAttackOutcome;
+            if (outcome == 0) return false;
+            firstStunPhase = this.pendingStunTransition;
+            this.swapAttackInFlight = false;
+            this.swapAttackOutcome = 0;
+            this.queuedAttackTicks = 0;
+            this.pendingStunTransition = false;
+        }
+        if (outcome < 0) {
+            this.finishSwap(player);
+            return false;
+        }
+        if (firstStunPhase && this.stunSlamActive) this.stunSlamSecondPhase = true;
+        return true;
     }
 
     private boolean canHandleAttack() {
-        if (Minecraft.currentScreen().isNotNull()) {
+        if (Minecraft.thePlayer().isNull() || Minecraft.currentScreen().isNotNull()
+                || !InputEventDispatcher.getInstance().getFocusState().isFocused()) {
             return false;
         }
         ItemStack heldItem = Minecraft.thePlayer().getHeldItemHand();
@@ -181,56 +300,66 @@ extends Mod {
 
     @EventHandler(priority=EventPriority.HIGH)
     public void onTick(EventPreTick eventPreTick) {
-        if (eventPreTick.getThePlayer().isNull()) {
+        EntityPlayerSP player = eventPreTick.getThePlayer();
+        if (player.isNull()) {
+            this.finishSwap(player);
             return;
         }
-        if (this.swingReleasePending) {
-            AttackKeyController.releaseAttackKey();
-            this.swingReleasePending = false;
+        this.releasePendingSwing();
+        if (this.swapActive) {
+            InventoryPlayer inventory = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6();
+            if (Minecraft.currentScreen().isNotNull()
+                    || !InputEventDispatcher.getInstance().getFocusState().isFocused()
+                    || inventory.v() != this.swappedSlot
+                    || ((this.breachSwapPending || this.swapAttackPending || this.stunSlamSecondPhase
+                         || this.swapAttackInFlight) && !this.isOriginalTargetUnderCrosshair())) {
+                this.finishSwap(player);
+                return;
+            }
+        }
+        if (this.swapAttackInFlight && !this.settleSwapAttack(player)) {
+            // A stalled tick executor must not leave the player's slot swapped
+            // indefinitely. Invalidation also rejects a later queued request.
+            if (this.swapAttackInFlight && ++this.queuedAttackTicks > 4) this.finishSwap(player);
+            return;
         }
         if (this.breachSwapPending && this.swapActive && this.tickCounter >= 1) {
             int maceSlot = this.findMaceSlot();
-            if (maceSlot != -1) {
-                eventPreTick.getThePlayer().V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().g(maceSlot);
-                AttackKeyController.releaseAttackKey();
-                AttackKeyController.requestSyntheticAttack(this);
-                this.swingReleasePending = true;
+            if (maceSlot == -1) {
+                this.finishSwap(player);
+                return;
             }
+            player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().g(maceSlot);
+            this.swappedSlot = maceSlot;
             this.breachSwapPending = false;
+            this.queueSwapAttack(false);
+            this.settleSwapAttack(player);
             return;
         }
         if (this.swapAttackPending && this.swapActive) {
-            AttackKeyController.releaseAttackKey();
-            AttackKeyController.requestSyntheticAttack(this);
-            this.swingReleasePending = true;
             this.swapAttackPending = false;
-            if (this.stunSlamActive) {
-                this.stunSlamSecondPhase = true;
-            }
+            this.queueSwapAttack(this.stunSlamActive);
+            if (this.settleSwapAttack(player)) ++this.tickCounter;
+            return;
         }
         if (this.stunSlamActive && this.swapActive && this.stunSlamSecondPhase && this.tickCounter >= 1) {
             int maceSlot = this.findMaceSlot();
-            if (maceSlot != -1) {
-                eventPreTick.getThePlayer().V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().g(maceSlot);
-                AttackKeyController.releaseAttackKey();
-                AttackKeyController.requestSyntheticAttack(this);
-                this.swingReleasePending = true;
+            if (maceSlot == -1) {
+                this.finishSwap(player);
+                return;
             }
+            player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().g(maceSlot);
+            this.swappedSlot = maceSlot;
             this.stunSlamSecondPhase = false;
             this.stunSlamActive = false;
+            this.queueSwapAttack(false);
+            this.settleSwapAttack(player);
             return;
         }
         if (this.swapActive) {
             int restoreDelayTicks = this.stunSlamActive || this.stunSlamSecondPhase ? 2 : 1;
             if (this.tickCounter++ > restoreDelayTicks) {
-                if (this.originalSlot != -1) {
-                    eventPreTick.getThePlayer().V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().g(this.originalSlot);
-                    this.originalSlot = -1;
-                }
-                this.swapActive = false;
-                this.tickCounter = 0;
-                this.stunSlamActive = false;
-                this.stunSlamSecondPhase = false;
+                this.finishSwap(player);
             }
         }
     }
@@ -250,17 +379,25 @@ extends Mod {
             return;
         }
         RayTraceResult crosshairHit = RotationManager.INSTANCE.getExtendedReachRayTrace();
-        if (crosshairHit.getEntity().isNull()) {
+        if (crosshairHit == null || crosshairHit.isNull()
+                || !crosshairHit.getTypeOfHit().equals(RayTraceResult_type.entity())) {
+            return;
+        }
+        Entity target = crosshairHit.getEntity();
+        if (target.isNull()) {
             return;
         }
         ItemStack heldItem = player.getHeldItemHand();
-        EntityOtherPlayerMP targetPlayer = this.getTargetPlayer();
+        EntityOtherPlayerMP targetPlayer = target.isInstance(MappedClasses.lG)
+                ? new EntityOtherPlayerMP(target.getObject()) : null;
         int maceSlot = this.findMaceSlot();
         if (this.stunSlam.getEffectiveValue().booleanValue() && this.maces.getEffectiveValue().booleanValue()
                 && heldItem.isNotNull() && heldItem.getItem().isNotNull()
                 && targetPlayer != null && this.isTargetSmashReady(targetPlayer) && maceSlot >= 0) {
             if (heldItem.getItem().isInstance(MappedClasses.YP)) {
                 this.originalSlot = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().v();
+                this.swappedSlot = this.originalSlot;
+                this.swapTargetObject = target.getObject();
                 this.breachSwapPending = true;
                 this.swapActive = true;
                 this.tickCounter = 0;
@@ -270,6 +407,8 @@ extends Mod {
             if (axeSlot >= 0) {
                 cancellation.setCancelled(true);
                 this.originalSlot = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().v();
+                this.swappedSlot = axeSlot;
+                this.swapTargetObject = target.getObject();
                 player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().g(axeSlot);
                 this.stunSlamActive = true;
                 this.swapActive = true;
@@ -282,6 +421,8 @@ extends Mod {
         if (weaponSlot >= 0) {
             cancellation.setCancelled(true);
             this.originalSlot = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().v();
+            this.swappedSlot = weaponSlot;
+            this.swapTargetObject = target.getObject();
             player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().g(weaponSlot);
             this.swapActive = true;
             this.tickCounter = 0;
@@ -343,6 +484,7 @@ extends Mod {
             if (this.axes.getEffectiveValue().booleanValue() && item.isInstance(MappedClasses.YP) && activeHand != null) {
                 ItemStack activeItem = targetPlayer.i(activeHand);
                 float useDuration = targetPlayer.d(activeHand);
+                if (activeItem.isNull() || activeItem.getItem().isNull()) continue;
                 int maximumUseDuration = activeItem.getItem().I(activeItem, targetPlayer);
                 if (useDuration > 0.0f) {
                     if (maximumUseDuration - useDuration > 5.0f) {

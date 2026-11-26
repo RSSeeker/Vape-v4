@@ -40,7 +40,7 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 | --- | --- |
 | `Vape-v4.21.*.exe` | GUI 单文件加载器（内嵌完整 DLL 与 Java 载荷 + 图标） |
 
-**可选外部 DLL**：exe 旁放置 `Vape-v4.21Native.dll` 时**优先加载外部 DLL**（便于自行替换/更新原生层）；无外部 DLL 时自动解压内嵌版本，免附带文件。
+**可选外部 DLL**：GUI 和控制台只接受与 exe 内嵌 DLL 逐字节一致的 `Vape-v4.21Native.dll`；否则使用内嵌版本。此检查不能证明 exe 或 DLL 安全。
 
 **使用方式**：
 
@@ -54,15 +54,15 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 
 - 集成上游 VapeLoader 图形界面（GDI+ 自绘，支持中英文）：进程选择 / 注入进度 / 加载完成
 - 去掉登录页与缓存询问页：启动即选进程注入，本地生成 token
-- **支持加载外部 DLL**：exe 旁存在 `Vape-v4.21Native.dll` 时优先注入外部 DLL；否则从 exe 内嵌资源解压注入，两种模式均免附带文件
+- **DLL 完整性检查**：外部 DLL 必须与内嵌资源一致；否则解压内嵌版本，不覆盖已有恢复文件
 - 窗口标题「Vape v4」，图标与产品一致
 - 文件落盘全部收拢进 exe 旁隐藏的 `.vapeclient` 目录（解压的 DLL/JAR、日志、配置、服务数据、纹理缓存）
 
 **注入方式**
 
-- 默认使用 **manual map（内存手工映射）** 注入：注入器把 DLL 内容写入目标进程并自行完成节映射、重定位、导入解析与节权限设置，再调用入口点，**不经过 `LoadLibrary`**——因此在 Minecraft 进程的模块表里看不到本 DLL（Process Explorer、`EnumProcessModules` 均枚举不到），也不会产生 image-load 类加载痕迹
-- **失败自动回退**：手工映射任一步失败即退回传统 `CreateRemoteThread` + `LoadLibraryW` 方式，可用性优先；两种方式加载的是同一份 DLL，游戏内功能、性能与版本兼容性完全一致
-- 与「编译时类名混淆」叠加使用（自行编译时默认开启）：注入痕迹 + 随机类名，降低按特征匹配的概率；发布包不混淆，详见常见问题第 10 条
+- GUI 优先尝试反射手工映射和线程劫持；控制台使用 `LoadLibraryW`。手工映射不建立普通模块记录，但这不代表不可见或可以逃避检测。
+- **失败自动回退**：GUI 手工映射失败时可能回退到 `CreateRemoteThread` + `LoadLibraryW`；两条路径的实际兼容性尚未证明完全一致。
+- 编译时会随机化产品类名，但这不能保证任何检测或反作弊结果。
 
 **动态模糊（MotionBlur）**
 
@@ -210,7 +210,7 @@ Loader 依赖 Java 进程和可见窗口标题来发现游戏，只有窗口标�
 
 ### 3. Loader 提示 Vape421Native.dll was not found beside the Loader
 
-该提示指的是 Loader 同目录下的 `Vape-v4.21Native.dll`（即「主要产物」一节所述的可选外部 DLL）：DLL 必须与 Loader 放在同一目录下。
+此提示表示 DLL 无法打开或校验。外部 DLL 并非必需，但必须与内嵌资源一致；请检查解压和恢复目录权限，不要为了加载而绕过安全警告。
 
 ### 4. Loader 提示 Product DLL did not acknowledge… 或 Unexpected…
 

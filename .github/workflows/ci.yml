@@ -67,6 +67,16 @@ jobs:
           & python -B -X utf8 tools/tests/run_rotation_controller_tests.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Test headless combat and Search lifecycles
+        shell: pwsh
+        run: |
+          & python -B -X utf8 tools/tests/run_attack_key_controller_tests.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & python -B -X utf8 tools/tests/run_combat_module_tests.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & python -B -X utf8 tools/tests/run_search_processor_tests.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       # JDK 17 contains ASM, used only by the offline obfuscation auditor.
       - name: Compile and test the obfuscated-class auditor
         shell: pwsh
@@ -213,4 +223,62 @@ jobs:
           name: windows-x64-english-bundle
           path: build/injection/
           if-no-files-found: error
+          retention-days: 14
+
+  scan-bundle:
+    name: Scan the rebuilt bundle as data
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download this run's Windows bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-x64-english-bundle
+          path: bundle
+      - name: Hash and scan without executing the bundle
+        shell: bash
+        run: |
+          set -uo pipefail
+          mapfile -d '' files < <(find bundle -type f \( -iname '*.exe' -o -iname '*.dll' \) -print0 | sort -z)
+          if [ "${#files[@]}" -ne 2 ]; then echo '::error::Expected one EXE and one DLL.'; exit 1; fi
+          sha256sum "${files[@]}" | tee sample-hashes.txt
+          while IFS= read -r line; do echo "::notice title=Rebuilt sample SHA-256::$line"; done < sample-hashes.txt
+          fail_setup() {
+            local status="$1"
+            while IFS= read -r line; do
+              line=${line//'%'/'%25'}
+              echo "::warning title=ClamAV setup detail::$line"
+            done < <(tail -15 clamav-setup.txt)
+            echo '::error::ClamAV setup failed; the bundle has not been scanned.'
+            exit "$status"
+          }
+          sudo apt-get update -qq 2>&1 | tee clamav-setup.txt
+          status=${PIPESTATUS[0]}; if [ "$status" -ne 0 ]; then fail_setup "$status"; fi
+          sudo apt-get install -y -qq clamav 2>&1 | tee -a clamav-setup.txt
+          status=${PIPESTATUS[0]}; if [ "$status" -ne 0 ]; then fail_setup "$status"; fi
+          sudo systemctl stop clamav-freshclam 2>/dev/null || true
+          sudo freshclam --stdout 2>&1 | tee -a clamav-setup.txt
+          status=${PIPESTATUS[0]}; if [ "$status" -ne 0 ]; then fail_setup "$status"; fi
+          clamscan --scan-archive=yes --max-filesize=1024M --max-scansize=2048M --alert-exceeds-max=yes --infected "${files[@]}" 2>&1 | tee clamav-report.txt
+          status=${PIPESTATUS[0]}
+          if [ "$status" -eq 0 ] && ! awk '/^Scanned files:/ {found=1; if ($3 >= 2) ok=1} END {exit !(found && ok)}' clamav-report.txt; then status=2; fi
+          if [ "$status" -eq 0 ]; then
+            echo '::notice title=ClamAV result::No signatures detected; this single scan does not establish safety.'
+          elif [ "$status" -eq 1 ]; then
+            echo '::error title=ClamAV result::A signature was detected; see the report.'
+          else
+            echo '::error title=ClamAV result::The scan failed or was incomplete.'
+          fi
+          exit "$status"
+      - name: Upload small scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rebuilt-bundle-scan-report
+          path: |
+            sample-hashes.txt
+            clamav-setup.txt
+            clamav-report.txt
+          if-no-files-found: warn
           retention-days: 14

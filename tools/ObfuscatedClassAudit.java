@@ -39,10 +39,14 @@ public final class ObfuscatedClassAudit {
     private static final Set<String> WHITELIST = new HashSet<>(Arrays.asList(
             "gg/vape/runtime/NativeBridge", "gg/vape/runtime/ForgePayloadClassLoader",
             "gg/vape/event/impl/EventRenderWorldPassExecutorDrain"));
-    // Localization-only edits and separately reviewed rotation behavior changes.
+    // Localization edits and separately reviewed module behavior changes.
     private static final Set<String> EXPECTED_ENGLISH_MODULE_CHANGES = new HashSet<>(Arrays.asList(
             "gg/vape/module/none/ClientSettings", "gg/vape/module/render/SpawnerFinder",
-            "gg/vape/module/combat/SilentAura",
+            "gg/vape/module/combat/SilentAura", "gg/vape/module/combat/AimAssist",
+            "gg/vape/module/combat/AutoMace", "gg/vape/module/combat/HitSwap",
+            "gg/vape/module/combat/Triggerbot", "gg/vape/module/render/Search",
+            "gg/vape/module/render/search/SearchBlockChunkScanner",
+            "gg/vape/module/combat/automace/AutoMaceRotationController",
             "gg/vape/module/combat/aimassist/AimAssistKissSubModule",
             "gg/vape/module/combat/aimassist/AimAssistRotationSubModule",
             "gg/vape/module/combat/aimassist/AimAssistTargetingSubModule"));
@@ -302,12 +306,24 @@ public final class ObfuscatedClassAudit {
     }
 
     static boolean matchesExpected(Result result, Set<String> expectedEnglishDifferences) {
-        return result.mappedProduct == result.randomCount
-                && result.ambiguous == 0 && result.unmatched == 0
-                && result.mappedModules == result.moduleCount
-                && result.baselineEqual == result.moduleCount
-                && result.englishDifferences.size() == expectedEnglishDifferences.size()
-                && new HashSet<>(result.englishDifferences).equals(expectedEnglishDifferences);
+        if (result.mappedProduct != result.randomCount || result.ambiguous != 0 || result.unmatched != 0
+                || result.mappedModules != result.moduleCount || result.baselineEqual != result.moduleCount) {
+            return false;
+        }
+        Set<String> actual = new HashSet<>(result.englishDifferences);
+        if (!actual.containsAll(expectedEnglishDifferences)) return false;
+        for (String name : actual) {
+            if (expectedEnglishDifferences.contains(name)) continue;
+            boolean reviewedNestedClass = false;
+            for (String parent : expectedEnglishDifferences) {
+                if (name.startsWith(parent + "$")) {
+                    reviewedNestedClass = true;
+                    break;
+                }
+            }
+            if (!reviewedNestedClass) return false;
+        }
+        return true;
     }
 
     public static void main(String[] args) throws Exception {

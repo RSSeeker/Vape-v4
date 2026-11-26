@@ -54,6 +54,7 @@ add_library(Vape421Native SHARED
         loader_bootstrap.c
         native_bridge.c
         reflective_loader.c
+        safe_file_materialization.c
         "${CMAKE_CURRENT_BINARY_DIR}/generated/payload.rc")
 # The reflective loader executes before its imports are resolved and must not
 # touch the CRT prologue that DllMainCRTStartup would have installed.
@@ -83,6 +84,7 @@ file(GLOB VAPE421_LOADER_GUI_SOURCES
 add_executable(Vape421LoaderGui WIN32
         ${VAPE421_LOADER_GUI_SOURCES}
         "${CMAKE_CURRENT_SOURCE_DIR}/injector.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/safe_file_materialization.c"
         "${VAPE421_LOADER_GUI_DIR}/assets.rc"
         "${VAPE421_LOADER_GUI_DIR}/icon.rc"
         "${VAPE421_LOADER_GUI_DIR}/app.manifest"
@@ -103,8 +105,8 @@ target_link_libraries(Vape421LoaderGui PRIVATE
 target_include_directories(Vape421LoaderGui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/loader_gui" "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # Embed Vape421Native.dll into the GUI loader for single-file operation.
-# The loader extracts resource 422 (RCDATA) to a temp file when no DLL sits
-# beside the exe (see ControllerModel::materializeEmbeddedDll).
+# The shared loader materializer accepts a matching adjacent DLL or extracts
+# resource 422 (RCDATA) without truncating existing recovery files.
 set(VAPE421_LOADER_GUI_DLL_RC
         "${CMAKE_CURRENT_BINARY_DIR}/generated/loader_gui_dll.rc")
 add_custom_command(
@@ -161,6 +163,42 @@ if(BUILD_TESTING)
     target_compile_features(Vape421LoaderLanguageTest PRIVATE cxx_std_17)
     target_compile_options(Vape421LoaderLanguageTest PRIVATE /W4 /utf-8)
     add_test(NAME Vape421LoaderLanguage COMMAND Vape421LoaderLanguageTest)
+
+    add_executable(Vape421ResourceIntegrityTest tests/embedded_resource_integrity_test.cpp)
+    target_include_directories(Vape421ResourceIntegrityTest PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/loader_gui")
+    target_compile_features(Vape421ResourceIntegrityTest PRIVATE cxx_std_17)
+    target_compile_options(Vape421ResourceIntegrityTest PRIVATE /W4 /utf-8)
+    add_test(NAME Vape421ResourceIntegrity COMMAND Vape421ResourceIntegrityTest)
+
+    add_executable(Vape421LockedResourceTest tests/locked_resource_file_test.cpp)
+    target_include_directories(Vape421LockedResourceTest PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/loader_gui")
+    target_compile_features(Vape421LockedResourceTest PRIVATE cxx_std_17)
+    target_compile_definitions(Vape421LockedResourceTest PRIVATE WIN32_LEAN_AND_MEAN)
+    target_compile_options(Vape421LockedResourceTest PRIVATE /W4 /utf-8)
+    add_test(NAME Vape421LockedResource COMMAND Vape421LockedResourceTest)
+
+    # Exercise the same C ABI materializer used by both GUI and console modes
+    # with an inert embedded fixture; no injection or foreign process is run.
+    add_executable(Vape421DllMaterializerTest
+            tests/embedded_dll_materializer_test.cpp
+            tests/materializer_fixture.rc
+            loader_gui/embedded_dll_materializer.cpp)
+    target_include_directories(Vape421DllMaterializerTest PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/loader_gui")
+    target_compile_features(Vape421DllMaterializerTest PRIVATE cxx_std_17)
+    target_compile_definitions(Vape421DllMaterializerTest PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_compile_options(Vape421DllMaterializerTest PRIVATE /W4 /utf-8)
+    add_test(NAME Vape421DllMaterializer COMMAND Vape421DllMaterializerTest)
+
+    add_executable(Vape421SafeFileTest
+            tests/safe_file_materialization_test.cpp safe_file_materialization.c)
+    target_include_directories(Vape421SafeFileTest PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_features(Vape421SafeFileTest PRIVATE cxx_std_17)
+    target_compile_definitions(Vape421SafeFileTest PRIVATE WIN32_LEAN_AND_MEAN)
+    target_compile_options(Vape421SafeFileTest PRIVATE /W4 /utf-8)
+    add_test(NAME Vape421SafeFile COMMAND Vape421SafeFileTest)
 endif()
 
 set_property(TARGET Vape421Native Vape421LoaderGui

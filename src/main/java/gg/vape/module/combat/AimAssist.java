@@ -247,6 +247,9 @@ extends Mod {
         if (this.adaptiveTargeting.isSelectedSubModule()) {
             return this.adaptiveTargeting.getTarget();
         }
+        if (this.kissRotation.isSelectedSubModule()) {
+            return this.kissRotation.getTarget();
+        }
         return null;
     }
 

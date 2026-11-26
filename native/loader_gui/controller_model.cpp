@@ -1,4 +1,5 @@
 #include "controller_model.h"
+#include "embedded_dll_materializer.h"
 #include "injection_coordinator.h"
 #include "loader_strings.h"
 
@@ -84,30 +85,6 @@ std::string jsonEscape(const std::string& value) {
         }
     }
     return result;
-}
-
-// Deletes every entry under directory (recursively) but keeps the directory
-// itself, so the recovery folder only ever holds the current session's files.
-void sweepDirectory(const std::wstring& directory) {
-    WIN32_FIND_DATAW data{};
-    const std::wstring pattern = directory + L"\\*";
-    HANDLE found = FindFirstFileW(pattern.c_str(), &data);
-    if (found == INVALID_HANDLE_VALUE) return;
-    do {
-        if (wcscmp(data.cFileName, L".") == 0 ||
-                wcscmp(data.cFileName, L"..") == 0) {
-            continue;
-        }
-        const std::wstring child = directory + L"\\" + data.cFileName;
-        if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
-            sweepDirectory(child);
-            RemoveDirectoryW(child.c_str());
-        } else {
-            SetFileAttributesW(child.c_str(), FILE_ATTRIBUTE_NORMAL);
-            DeleteFileW(child.c_str());
-        }
-    } while (FindNextFileW(found, &data));
-    FindClose(found);
 }
 
 void captureWindowTitles(std::vector<MinecraftProcess>& candidates) {
@@ -202,8 +179,7 @@ std::wstring executableDirectory() {
 
 // Ensures <exe>\.vapeclient exists and is hidden. The injected DLL derives
 // the client directory from its own module path (<exe>\.vapeclient\Vape-v4.21Recovery),
-// so no TEMP marker file is needed; this just makes the folder visible early
-// and removes the obsolete TEMP marker/diagnostics left by older builds.
+// so no TEMP marker file is needed; this just makes the folder available early.
 void ensureClientDirectoryHidden() {
     const std::wstring directory = executableDirectory() + L"\\.vapeclient";
     if (CreateDirectoryW(directory.c_str(), nullptr) ||
@@ -215,97 +191,7 @@ void ensureClientDirectoryHidden() {
                 attributes | FILE_ATTRIBUTE_HIDDEN);
         }
     }
-    // Best-effort cleanup of the legacy TEMP-based directory handshake.
-    wchar_t tempRoot[MAX_PATH]{};
-    if (GetTempPathW(static_cast<DWORD>(std::size(tempRoot)), tempRoot) != 0 &&
-            tempRoot[0] != L'\0') {
-        std::wstring root = tempRoot;
-        if (!root.empty() && root.back() != L'\\') root.push_back(L'\\');
-        DeleteFileW((root + L"injector_dir.txt").c_str());
-        DeleteFileW((root + L"vape_injector_diag.txt").c_str());
-    }
 }
-}
-
-// Extracts the embedded product DLL (resource 422, RCDATA) to
-// <exe>\.vapeclient\Vape-v4.21Recovery\ so it can be injected via LoadLibraryW.
-// The injected DLL derives the client directory from this fixed module path,
-// keeping every artifact inside the .vapeclient tree (no %TEMP% writes).
-// If a Vape-v4.21Native.dll sits next to the exe, it is used directly and the
-// embedded copy is not extracted.
-bool ControllerModel::materializeEmbeddedDll(std::uint32_t processId,
-        std::wstring& output) {
-    // Prefer an external DLL placed beside the exe (e.g. the published bundle).
-    const std::wstring external = executableDirectory() + L"\\Vape-v4.21Native.dll";
-    if (GetFileAttributesW(external.c_str()) != INVALID_FILE_ATTRIBUTES) {
-        output = external;
-        return true;
-    }
-    const HRSRC resource = FindResourceW(nullptr,
-        MAKEINTRESOURCEW(422), MAKEINTRESOURCEW(10));
-    if (resource == nullptr) return false;
-    const DWORD size = SizeofResource(nullptr, resource);
-    const HGLOBAL loaded = LoadResource(nullptr, resource);
-    const auto* bytes = loaded == nullptr ? nullptr
-        : static_cast<const unsigned char*>(LockResource(loaded));
-    if (bytes == nullptr || size < 4) return false;
-
-    ensureClientDirectoryHidden();
-    const std::wstring clientRoot = executableDirectory() + L"\\.vapeclient";
-    wchar_t directory[MAX_PATH]{};
-    _snwprintf_s(directory, std::size(directory), _TRUNCATE,
-        L"%ls\\Vape-v4.21Recovery", clientRoot.c_str());
-    if (!CreateDirectoryW(directory, nullptr)
-            && GetLastError() != ERROR_ALREADY_EXISTS) {
-        return false;
-    }
-    // Sweep stale per-pid artifacts from previous injections so the recovery
-    // directory only ever holds the current session's files.
-    sweepDirectory(directory);
-    wchar_t target[MAX_PATH]{};
-    _snwprintf_s(target, std::size(target), _TRUNCATE,
-        L"%ls\\Vape-v4.21Native-%lu.dll", directory,
-        static_cast<unsigned long>(processId));
-
-    HANDLE file = CreateFileW(target, GENERIC_WRITE,
-        FILE_SHARE_READ | FILE_SHARE_DELETE, nullptr, CREATE_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file == INVALID_HANDLE_VALUE) {
-        // The same-pid artifact may still be mapped by a live process from a
-        // previous injection (same content). Reuse it instead of failing.
-        const DWORD createError = GetLastError();
-        if (createError == ERROR_SHARING_VIOLATION ||
-                createError == ERROR_ACCESS_DENIED) {
-            WIN32_FILE_ATTRIBUTE_DATA existing{};
-            if (GetFileAttributesExW(target, GetFileExInfoStandard, &existing) &&
-                    existing.nFileSizeLow == size &&
-                    existing.nFileSizeHigh == 0) {
-                output = target;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    DWORD offset = 0;
-    bool ok = true;
-    while (offset < size) {
-        DWORD written = 0;
-        const DWORD remaining = size - offset;
-        if (!WriteFile(file, bytes + offset, remaining, &written, nullptr)
-                || written == 0) {
-            ok = false;
-            break;
-        }
-        offset += written;
-    }
-    CloseHandle(file);
-    if (!ok) {
-        DeleteFileW(target);
-        return false;
-    }
-    output = target;
-    return true;
 }
 
 ControllerModel::ControllerModel() {
@@ -691,9 +577,9 @@ bool ControllerModel::injectMinecraft(std::uint32_t processId, bool reportFailur
         return false;
     }
     std::wstring error;
-    // Always use the embedded DLL resource; never load an external copy.
-    std::wstring dllPath;
-    if (!materializeEmbeddedDll(processId, dllPath)) {
+    // Use only a DLL matching the embedded resource, including any adjacent copy.
+    wchar_t dllPathBuffer[MAX_PATH]{};
+    if (!vape421_materialize_dll(processId, dllPathBuffer, std::size(dllPathBuffer))) {
         autoInjectError_ = L"extract native dll failed";
         if (reportFailure) {
             setStatus(ls(Ls::CannotExtractNativeDll));
@@ -704,6 +590,7 @@ bool ControllerModel::injectMinecraft(std::uint32_t processId, bool reportFailur
     // The injected DLL derives the client directory from its own module path
     // (<exe>\.vapeclient\Vape-v4.21Recovery); ensure the hidden folder exists.
     ensureClientDirectoryHidden();
+    const std::wstring dllPath(dllPathBuffer);
     if (!InjectionCoordinator::injectProductDll(processId, dllPath, service_.port(),
             serviceHttpBase, error)) {
         service_.stop();
