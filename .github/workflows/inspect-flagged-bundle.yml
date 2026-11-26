@@ -34,23 +34,43 @@ jobs:
           if [ "${#files[@]}" -ne 2 ]; then echo 'Expected one EXE and one DLL.'; exit 1; fi
           sha256sum "${files[@]}" | tee sample-hashes.txt
           while IFS= read -r line; do echo "::notice title=Flagged sample SHA-256::$line"; done < sample-hashes.txt
+          for file in "${files[@]}"; do
+            echo "::notice title=Sample size::$(stat -c '%s bytes %n' "$file")"
+          done
 
       - name: Install ClamAV and obtain current signatures
         shell: bash
         run: |
-          set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq clamav
-          sudo freshclam --stdout
+          set -uo pipefail
+          report_failure() {
+            local status="$1"
+            while IFS= read -r line; do
+              line=${line//'%'/'%25'}
+              echo "::warning title=ClamAV setup detail::$line"
+            done < <(tail -15 clamav-setup.txt)
+            echo "::error title=ClamAV setup::Scanner setup failed with exit $status; no scan result is available."
+            exit "$status"
+          }
+          sudo apt-get update -qq 2>&1 | tee clamav-setup.txt
+          status=${PIPESTATUS[0]}; if [ "$status" -ne 0 ]; then report_failure "$status"; fi
+          sudo apt-get install -y -qq clamav 2>&1 | tee -a clamav-setup.txt
+          status=${PIPESTATUS[0]}; if [ "$status" -ne 0 ]; then report_failure "$status"; fi
+          # On images that start the daemon automatically, release its database lock.
+          sudo systemctl stop clamav-freshclam 2>/dev/null || true
+          sudo freshclam --stdout 2>&1 | tee -a clamav-setup.txt
+          status=${PIPESTATUS[0]}; if [ "$status" -ne 0 ]; then report_failure "$status"; fi
 
       - name: Scan the EXE and DLL without running either file
         shell: bash
         run: |
           set -uo pipefail
-          clamscan --scan-archive=yes --max-filesize=100M --max-scansize=500M --infected flagged-bundle 2>&1 | tee clamav-report.txt
+          clamscan --scan-archive=yes --max-filesize=1024M --max-scansize=2048M --alert-exceeds-max=yes --infected flagged-bundle 2>&1 | tee clamav-report.txt
           status=${PIPESTATUS[0]}
+          if [ "$status" -eq 0 ] && ! awk '/^Scanned files:/ {found=1; if ($3 >= 2) ok=1} END {exit !(found && ok)}' clamav-report.txt; then
+            status=2
+          fi
           if [ "$status" -eq 0 ]; then
-            echo '::notice title=ClamAV result::No ClamAV signatures detected. This does not establish safety.'
+            echo '::notice title=ClamAV result::No ClamAV signatures detected in the scanned files. This does not establish safety.'
           elif [ "$status" -eq 1 ]; then
             echo '::error title=ClamAV result::ClamAV detected at least one signature; see the diagnostic report.'
           else
@@ -65,6 +85,7 @@ jobs:
           name: flagged-bundle-inspection
           path: |
             sample-hashes.txt
+            clamav-setup.txt
             clamav-report.txt
           if-no-files-found: warn
           retention-days: 14
