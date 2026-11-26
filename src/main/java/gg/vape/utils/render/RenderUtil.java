@@ -256,99 +256,117 @@ public class RenderUtil {
     public static void U(String string, double d, double d2, double d3, double d4, double d5, int n, Color color, double d6, MatrixStack matrixStack) {
         float f;
         float f2;
+        boolean previousWorldText = GuiRenderPrimitives.U;
+        boolean matrixPushed = false;
+        boolean gameMatrixPushed = false;
+        boolean labelStateStarted = false;
         GuiRenderPrimitives.U = true;
-        FontRenderer fontRenderer = Minecraft.getFontRenderer();
-        int n2 = n;
-        float f3 = d5 / 5.0 <= 2.0 ? 2.0f : (float)(d5 / 5.0);
-        float f4 = f2 = (float)(0.01666666753590107 * ((double)f3 * d4));
-        RenderUtil.d();
-        float f5 = FreeLookHudModule.isActive() ? FreeLookHudModule.getRenderPitch() : Minecraft.D().getPlayerViewX();
-        float f6 = f = FreeLookHudModule.isActive() ? FreeLookHudModule.getRenderYaw() : Minecraft.D().getPlayerViewY();
-        if (ForgeVersion.MC_1_16_5.d()) {
-            if (Minecraft.gameSettings().x() == 0) {
+        try {
+            FontRenderer fontRenderer = Minecraft.getFontRenderer();
+            int n2 = n;
+            float f3 = d5 / 5.0 <= 2.0 ? 2.0f : (float)(d5 / 5.0);
+            float f4 = f2 = (float)(0.01666666753590107 * ((double)f3 * d4));
+            OpenGlBackendHolder.backend.pushMatrix();
+            matrixPushed = true;
+            if (ForgeVersion.MC_1_16_5.d()) RenderUtil.p();
+            float f5 = FreeLookHudModule.isActive() ? FreeLookHudModule.getRenderPitch() : Minecraft.D().getPlayerViewX();
+            float f6 = f = FreeLookHudModule.isActive() ? FreeLookHudModule.getRenderYaw() : Minecraft.D().getPlayerViewY();
+            if (ForgeVersion.MC_1_16_5.d()) {
+                if (Minecraft.gameSettings().x() == 0) {
+                    OpenGlBackendHolder.backend.translate(d + 0.0, d2 + 0.25 + 0.5, d3);
+                    OpenGlBackendHolder.backend.setNormal(0.0f, 1.0f, 0.0f);
+                    OpenGlBackendHolder.backend.rotate(-f5, 0.0f, 1.0f, 0.0f);
+                    OpenGlBackendHolder.backend.rotate(-f, -1.0f, 0.0f, 0.0f);
+                } else {
+                    ActiveRenderInfo activeRenderInfo = Minecraft.m$src$Lgg_vape_wrapper_impl_EntityRenderer_$13begmf().l();
+                    double d7 = GuiRenderPrimitives.d() ? 0.0 : RenderManager.getInterpolatedRenderPosX() - activeRenderInfo.o().getX();
+                    double d8 = GuiRenderPrimitives.d() ? 0.0 : RenderManager.getInterpolatedRenderPosY() - activeRenderInfo.o().getY();
+                    double d9 = GuiRenderPrimitives.d() ? 0.0 : RenderManager.getInterpolatedRenderPosZ() - activeRenderInfo.o().getZ();
+                    OpenGlBackendHolder.backend.translate(d + d7, d2 + d8 + 0.25 + 0.5, d3 + d9);
+                    OpenGlBackendHolder.backend.setNormal(0.0f, 1.0f, 0.0f);
+                    OpenGlBackendHolder.backend.rotate(-f5, 0.0f, 1.0f, 0.0f);
+                    OpenGlBackendHolder.backend.rotate(f, 1.0f, 0.0f, 0.0f);
+                }
+            } else {
                 OpenGlBackendHolder.backend.translate(d + 0.0, d2 + 0.25 + 0.5, d3);
                 OpenGlBackendHolder.backend.setNormal(0.0f, 1.0f, 0.0f);
-                OpenGlBackendHolder.backend.rotate(-f5, 0.0f, 1.0f, 0.0f);
-                OpenGlBackendHolder.backend.rotate(-f, -1.0f, 0.0f, 0.0f);
-            } else {
-                ActiveRenderInfo activeRenderInfo = Minecraft.m$src$Lgg_vape_wrapper_impl_EntityRenderer_$13begmf().l();
-                double d7 = GuiRenderPrimitives.d() ? 0.0 : RenderManager.getInterpolatedRenderPosX() - activeRenderInfo.o().getX();
-                double d8 = GuiRenderPrimitives.d() ? 0.0 : RenderManager.getInterpolatedRenderPosY() - activeRenderInfo.o().getY();
-                double d9 = GuiRenderPrimitives.d() ? 0.0 : RenderManager.getInterpolatedRenderPosZ() - activeRenderInfo.o().getZ();
-                OpenGlBackendHolder.backend.translate(d + d7, d2 + d8 + 0.25 + 0.5, d3 + d9);
-                OpenGlBackendHolder.backend.setNormal(0.0f, 1.0f, 0.0f);
-                OpenGlBackendHolder.backend.rotate(-f5, 0.0f, 1.0f, 0.0f);
-                OpenGlBackendHolder.backend.rotate(f, 1.0f, 0.0f, 0.0f);
+                if (Minecraft.gameSettings().x() == 2) {
+                    OpenGlBackendHolder.backend.rotate(-f5, 0.0f, 1.0f, 0.0f);
+                    OpenGlBackendHolder.backend.rotate(f, -1.0f, 0.0f, 0.0f);
+                } else {
+                    OpenGlBackendHolder.backend.rotate(-f5, 0.0f, 1.0f, 0.0f);
+                    OpenGlBackendHolder.backend.rotate(f, 1.0f, 0.0f, 0.0f);
+                }
             }
-        } else {
-            OpenGlBackendHolder.backend.translate(d + 0.0, d2 + 0.25 + 0.5, d3);
-            OpenGlBackendHolder.backend.setNormal(0.0f, 1.0f, 0.0f);
-            if (Minecraft.gameSettings().x() == 2) {
-                OpenGlBackendHolder.backend.rotate(-f5, 0.0f, 1.0f, 0.0f);
-                OpenGlBackendHolder.backend.rotate(f, -1.0f, 0.0f, 0.0f);
-            } else {
-                OpenGlBackendHolder.backend.rotate(-f5, 0.0f, 1.0f, 0.0f);
-                OpenGlBackendHolder.backend.rotate(f, 1.0f, 0.0f, 0.0f);
+            OpenGlBackendHolder.backend.scale(-f4, -f4, f4);
+            int n3 = fontRenderer.getStringWidth(string) / 2;
+            int n4 = -(fontRenderer.FONT_HEIGHT(string) - 1);
+            int n5 = fontRenderer.getFontHeight();
+            int n6 = n3;
+            int n7 = -(n5 - 1);
+            labelStateStarted = true;
+            GlStateManager.disableLighting();
+            GlStateManager.depthMask(false);
+            GlStateManager.disableDepth();
+            GlStateManager.enableBlend();
+            GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0);
+            GlStateManager.Y();
+            GlStateManager.disableTexture2D();
+            RenderUtils.M((double)(-n6) - 2.0, n7, (double)n6 + 2.0, 2.0, 0.0, color, color);
+            GlStateManager.enableTexture2D();
+            GlStateManager.disableDepth();
+            OpenGlBackendHolder.backend.setColor(1.0f, 1.0f, 1.0f);
+            if (ForgeVersion.MC_1_16_5.d() && (matrixStack == null || matrixStack.isNull() || !matrixStack.isInstance(MappedClasses.DQ))) {
+                matrixStack = MatrixStack.A();
             }
-        }
-        OpenGlBackendHolder.backend.scale(-f4, -f4, f4);
-        int n3 = fontRenderer.getStringWidth(string) / 2;
-        int n4 = -(fontRenderer.FONT_HEIGHT(string) - 1);
-        int n5 = fontRenderer.getFontHeight();
-        int n6 = n3;
-        int n7 = -(n5 - 1);
-        GlStateManager.disableLighting();
-        GlStateManager.depthMask(false);
-        GlStateManager.disableDepth();
-        GlStateManager.enableBlend();
-        GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0);
-        GlStateManager.Y();
-        GlStateManager.disableTexture2D();
-        RenderUtils.M((double)(-n6) - 2.0, n7, (double)n6 + 2.0, 2.0, 0.0, color, color);
-        GlStateManager.enableTexture2D();
-        GlStateManager.disableDepth();
-        OpenGlBackendHolder.backend.setColor(1.0f, 1.0f, 1.0f);
-        if (ForgeVersion.MC_1_16_5.d() && (matrixStack == null || matrixStack.isNull() || !matrixStack.isInstance(MappedClasses.DQ))) {
-            matrixStack = MatrixStack.A();
-        }
-        boolean bl = false;
-        if (GuiRenderPrimitives.d()) {
-            RenderMatrix4f renderMatrix4f = new RenderMatrix4f().setIdentity();
-            renderMatrix4f.multiply(BufferedGuiRenderPrimitives.viewMatrix);
-            renderMatrix4f.multiply(BufferedGuiRenderPrimitives.matrixStack.peek());
-            if (ForgeVersion.MC_1_20_6.d()) {
-                fontRenderer.h(string, -n3, -n5 + 3, n2, false, renderMatrix4f, SharedMonsterAttributes.V());
-            } else {
-                int n8 = 0xF000F0;
-                RenderItemFontBridge renderItemFontBridge = Minecraft.H$src$Lgg_vape_wrapper_impl_VoxelShape_$1dlcquv().getBufferSource();
+            if (GuiRenderPrimitives.d()) {
+                RenderMatrix4f renderMatrix4f = new RenderMatrix4f().setIdentity();
+                renderMatrix4f.multiply(BufferedGuiRenderPrimitives.viewMatrix);
+                renderMatrix4f.multiply(BufferedGuiRenderPrimitives.matrixStack.peek());
+                if (ForgeVersion.MC_1_20_6.d()) {
+                    fontRenderer.h(string, -n3, -n5 + 3, n2, false, renderMatrix4f, SharedMonsterAttributes.V());
+                } else {
+                    int n8 = 0xF000F0;
+                    RenderItemFontBridge renderItemFontBridge = Minecraft.H$src$Lgg_vape_wrapper_impl_VoxelShape_$1dlcquv().getBufferSource();
+                    ScorePlayerTeamTextComponent scorePlayerTeamTextComponent = ScorePlayerTeamTextComponent.B(string);
+                    fontRenderer.Z(scorePlayerTeamTextComponent, -n3, -n5 + 3, n2, false, renderMatrix4f.toMinecraftMatrix(), renderItemFontBridge, true, 0, n8);
+                    renderItemFontBridge.q();
+                }
+            } else if (ForgeVersion.MC_1_16_5.d()) {
+                matrixStack.H();
+                gameMatrixPushed = true;
+                Quaternion quaternion = Minecraft.D().getCameraOrientation();
+                matrixStack.i(quaternion);
+                matrixStack.i(Quaternion.fromEulerAngles(180.0f, 0.0f, 180.0f, true));
                 ScorePlayerTeamTextComponent scorePlayerTeamTextComponent = ScorePlayerTeamTextComponent.B(string);
-                fontRenderer.Z(scorePlayerTeamTextComponent, -n3, -n5 + 3, n2, false, renderMatrix4f.toMinecraftMatrix(), renderItemFontBridge, true, 0, n8);
+                RenderItemFontBridge renderItemFontBridge = RenderItemFontBridge.V(Tessellator.getInstance().getWorldRenderer());
+                int n9 = 0xF000F0;
+                Matrix4f matrix4f = matrixStack.F().getMatrix();
+                fontRenderer.Z(scorePlayerTeamTextComponent, -n3, -n5 + 3, n2, false, matrix4f, renderItemFontBridge, true, 0, n9);
                 renderItemFontBridge.q();
+            } else {
+                fontRenderer.drawString(string, (double)(-n3), (double)(-n5 + 3), n2);
             }
-        } else if (ForgeVersion.MC_1_16_5.d()) {
-            matrixStack.H();
-            bl = true;
-            Quaternion quaternion = Minecraft.D().getCameraOrientation();
-            matrixStack.i(quaternion);
-            matrixStack.i(Quaternion.fromEulerAngles(180.0f, 0.0f, 180.0f, true));
-            ScorePlayerTeamTextComponent scorePlayerTeamTextComponent = ScorePlayerTeamTextComponent.B(string);
-            RenderItemFontBridge renderItemFontBridge = RenderItemFontBridge.V(Tessellator.getInstance().getWorldRenderer());
-            int n9 = 0xF000F0;
-            Matrix4f matrix4f = matrixStack.F().getMatrix();
-            fontRenderer.Z(scorePlayerTeamTextComponent, -n3, -n5 + 3, n2, false, matrix4f, renderItemFontBridge, true, 0, n9);
-            renderItemFontBridge.q();
-        } else {
-            fontRenderer.drawString(string, (double)(-n3), (double)(-n5 + 3), n2);
+        } finally {
+            try {
+                if (gameMatrixPushed) matrixStack.U();
+            } finally {
+                try {
+                    if (labelStateStarted) {
+                        GlStateManager.enableDepth();
+                        GlStateManager.depthMask(true);
+                        GlStateManager.disableBlend();
+                        GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
+                    }
+                } finally {
+                    try {
+                        if (matrixPushed) RenderUtil.Y();
+                    } finally {
+                        GuiRenderPrimitives.U = previousWorldText;
+                    }
+                }
+            }
         }
-        if (bl) {
-            matrixStack.U();
-        }
-        GlStateManager.enableDepth();
-        GlStateManager.depthMask(true);
-        GlStateManager.disableBlend();
-        GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
-        RenderUtil.Y();
-        GuiRenderPrimitives.U = false;
     }
 
     public static void u(double d, double d2, double d3, double d4, double d5, double d6, double d7, Color color, Color color2, double d8, double d9, double d10) {

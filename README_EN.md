@@ -113,6 +113,14 @@ is an integrity check, not evidence that the EXE or DLL is safe.
 
 > This project is for software recovery, compatibility analysis and testing in your own environment. Only use it in an isolated instance you own and are permitted to test, and confirm local laws, licenses and server rules yourself.
 
+## Base-hunting tools
+
+- **StorageESP** highlights loaded chests and barrels. Enable other storage types as needed; the Furnace option also includes blast furnaces and smokers on modern versions. Set **Cluster minimum** above 1 to show only enabled storage blocks with enough neighbors inside **Cluster radius**. The target and each half of a double chest count separately. Optional coordinates and range controls help locate a find.
+- **SpawnerFinder** offers range and coordinate labels. **Show unknown** is on by default: it shows a spawner even when its mob name is unavailable and therefore cannot be checked against the whitelist. Turn it off for strict filtering.
+- **Search** scans configured blocks progressively, prioritizing nearby positions on modern versions. Add blocks such as `minecraft:barrel` or `minecraft:chest` in its Search frame; large ranges and newly loaded chunks take time to scan.
+
+These tools use only the chunks sent to the client; they cannot find unloaded bases. Dense storage or a spawner is a clue, not proof of a player base. The mapping and world-text issues noted below still apply, and the changes have not been verified in live Minecraft gameplay.
+
 ## Script extensions
 
 The client embeds Mozilla Rhino 1.7.15 (relocated to `gg.vape.shaded.org.mozilla`, interpreted, no bytecode generation) and loads custom module scripts from `.vapeclient\scripts\`:
@@ -172,7 +180,7 @@ The issues below remain; they are mainly caused by **1.20.1's mappings differing
 
 **1.20.1 (Forge / NeoForge)**
 - **World text is missing**: text inside item label boxes, NameTags, and the distance text of Indicators and Arrows. The text-component construction bridge cannot be resolved on 1.20.1, so the code now simply skips the text (no exception thrown) until it is rebuilt as screen-space 2D drawing
-- **StorageESP (chest ESP) and Search do not show**: the block-entity table that container ESP relies on cannot be resolved on 1.20.1, and the render exception is silently swallowed
+- **StorageESP (chest ESP) and Search may not show**: the 1.20.1 container block-entity table has a known mapping problem. Search uses a separate block scan but may also be affected by mapping or rendering issues. The base-hunting changes have not been verified to fix these problems.
 - **Potion icons / armor (equipment) icons not showing**: `getBakedModel` / `getSpriteTexture` mappings fail on 1.20.1; currently handled by a graceful skip (no crash, no lag, but no display)
 
 **26.2 is an experimental adaptation and may have the following issues**:

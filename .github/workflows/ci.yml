@@ -78,6 +78,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & python -B -X utf8 tools/tests/run_search_processor_tests.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & python -B -X utf8 tools/tests/run_search_block_tests.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & python -B -X utf8 tools/tests/run_base_hunting_tests.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & python -B -X utf8 tools/tests/run_world_label_tests.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # JDK 17 contains ASM, used only by the offline obfuscation auditor.
       - name: Compile and test the obfuscated-class auditor

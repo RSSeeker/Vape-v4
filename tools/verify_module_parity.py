@@ -31,7 +31,6 @@ APPROVED_SOURCES = {
     "gg/vape/manager/client/GlobalSettingsController.java": "cde64f8889c4e191df4e6f4927e763d787748adca7261131e86c5b44f9dee6b4",
     "gg/vape/manager/client/OnlineConnectionManager.java": "d43f088392707ab5d0677712c8c7703b84e60aff8b69bc8f1973019dc05118b5",
     "gg/vape/module/none/ClientSettings.java": "92dc37e0c17b116fbc754ae51223aa2c7c81cc292d69d8bd5ab801d8bd7fa893",
-    "gg/vape/module/render/SpawnerFinder.java": "68b4b4fe35be4887778bba746b42070f8976672be3051ad8a0e93879bb5f3fd3",
     "gg/vape/runtime/NativeBridge.java": "ca5f8024b13b55a1143090742859dc7605d94962f8eae74fb78c35939c0b23de",
     "gg/vape/ui/click/frame/impl/online/OnlineConnectionRetryPageComponent.java": "c6972148235f2731fe093abfaf8edf685c64bee18f4c4bf335ad9da77815b548",
     "gg/vape/utils/network/AnticheatProfile.java": "1954e7755d9e936b2264b93a22836eeadf7c678f584510ba292e2c72d626bd8d",
@@ -56,9 +55,17 @@ APPROVED_ENHANCEMENTS = {
     "gg/vape/module/combat/automace/AimSelectionRules.java": "8b25748d4dd7a2db2697c6397f86c428f7ee8c1f38aa202996f2674e480b946d",
     "gg/vape/module/combat/automace/AutoMaceAttackGate.java": "6384c92e5d2339f8122c917dc7e563df42614f398c4a10aabfe0ef983af8161c",
     "gg/vape/module/render/Search.java": "05378e2f59303c2bb7407bc7a436b31e3f64fc05dfc800f868cb317508769df5",
+    "gg/vape/module/render/StorageESP.java": "2ca853d26f932c541969262e2dc648d2972de19e5b80a93d719d2b9cea5133e5",
+    "gg/vape/module/render/SpawnerFinder.java": "073f19b1c83e9cd5afe1e1340279cbc6eb098a5d3c190540c9348138084c4dd0",
+    "gg/vape/module/render/storage/StorageClusterFilter.java": "84b1d5f6befb2427b711634f98363d244e737b66e9a07dfbb7277d72ced5408b",
+    "gg/vape/module/render/spawnerfinder/SpawnerNameMatcher.java": "0ae96558d2a699b5773eb4708cc5ca79549ecb3dd862e696ea3404c6ec2187c2",
+    "gg/vape/utils/processors/SearchScanCursor.java": "2681d1941baa725b2601cfb49296e72c4d26797fa10c428e87ae99750fa4a13b",
+    "gg/vape/utils/render/RenderUtil.java": "bc01b189ca3b5210148a225635678a4315d1fde246addae826642d7d0b003ce5",
+    "gg/vape/utils/render/WorldOverlayGlState.java": "6cda41432aec210105e9046ff95a004e174936ff93b88823c7a28eac8d8995c4",
+    "gg/vape/ui/unmap/SearchBlock.java": "93c5689ea772c35a587217e4f98fe4fb6803093bd66f2c8d4201a2a68df234f9",
     "gg/vape/module/render/search/SearchBlockChunkScanner.java": "30bc10d3baa17c3dc17ffee4d958f933871b35a9fa29b716b641d54e62eee505",
-    "gg/vape/utils/processors/SearchProcessor.java": "a8b6ede1a4765967da3c216f7e3cfc3166e7c197cab82ec549f29671fea7a180",
-    "gg/vape/utils/processors/SearchResultIndex.java": "b9ebe577f062c0648aa638aed2e4a72bc3c9ed3747b2f341715b6d9a76d16045",
+    "gg/vape/utils/processors/SearchProcessor.java": "db0c75e73246352334bda17363106d025b30bc596254bb488960ee15fd39b0f8",
+    "gg/vape/utils/processors/SearchResultIndex.java": "36034fa4b16747487a6e39773bef017cb483d165ed824149c7fc511e6d1df0c2",
     "gg/vape/rotation/AdaptiveRotationController.java": "c214a0358b332a0d27c7c41278d975af06e2b7d13b2c5ea48103f9a5f3bcc653",
     "gg/vape/rotation/MouseRotationController.java": "7b90c8a8a3b279ceb06a9b12989fbf0c6e6256ae8074c041e5939f962d887923",
     "gg/vape/rotation/RotationManager.java": "8d8f48842d2c93945b313a8136f504a0c8634c75aa4271d01bc0098e992eeff9",
@@ -69,6 +76,10 @@ JAVA_ADDITIONS = {
     "gg/vape/module/combat/automace/AimSelectionRules.java",
     "gg/vape/module/combat/automace/AutoMaceAttackGate.java",
     "gg/vape/utils/processors/SearchResultIndex.java",
+    "gg/vape/utils/processors/SearchScanCursor.java",
+    "gg/vape/utils/render/WorldOverlayGlState.java",
+    "gg/vape/module/render/storage/StorageClusterFilter.java",
+    "gg/vape/module/render/spawnerfinder/SpawnerNameMatcher.java",
 }
 JAVA_ADDED_CLASSES = {
     "gg/vape/rotation/RotationMath.class",
@@ -81,6 +92,17 @@ JAVA_ADDED_CLASSES = {
     "gg/vape/utils/processors/SearchResultIndex$1.class",
     "gg/vape/utils/processors/SearchResultIndex$Entry.class",
     "gg/vape/utils/processors/SearchResultIndex$Position.class",
+    "gg/vape/utils/processors/SearchScanCursor.class",
+    "gg/vape/utils/render/WorldOverlayGlState.class",
+    "gg/vape/module/render/StorageESP$1.class",
+    "gg/vape/module/render/StorageESP$Target.class",
+    "gg/vape/module/render/SpawnerFinder$1.class",
+    "gg/vape/module/render/SpawnerFinder$Target.class",
+    "gg/vape/module/render/storage/StorageClusterFilter.class",
+    "gg/vape/module/render/storage/StorageClusterFilter$1.class",
+    "gg/vape/module/render/storage/StorageClusterFilter$Cell.class",
+    "gg/vape/module/render/storage/StorageClusterFilter$Position.class",
+    "gg/vape/module/render/spawnerfinder/SpawnerNameMatcher.class",
 }
 ENHANCED_MODULE_SOURCES = {
     name for name in APPROVED_ENHANCEMENTS
@@ -88,7 +110,6 @@ ENHANCED_MODULE_SOURCES = {
 }
 MODULE_EXCEPTIONS = {
     "gg/vape/module/none/ClientSettings.java",
-    "gg/vape/module/render/SpawnerFinder.java",
 }
 
 # All other native files, including the reflective-loader implementation and
@@ -137,8 +158,8 @@ NATIVE_ADDITIONS = {
     "native/tests/locked_resource_file_test.cpp",
 }
 APPROVED_RESOURCES = {
-    "src/main/resources/resources/chinese.properties.txt": "deffbc7f8dd1f4b39f254865d2c9302e0403e8d0360b9e4459dd67beebcdba20",
-    "src/main/resources/resources/english.properties.txt": "b0a9d3e50d1d48722a7fb1f87103dab8e36272175080b0f5de59e20ee3d78ff4",
+    "src/main/resources/resources/chinese.properties.txt": "01db4348d13be975432b4af17acd9ed61259fd0002c6a10118c55c7a8ab1a5b5",
+    "src/main/resources/resources/english.properties.txt": "68ea8f5fcd6429e4a829c73a0ad19f81fda1ce43041c0eb12229c6846c72ed7c",
 }
 TEXT_SUFFIXES = {
     ".c", ".cpp", ".h", ".cmake", ".in", ".rc", ".manifest", ".txt",
@@ -174,11 +195,6 @@ def module_original_form(name, data):
             '(String)"Language", (ModeSelection)FontSelector.c, (ModeSelection[])new ModeSelection[]{FontSelector.j, FontSelector.c}',
             "GUI Language default",
         )
-    elif name.endswith("/render/SpawnerFinder.java"):
-        text = replace_once(text, "import gg.vape.notification.NotificationText;\n", "", "spawner import")
-        text = replace_once(text, '        String spawnerLabel = NotificationText.localize("Spawner");\n', "", "spawner label")
-        require(text.count('+ " " + spawnerLabel;') == 2, "Expected two translated spawner labels")
-        text = text.replace('+ " " + spawnerLabel;', '+ " 刷怪笼";')
     return text.encode("utf-8")
 
 

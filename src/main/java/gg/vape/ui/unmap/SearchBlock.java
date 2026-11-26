@@ -6,6 +6,7 @@ import gg.vape.utils.Base64Util;
 import gg.vape.utils.BlockUtil;
 import gg.vape.utils.MutableColor;
 import java.awt.Color;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import org.jetbrains.annotations.Nullable;
@@ -77,15 +78,30 @@ public class SearchBlock {
             this.R = predicate;
             return;
         }
-        if (string.contains(":")) {
-            String[] stringArray = string.split(":");
-            if (stringArray.length == 2) {
-                this.b(stringArray[0]);
-                this.o(stringArray[1]);
-            }
-        } else {
-            this.b(string);
+        // A resource namespace is not block metadata. Keep supporting the
+        // legacy name:id syntax, but only treat a numeric final component as
+        // metadata. Block.t expects unqualified vanilla names on modern versions.
+        string = string.trim();
+        if (string.regionMatches(true, 0, "minecraft:", 0, "minecraft:".length())) {
+            string = string.substring("minecraft:".length()).toLowerCase(Locale.ROOT);
         }
+        int separator = string.lastIndexOf(':');
+        if (separator > 0 && separator < string.length() - 1) {
+            String suffix = string.substring(separator + 1);
+            boolean metadata;
+            try {
+                Integer.parseInt(suffix);
+                metadata = true;
+            } catch (NumberFormatException ignored) {
+                metadata = false;
+            }
+            if (metadata) {
+                this.b(string.substring(0, separator));
+                this.o(suffix);
+                return;
+            }
+        }
+        this.b(string);
     }
 
     public void c(int n) {

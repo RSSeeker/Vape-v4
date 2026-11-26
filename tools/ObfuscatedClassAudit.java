@@ -42,6 +42,7 @@ public final class ObfuscatedClassAudit {
     // Localization edits and separately reviewed module behavior changes.
     private static final Set<String> EXPECTED_ENGLISH_MODULE_CHANGES = new HashSet<>(Arrays.asList(
             "gg/vape/module/none/ClientSettings", "gg/vape/module/render/SpawnerFinder",
+            "gg/vape/module/render/StorageESP",
             "gg/vape/module/combat/SilentAura", "gg/vape/module/combat/AimAssist",
             "gg/vape/module/combat/AutoMace", "gg/vape/module/combat/HitSwap",
             "gg/vape/module/combat/Triggerbot", "gg/vape/module/render/Search",

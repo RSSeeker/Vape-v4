@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiPredicate;
 
 /** Shared by the near and full-range scanners; published entries are never recycled. */
 public final class SearchResultIndex {
@@ -72,6 +73,13 @@ public final class SearchResultIndex {
 
     public synchronized void prune(long generation, Object world, int x, int y, int z,
                                    int radius, List<SearchBlock> targets) {
+        this.prune(generation, world, x, y, z, radius, targets, null);
+    }
+
+    /** Remove results in unloaded chunks without trying to load those chunks. */
+    public synchronized void prune(long generation, Object world, int x, int y, int z,
+                                   int radius, List<SearchBlock> targets,
+                                   BiPredicate<Integer, Integer> chunkLoaded) {
         if (generation != this.generation || world != this.world) return;
         List<SearchResultData> removed = new ArrayList<SearchResultData>();
         Iterator<Map.Entry<Position, Entry>> iterator = this.entries.entrySet().iterator();
@@ -81,7 +89,8 @@ public final class SearchResultIndex {
             Entry entry = item.getValue();
             if (Math.abs((long)position.x - x) > radius || Math.abs((long)position.y - y) > radius
                     || Math.abs((long)position.z - z) > radius || !entry.block.T()
-                    || !targets.contains(entry.block)) {
+                    || !targets.contains(entry.block)
+                    || chunkLoaded != null && !chunkLoaded.test(position.x >> 4, position.z >> 4)) {
                 removed.add(entry.result);
                 iterator.remove();
             }

@@ -89,9 +89,10 @@ class JarComparisonTests(unittest.TestCase):
         self.english[self.added] = b"reviewed helper"
         self.english["resources/english.properties.txt"] = b"new language"
         enhancements = {"gg/vape/module/combat/Enhanced.java": "hash",
+                        "gg/vape/module/render/SpawnerFinder.java": "hash",
                         "gg/vape/rotation/Helper.java": "hash"}
         patches = [mock.patch.object(parity, "APPROVED_ENHANCEMENTS", enhancements),
-                   mock.patch.object(parity, "ENHANCED_MODULE_SOURCES", {"gg/vape/module/combat/Enhanced.java"}),
+                   mock.patch.object(parity, "ENHANCED_MODULE_SOURCES", {"gg/vape/module/combat/Enhanced.java", "gg/vape/module/render/SpawnerFinder.java"}),
                    mock.patch.object(parity, "JAVA_ADDED_CLASSES", {self.added})]
         for patch in patches:
             patch.start()
@@ -252,18 +253,18 @@ class SourceComparisonTests(unittest.TestCase):
         original = dict(data)
         del original[added]
         original[gui] = parity.module_original_form(gui, edited_gui)
-        original[spawner] = parity.module_original_form(spawner, edited_spawner)
+        original[spawner] = b"old spawner behavior\n"
         original[enhanced] = b"old rotation\n"
         original[support] = b"old diagnostic\n"
         for name, contents in data.items():
             self.put(self.current / "src/main/java", name, contents.replace(b"\n", b"\r\n"))
             if name in original:
                 self.put(self.baseline / "src/main/java", name, original[name])
-        approved = {name: parity.sha256(data[name]) for name in (gui, spawner, support)}
-        enhancements = {name: parity.sha256(data[name]) for name in (enhanced, added)}
+        approved = {name: parity.sha256(data[name]) for name in (gui, support)}
+        enhancements = {name: parity.sha256(data[name]) for name in (spawner, enhanced, added)}
         with mock.patch.object(parity, "APPROVED_SOURCES", approved), \
                 mock.patch.object(parity, "APPROVED_ENHANCEMENTS", enhancements), \
-                mock.patch.object(parity, "ENHANCED_MODULE_SOURCES", {enhanced}), \
+                mock.patch.object(parity, "ENHANCED_MODULE_SOURCES", {spawner, enhanced}), \
                 mock.patch.object(parity, "JAVA_ADDITIONS", {added}):
             self.assertEqual(parity.audit_sources(self.baseline, self.current), (5, 5, 5))
             self.put(self.current / "src/main/java", other, b"changed behavior\n")

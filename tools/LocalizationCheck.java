@@ -30,6 +30,22 @@ public final class LocalizationCheck {
         checkPair(english, chinese, "cache_data.tooltip",
                 "Caches data locally to improve load time (.vapeclient)");
         checkPair(english, chinese, "spawner", "Spawner");
+        checkPair(english, chinese, "storageesp.render_barrel", "Render Barrel");
+        checkPair(english, chinese, "storageesp.barrel_color", "Barrel Color");
+        checkPair(english, chinese, "storageesp.range", "Range");
+        checkPair(english, chinese, "storageesp.cluster_minimum", "Cluster minimum");
+        checkPair(english, chinese, "storageesp.cluster_radius", "Cluster radius");
+        checkPair(english, chinese, "storageesp.show_coordinates", "Show coordinates");
+        checkPair(english, chinese, "storageesp.show_coordinates.tooltip", "Show the block coordinates of visible storage");
+        checkPair(english, chinese, "storageesp.range.tooltip", "Maximum distance to loaded storage");
+        checkPair(english, chinese, "storageesp.cluster_minimum.tooltip", "Minimum enabled storage blocks nearby, including this one");
+        checkPair(english, chinese, "storageesp.cluster_radius.tooltip", "Three-dimensional distance used for the cluster minimum");
+        checkPair(english, chinese, "spawnerfinder.range", "Range");
+        checkPair(english, chinese, "spawnerfinder.range.tooltip", "Maximum distance to loaded spawners");
+        checkPair(english, chinese, "spawnerfinder.show_coordinates", "Show coordinates");
+        checkPair(english, chinese, "spawnerfinder.show_coordinates.tooltip", "Show the spawner's block coordinates");
+        checkPair(english, chinese, "spawnerfinder.show_unknown", "Show unknown");
+        checkPair(english, chinese, "spawnerfinder.show_unknown.tooltip", "Show spawners without a known mob name even when a whitelist is set");
         checkPair(english, chinese, "reconnecting", "Reconnecting...");
         checkPair(english, chinese, "reconnecting_in_seconds", "Reconnecting in %d seconds...");
         for (Properties language : new Properties[]{english, chinese}) {
