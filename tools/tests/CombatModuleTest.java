@@ -1,6 +1,7 @@
 import gg.vape.Vape;
 import gg.vape.config.ClientSettings;
 import gg.vape.event.impl.EventKeyPress;
+import gg.vape.event.impl.EventMouseButton;
 import gg.vape.event.impl.EventPreTick;
 import gg.vape.input.AttackKeyController;
 import gg.vape.input.InputEventDispatcher;
@@ -40,6 +41,8 @@ public final class CombatModuleTest {
         RotationManager.INSTANCE.hit = new RayTraceResult(RayTraceResult_type.block(), null);
     }
     private static void reset() {
+        Minecraft.player = new EntityPlayerSP();
+        Minecraft.world = new WorldClient();
         Minecraft.player.present = true;
         Minecraft.player.hurt = 0;
         Minecraft.player.inventory = new InventoryPlayer();
@@ -142,6 +145,22 @@ public final class CombatModuleTest {
         return event;
     }
     private static void testHitSwapTargetsAndRestoration() throws Exception {
+        reset();
+        HitSwap canceledSwap = configuredSwap();
+        hit(player(99, false));
+        EventKeyPress canceledKey = new EventKeyPress();
+        canceledKey.setCancelled(true);
+        canceledSwap.onKeyPress(canceledKey);
+        check(Minecraft.player.inventory.v() == 0, "already-canceled physical input does not start a swap");
+        EventMouseButton canceledMouse = new EventMouseButton();
+        canceledMouse.setCancelled(true);
+        canceledSwap.onMouseButton(canceledMouse);
+        check(Minecraft.player.inventory.v() == 0, "already-canceled mouse input does not start a swap");
+        gg.vape.event.impl.SyntheticAttackRequestEvent canceledSynthetic =
+                new gg.vape.event.impl.SyntheticAttackRequestEvent();
+        canceledSynthetic.setCancelled(true);
+        canceledSwap.onSyntheticAttack(canceledSynthetic);
+        check(Minecraft.player.inventory.v() == 0, "already-canceled synthetic input does not start a swap");
         reset();
         EntityOtherPlayerMP first = player(1, false);
         EntityOtherPlayerMP second = player(2, false);
@@ -307,6 +326,57 @@ public final class CombatModuleTest {
                 "deferred event cancellation cannot advance stun into slam");
     }
 
+    private static void testHitSwapWorldAndInventoryChanges() {
+        reset();
+        EntityOtherPlayerMP target = player(16, false);
+        HitSwap swap = configuredSwap();
+        hit(target);
+        AttackKeyController.defer = true;
+        begin(swap);
+        swap.onTick(new EventPreTick());
+        Minecraft.player.inventory.slots[2] = new ItemStack(new Sword());
+        AttackKeyController.runDeferred();
+        swap.onTick(new EventPreTick());
+        check(AttackKeyController.presses == 0 && Minecraft.player.inventory.v() == 0,
+                "replacing the item in a swapped slot rejects the queued hit");
+
+        reset();
+        swap = configuredSwap();
+        hit(target);
+        AttackKeyController.defer = true;
+        begin(swap);
+        swap.onTick(new EventPreTick());
+        Minecraft.world = new WorldClient();
+        AttackKeyController.runDeferred();
+        swap.onTick(new EventPreTick());
+        check(AttackKeyController.presses == 0 && Minecraft.player.inventory.v() == 0,
+                "world replacement invalidates the pending swap even when player and target remain");
+
+        reset();
+        swap = configuredSwap();
+        hit(target);
+        AttackKeyController.defer = true;
+        begin(swap);
+        swap.onTick(new EventPreTick());
+        EntityPlayerSP replacement = new EntityPlayerSP();
+        replacement.inventory.g(2);
+        Minecraft.player = replacement;
+        AttackKeyController.runDeferred();
+        swap.onTick(new EventPreTick());
+        check(AttackKeyController.presses == 0 && replacement.inventory.v() == 2,
+                "a new player never receives the previous player's restored slot");
+
+        reset();
+        swap = configuredSwap();
+        hit(target);
+        begin(swap);
+        replacement = new EntityPlayerSP();
+        replacement.inventory.g(2);
+        Minecraft.player = replacement;
+        swap.onDisable();
+        check(replacement.inventory.v() == 2, "disable cannot restore a slot on a replacement player");
+    }
+
     private static void testDeferredTriggerbot() {
         reset();
         EntityOtherPlayerMP first = player(20, false);
@@ -359,6 +429,7 @@ public final class CombatModuleTest {
 
     public static void main(String[] args) throws Exception {
         testDeferredHitSwap();
+        testHitSwapWorldAndInventoryChanges();
         testDeferredTriggerbot();
         testTriggerTracking();
         testTriggerActivation();

@@ -46,14 +46,15 @@ APPROVED_ENHANCEMENTS = {
     "gg/vape/input/AttackKeyController.java": "38d5baeefc4cb441fde2c9823628f53ae031a3f46b01a179db1caf1fb2f31d8c",
     "gg/vape/module/combat/SilentAura.java": "c07194c7e0c2b3bd94d80849e64f9998e97ce988a823719a628a14b6a57fe8fa",
     "gg/vape/module/combat/AimAssist.java": "2a81e9bdfecf9a363cf4414ea138b658e203e234fd216c9ec016cd5a0d22ee35",
-    "gg/vape/module/combat/AutoMace.java": "75393638865c4618f7fb5d31b09b8ec600950bc62ec2b3845d0e11fbb5b9b0c7",
-    "gg/vape/module/combat/HitSwap.java": "1c548a931acdb9c64de21cb0c7a10a2bd99b333aa7655e087b05aeec6a492a88",
+    "gg/vape/module/combat/AutoMace.java": "f8b0956f993952eb7fd93ae6a52a9e52905c8a370e76d19ec7ccb3d75c45319f",
+    "gg/vape/module/combat/HitSwap.java": "c760686e00f000379f849964ad5fa718d776bfd55f4732c787692a4a32c5e922",
     "gg/vape/module/combat/Triggerbot.java": "6be6b8b2590fdf29a2a3a8eb08fd2d5fbc8f819abee3e0c1601ab244e87240c7",
     "gg/vape/module/combat/aimassist/AimAssistKissSubModule.java": "31ff65af290fb0af673f23383a362eb9e71321dfd30be131456560565062247c",
     "gg/vape/module/combat/aimassist/AimAssistRotationSubModule.java": "a9b4a0bb9392facc5029d165d9f8936981012609079aa52f4c57570c7e6f1686",
     "gg/vape/module/combat/aimassist/AimAssistTargetingSubModule.java": "8bebb812eece35f0fe667ff4b8f6f3de429c4751c6fb4179684c08cedc4a8a0c",
     "gg/vape/module/combat/automace/AutoMaceRotationController.java": "875eb671fd24c13467ac5a12f9d15eb5e53e9bf4a4d95eae1c021b5488fed1fc",
     "gg/vape/module/combat/automace/AimSelectionRules.java": "8b25748d4dd7a2db2697c6397f86c428f7ee8c1f38aa202996f2674e480b946d",
+    "gg/vape/module/combat/automace/AutoMaceAttackGate.java": "6384c92e5d2339f8122c917dc7e563df42614f398c4a10aabfe0ef983af8161c",
     "gg/vape/module/render/Search.java": "05378e2f59303c2bb7407bc7a436b31e3f64fc05dfc800f868cb317508769df5",
     "gg/vape/module/render/search/SearchBlockChunkScanner.java": "30bc10d3baa17c3dc17ffee4d958f933871b35a9fa29b716b641d54e62eee505",
     "gg/vape/utils/processors/SearchProcessor.java": "a8b6ede1a4765967da3c216f7e3cfc3166e7c197cab82ec549f29671fea7a180",
@@ -66,6 +67,7 @@ APPROVED_ENHANCEMENTS = {
 JAVA_ADDITIONS = {
     "gg/vape/rotation/RotationMath.java",
     "gg/vape/module/combat/automace/AimSelectionRules.java",
+    "gg/vape/module/combat/automace/AutoMaceAttackGate.java",
     "gg/vape/utils/processors/SearchResultIndex.java",
 }
 JAVA_ADDED_CLASSES = {
@@ -74,6 +76,7 @@ JAVA_ADDED_CLASSES = {
     "gg/vape/rotation/RotationMath$TargetPredictor.class",
     "gg/vape/module/combat/AutoMace$AimSelection.class",
     "gg/vape/module/combat/automace/AimSelectionRules.class",
+    "gg/vape/module/combat/automace/AutoMaceAttackGate.class",
     "gg/vape/utils/processors/SearchResultIndex.class",
     "gg/vape/utils/processors/SearchResultIndex$1.class",
     "gg/vape/utils/processors/SearchResultIndex$Entry.class",

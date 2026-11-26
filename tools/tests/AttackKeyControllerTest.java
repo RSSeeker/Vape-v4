@@ -3,6 +3,7 @@ import gg.vape.event.impl.SyntheticAttackRequestEvent;
 import gg.vape.input.AttackKeyController;
 import gg.vape.input.KeyBindingHelper;
 import gg.vape.module.Mod;
+import gg.vape.utils.ThreadBoundExecutor;
 import gg.vape.wrapper.impl.ForgeVersion;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -16,14 +17,14 @@ public final class AttackKeyControllerTest {
     }
     private static void reset(boolean modern) {
         ForgeVersion.MC_26_2.modern = modern;
-        EventTickBase.PRE_TICK_EXECUTOR.reset();
+        EventTickBase.PRE_TICK_EXECUTOR = new ThreadBoundExecutor();
         SyntheticAttackRequestEvent.cancel = false;
         SyntheticAttackRequestEvent.onFire = null;
         SyntheticAttackRequestEvent.fired = 0;
         KeyBindingHelper.presses = 0;
         KeyBindingHelper.releases = 0;
     }
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         Mod source = new Mod();
         AtomicInteger completion = new AtomicInteger();
         reset(false);
@@ -69,6 +70,21 @@ public final class AttackKeyControllerTest {
         check(completion.get() == 1 && KeyBindingHelper.presses == 1, "valid queued request reports completion");
         AttackKeyController.releaseAttackKey();
         check(KeyBindingHelper.releases == 1, "tick owner releases immediately");
+        reset(true);
+        EventTickBase.PRE_TICK_EXECUTOR.runPending();
+        completion.set(0);
+        Thread worker = new Thread(() -> {
+            AttackKeyController.releaseAttackKey();
+            AttackKeyController.requestValidatedSyntheticAttack(source, () -> true,
+                    pressed -> completion.set(pressed ? 1 : -1));
+        });
+        worker.start();
+        worker.join();
+        check(KeyBindingHelper.releases == 0 && KeyBindingHelper.presses == 0 && completion.get() == 0,
+                "off-owner release and press remain queued on the real executor");
+        EventTickBase.PRE_TICK_EXECUTOR.runPending();
+        check(KeyBindingHelper.releases == 1 && KeyBindingHelper.presses == 1 && completion.get() == 1,
+                "the owner drains the queued release and validated press");
         reset(true);
         check(AttackKeyController.requestSyntheticAttack(source) && KeyBindingHelper.presses == 0,
                 "legacy boolean only acknowledges scheduling");

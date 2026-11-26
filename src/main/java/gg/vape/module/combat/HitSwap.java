@@ -31,6 +31,7 @@ import gg.vape.wrapper.impl.ItemStack;
 import gg.vape.wrapper.impl.Minecraft;
 import gg.vape.wrapper.impl.RayTraceResult;
 import gg.vape.wrapper.impl.RayTraceResult_type;
+import gg.vape.wrapper.impl.WorldClient;
 import java.util.Arrays;
 
 public class HitSwap
@@ -57,6 +58,8 @@ extends Mod {
     public final BooleanValue densityMaces;
     private int originalSlot = -1;
     private volatile int swappedSlot = -1;
+    private volatile Object swapPlayerObject;
+    private volatile Object swapWorldObject;
     private volatile Object swapTargetObject;
     private static final long MODULE_ID = -7666507152973844357L;
     public final BooleanValue maces = BooleanValue.create(this, "Maces", true);
@@ -78,7 +81,7 @@ extends Mod {
 
     @EventHandler(priority=EventPriority.HIGH)
     public void onKeyPress(EventKeyPress event) {
-        if (!event.isKeybinding(Minecraft.gameSettings().F()) || !event.isDown()) {
+        if (event.isCanceled() || !event.isKeybinding(Minecraft.gameSettings().F()) || !event.isDown()) {
             return;
         }
         this.handleAttack(new PhysicalAttackCancellationAdapter(event));
@@ -137,10 +140,12 @@ extends Mod {
     private void finishSwap(EntityPlayerSP player) {
         int restoreSlot;
         int expectedSlot;
+        Object restorePlayer;
         boolean release;
         synchronized (this.swapRequestLock) {
             restoreSlot = this.swapActive ? this.originalSlot : -1;
             expectedSlot = this.swappedSlot;
+            restorePlayer = this.swapPlayerObject;
             ++this.swapRequestEpoch;
             release = this.swingReleasePending;
             this.swingReleasePending = false;
@@ -151,6 +156,8 @@ extends Mod {
             this.swapActive = false;
             this.originalSlot = -1;
             this.swappedSlot = -1;
+            this.swapPlayerObject = null;
+            this.swapWorldObject = null;
             this.swapTargetObject = null;
             this.tickCounter = 0;
             this.swapAttackPending = false;
@@ -158,7 +165,7 @@ extends Mod {
             this.stunSlamActive = false;
             this.stunSlamSecondPhase = false;
         }
-        if (player != null && player.isNotNull() && restoreSlot >= 0) {
+        if (player != null && player.isNotNull() && player.getObject() == restorePlayer && restoreSlot >= 0) {
             InventoryPlayer inventory = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6();
             // Do not undo a manual slot change made while the swap was pending.
             if (inventory.v() == expectedSlot && restoreSlot != expectedSlot) inventory.g(restoreSlot);
@@ -179,17 +186,31 @@ extends Mod {
         final long epoch;
         final int slot;
         final Object target;
-        final Object playerObject = Minecraft.thePlayer().getObject();
+        final Object playerObject;
+        final Object worldObject;
         synchronized (this.swapRequestLock) {
             if (!this.swapActive) return;
             epoch = this.swapRequestEpoch;
             slot = this.swappedSlot;
             target = this.swapTargetObject;
+            playerObject = this.swapPlayerObject;
+            worldObject = this.swapWorldObject;
             this.swapAttackInFlight = true;
             this.swapAttackOutcome = 0;
             this.queuedAttackTicks = 0;
             this.pendingStunTransition = firstStunPhase;
         }
+        EntityPlayerSP queuedPlayer = Minecraft.thePlayer();
+        if (queuedPlayer.isNull() || queuedPlayer.getObject() != playerObject || slot < 0 || slot >= 9) {
+            this.finishSwap(queuedPlayer);
+            return;
+        }
+        ItemStack stack = queuedPlayer.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().c(slot);
+        if (stack == null || stack.isNull()) {
+            this.finishSwap(queuedPlayer);
+            return;
+        }
+        final Object stackObject = stack.getObject();
         AttackKeyController.releaseAttackKey();
         AttackKeyController.requestValidatedSyntheticAttack(this, () -> {
             synchronized (this.swapRequestLock) {
@@ -197,10 +218,14 @@ extends Mod {
                         || slot != this.swappedSlot || target != this.swapTargetObject) return false;
             }
             EntityPlayerSP player = Minecraft.thePlayer();
-            return this.isEnabled() && player != null && player.isNotNull()
-                    && player.getObject() == playerObject && Minecraft.currentScreen().isNull()
-                    && InputEventDispatcher.getInstance().getFocusState().isFocused()
-                    && player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().v() == slot
+            WorldClient world = Minecraft.theWorld();
+            if (!this.isEnabled() || player == null || player.isNull() || player.getObject() != playerObject
+                    || world.isNull() || world.getObject() != worldObject || Minecraft.currentScreen().isNotNull()
+                    || !InputEventDispatcher.getInstance().getFocusState().isFocused()) return false;
+            InventoryPlayer inventory = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6();
+            if (inventory.v() != slot) return false;
+            ItemStack currentStack = inventory.c(slot);
+            return currentStack != null && currentStack.isNotNull() && currentStack.getObject() == stackObject
                     && this.isOriginalTargetUnderCrosshair();
         }, pressed -> {
             boolean releaseLate = false;
@@ -240,7 +265,8 @@ extends Mod {
     }
 
     private boolean canHandleAttack() {
-        if (Minecraft.thePlayer().isNull() || Minecraft.currentScreen().isNotNull()
+        if (Minecraft.thePlayer().isNull() || Minecraft.theWorld().isNull()
+                || Minecraft.currentScreen().isNotNull()
                 || !InputEventDispatcher.getInstance().getFocusState().isFocused()) {
             return false;
         }
@@ -250,6 +276,7 @@ extends Mod {
 
     @EventHandler(priority=EventPriority.HIGH)
     public void onSyntheticAttack(SyntheticAttackRequestEvent event) {
+        if (event.isCanceled()) return;
         Mod source = event.getSource();
         if (source == this || source instanceof ShieldBreaker
                 || source instanceof AutoMace && ((AutoMace)source).isSyntheticAttackInProgress()) {
@@ -260,7 +287,7 @@ extends Mod {
 
     @EventHandler(priority=EventPriority.HIGH)
     public void onMouseButton(EventMouseButton event) {
-        if (!event.isKeybinding(Minecraft.gameSettings().F()) || !event.isDown()) {
+        if (event.isCanceled() || !event.isKeybinding(Minecraft.gameSettings().F()) || !event.isDown()) {
             return;
         }
         this.handleAttack(new PhysicalAttackCancellationAdapter(event));
@@ -301,7 +328,8 @@ extends Mod {
     @EventHandler(priority=EventPriority.HIGH)
     public void onTick(EventPreTick eventPreTick) {
         EntityPlayerSP player = eventPreTick.getThePlayer();
-        if (player.isNull()) {
+        WorldClient world = Minecraft.theWorld();
+        if (player.isNull() || world.isNull()) {
             this.finishSwap(player);
             return;
         }
@@ -310,6 +338,7 @@ extends Mod {
             InventoryPlayer inventory = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6();
             if (Minecraft.currentScreen().isNotNull()
                     || !InputEventDispatcher.getInstance().getFocusState().isFocused()
+                    || player.getObject() != this.swapPlayerObject || world.getObject() != this.swapWorldObject
                     || inventory.v() != this.swappedSlot
                     || ((this.breachSwapPending || this.swapAttackPending || this.stunSlamSecondPhase
                          || this.swapAttackInFlight) && !this.isOriginalTargetUnderCrosshair())) {
@@ -372,7 +401,8 @@ extends Mod {
             return;
         }
         EntityPlayerSP player = Minecraft.thePlayer();
-        if (player.isNull()) {
+        WorldClient world = Minecraft.theWorld();
+        if (player.isNull() || world.isNull()) {
             return;
         }
         if (player.l$src$Z$1io4duf()) {
@@ -397,6 +427,8 @@ extends Mod {
             if (heldItem.getItem().isInstance(MappedClasses.YP)) {
                 this.originalSlot = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().v();
                 this.swappedSlot = this.originalSlot;
+                this.swapPlayerObject = player.getObject();
+                this.swapWorldObject = world.getObject();
                 this.swapTargetObject = target.getObject();
                 this.breachSwapPending = true;
                 this.swapActive = true;
@@ -408,6 +440,8 @@ extends Mod {
                 cancellation.setCancelled(true);
                 this.originalSlot = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().v();
                 this.swappedSlot = axeSlot;
+                this.swapPlayerObject = player.getObject();
+                this.swapWorldObject = world.getObject();
                 this.swapTargetObject = target.getObject();
                 player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().g(axeSlot);
                 this.stunSlamActive = true;
@@ -422,6 +456,8 @@ extends Mod {
             cancellation.setCancelled(true);
             this.originalSlot = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().v();
             this.swappedSlot = weaponSlot;
+            this.swapPlayerObject = player.getObject();
+            this.swapWorldObject = world.getObject();
             this.swapTargetObject = target.getObject();
             player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().g(weaponSlot);
             this.swapActive = true;

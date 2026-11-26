@@ -74,6 +74,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & python -B -X utf8 tools/tests/run_combat_module_tests.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & python -B -X utf8 tools/tests/run_automace_module_tests.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & python -B -X utf8 tools/tests/run_search_processor_tests.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

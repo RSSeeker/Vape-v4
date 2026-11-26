@@ -9,6 +9,7 @@ import gg.vape.event.impl.EventPostAttack;
 import gg.vape.event.impl.EventPreTick;
 import gg.vape.event.impl.SyntheticAttackRequestEvent;
 import gg.vape.input.AttackKeyController;
+import gg.vape.input.InputEventDispatcher;
 import gg.vape.mapping.MappedClasses;
 import gg.vape.module.Category;
 import gg.vape.module.Mod;
@@ -16,6 +17,7 @@ import gg.vape.module.blatant.blockin.BlockPathPlanner;
 import gg.vape.module.blatant.blockin.BlockPlacementGraph;
 import gg.vape.module.combat.automace.AutoMaceRotationController;
 import gg.vape.module.combat.automace.AimSelectionRules;
+import gg.vape.module.combat.automace.AutoMaceAttackGate;
 import gg.vape.module.control.AttackCancellationAdapter;
 import gg.vape.module.control.PhysicalAttackCancellationAdapter;
 import gg.vape.module.control.SharedModuleControlClaims;
@@ -108,13 +110,18 @@ public class AutoMace extends Mod {
     private BlockPlacementGraph movementSnapshot;
     private Item cachedElytra;
 
-    private boolean releasePending;
-    private boolean dispatchingSyntheticAttack;
-    private boolean weaponSwapActive;
-    private boolean stunSlamFollowupPending;
+    private final AutoMaceAttackGate attackGate = new AutoMaceAttackGate();
+    private int queuedAttackTicks;
+    private volatile boolean weaponSwapActive;
+    private volatile boolean stunSlamFollowupPending;
+    private volatile boolean stunSlamAxeObserved;
+    private boolean stunSlamAutomatic;
     private int originalSlot = -1;
+    private int weaponSlot = -1;
+    private Object weaponPlayerObject;
+    private Object weaponWorldObject;
     private int maceSlot = -1;
-    private int targetId = -1;
+    private Object stunSlamTargetObject;
     private int originalAttackTick = -1;
     private int weaponSwapTicks;
 
@@ -182,7 +189,7 @@ public class AutoMace extends Mod {
         if (event.isKeybinding(Minecraft.gameSettings().F()) && event.isDown()) {
             this.inputTimer.reset();
             if (!event.isCanceled()) {
-                this.handleAttack(new PhysicalAttackCancellationAdapter(event));
+                this.handleAttack(new PhysicalAttackCancellationAdapter(event), false);
             }
         }
     }
@@ -192,7 +199,7 @@ public class AutoMace extends Mod {
         if (event.isKeybinding(Minecraft.gameSettings().F()) && event.isDown()) {
             this.inputTimer.reset();
             if (!event.isCanceled()) {
-                this.handleAttack(new PhysicalAttackCancellationAdapter(event));
+                this.handleAttack(new PhysicalAttackCancellationAdapter(event), false);
             }
         }
     }
@@ -205,52 +212,86 @@ public class AutoMace extends Mod {
         }
         this.inputTimer.reset();
         if (!event.isCanceled()) {
-            this.handleAttack(new SyntheticAttackCancellationAdapter(event));
+            this.handleAttack(new SyntheticAttackCancellationAdapter(event), false);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onPostAttack(EventPostAttack event) {
-        if (!this.weaponSwapActive || !this.stunSlamFollowupPending || event.getTarget().isNull()
-                || event.getTarget().S() != this.targetId) {
+        if (!this.weaponSwapActive || !this.stunSlamFollowupPending || this.stunSlamAxeObserved
+                || event.getTarget().isNull() || event.getTarget().getObject() != this.stunSlamTargetObject) {
             return;
         }
         EntityPlayerSP player = Minecraft.thePlayer();
-        if (!this.isHoldingAxe(player)) {
+        WorldClient world = Minecraft.theWorld();
+        if (player.isNull() || player.getObject() != this.weaponPlayerObject || world.isNull()
+                || world.getObject() != this.weaponWorldObject
+                || player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().v() != this.weaponSlot
+                || !this.isHoldingAxe(player)) {
             this.abortWeaponSwap(player);
             return;
         }
-        this.completeStunSlamFollowup(player);
+        // A local post-attack event confirms the axe action was attempted;
+        // it is not proof of a server-side hit or shield break. Anchor the
+        // follow-up to this event's tick, not the time the request was queued.
+        this.originalAttackTick = player.l();
+        this.stunSlamAxeObserved = true;
     }
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onTick(EventPreTick event) {
         EntityPlayerSP player = event.getThePlayer();
-        if (player.isNull()) {
+        WorldClient world = event.getWorld();
+        boolean releasedAttackThisTick = this.attackGate.takeRelease();
+        if (releasedAttackThisTick) AttackKeyController.releaseAttackKey();
+        int attackOutcome = this.attackGate.takeOutcome();
+        if (player.isNull() || world.isNull() || Minecraft.currentScreen().isNotNull()
+                || !ClientSettings.INSTANCE.isInputEnabled()
+                || !InputEventDispatcher.getInstance().getFocusState().isFocused()) {
+            this.abortWeaponSwap(player);
             this.releaseRotation();
             return;
         }
+        if (attackOutcome < 0) {
+            this.abortWeaponSwap(player);
+            return;
+        }
+        if (this.weaponSwapActive && (player.getObject() != this.weaponPlayerObject
+                || world.getObject() != this.weaponWorldObject
+                || player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().v() != this.weaponSlot
+                || this.stunSlamFollowupPending && (!this.stunSlam.getEffectiveValue().booleanValue()
+                    || !this.isHoldingAxe(player)
+                    || this.stunSlamAutomatic && (!this.attack.getEffectiveValue().booleanValue()
+                        || !this.isFalling(player))))) {
+            this.abortWeaponSwap(player);
+            return;
+        }
+        if (this.attackGate.isPending()) {
+            // A stalled executor must not keep a swapped weapon indefinitely.
+            if (++this.queuedAttackTicks > 4) {
+                this.abortWeaponSwap(player);
+            }
+            return;
+        }
+        this.queuedAttackTicks = 0;
 
         this.movementSnapshot = new BlockPlacementGraph(player);
-        boolean elytraBusy = this.updateElytraState(player, event.getWorld());
+        boolean elytraBusy = this.updateElytraState(player, world);
         if (elytraBusy) {
             this.releaseRotation();
         } else {
-            this.updateAim(player, event.getWorld());
-        }
-
-        boolean releasedAttackThisTick = false;
-        if (this.releasePending) {
-            AttackKeyController.releaseAttackKey();
-            this.releasePending = false;
-            releasedAttackThisTick = true;
+            this.updateAim(player, world);
         }
 
         if (this.weaponSwapActive && this.stunSlamFollowupPending) {
-            if (player.l() <= this.originalAttackTick) {
+            // Never issue the slam merely because a tick passed; wait for
+            // the local axe attack event, then abandon a stalled sequence.
+            if (AutoMaceAttackGate.followupExpired(this.stunSlamAxeObserved, player.l(), this.originalAttackTick)) {
+                this.abortWeaponSwap(player);
                 return;
             }
-            if (!this.isCrosshairTarget(this.targetId)) {
+            if (!AutoMaceAttackGate.followupReady(this.stunSlamAxeObserved, player.l(), this.originalAttackTick)) return;
+            if (!this.isCrosshairTarget(this.stunSlamTargetObject)) {
                 this.abortWeaponSwap(player);
                 return;
             }
@@ -259,11 +300,7 @@ public class AutoMace extends Mod {
         }
 
         if (this.weaponSwapActive && this.weaponSwapTicks++ > 1) {
-            if (this.originalSlot != -1) {
-                player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().g(this.originalSlot);
-                this.originalSlot = -1;
-            }
-            this.clearWeaponSwapState();
+            this.abortWeaponSwap(player);
         }
 
         if (!releasedAttackThisTick && !elytraBusy) {
@@ -271,8 +308,8 @@ public class AutoMace extends Mod {
         }
     }
 
-    private void handleAttack(AttackCancellationAdapter cancellation) {
-        if (this.weaponSwapActive || !this.canOperate()) {
+    private void handleAttack(AttackCancellationAdapter cancellation, boolean automatic) {
+        if (!this.isEnabled() || this.weaponSwapActive || this.attackGate.isBusy() || !this.canOperate()) {
             return;
         }
         EntityPlayerSP player = Minecraft.thePlayer();
@@ -290,7 +327,7 @@ public class AutoMace extends Mod {
                 return;
             }
             if (this.isHoldingAxe(player)) {
-                this.beginStunSlam(player, selectedMaceSlot, target.S());
+                this.beginStunSlam(player, selectedMaceSlot, target.getObject(), automatic);
                 return;
             }
             int axeSlot = this.findAxeSlot(inventory);
@@ -298,12 +335,19 @@ public class AutoMace extends Mod {
                 cancellation.setCancelled(true);
                 this.originalSlot = inventory.v();
                 inventory.g(axeSlot);
+                this.weaponSlot = axeSlot;
+                this.weaponPlayerObject = player.getObject();
+                this.weaponWorldObject = Minecraft.theWorld().getObject();
                 this.maceSlot = selectedMaceSlot;
                 this.originalAttackTick = player.l();
-                this.targetId = target.S();
-                this.weaponSwapActive = true;
+                this.stunSlamTargetObject = target.getObject();
+                this.stunSlamAutomatic = automatic;
+                this.stunSlamAxeObserved = false;
                 this.stunSlamFollowupPending = true;
                 this.weaponSwapTicks = 0;
+                this.weaponSwapActive = true;
+                AttackKeyController.releaseAttackKey();
+                if (!this.requestSyntheticAttack(true, automatic)) this.abortWeaponSwap(player);
                 return;
             }
         }
@@ -314,31 +358,47 @@ public class AutoMace extends Mod {
         }
         this.originalSlot = inventory.v();
         inventory.g(selectedMaceSlot);
-        this.weaponSwapActive = true;
+        this.weaponSlot = selectedMaceSlot;
+        this.weaponPlayerObject = player.getObject();
+        this.weaponWorldObject = Minecraft.theWorld().getObject();
         this.weaponSwapTicks = 0;
+        this.weaponSwapActive = true;
     }
 
-    private void beginStunSlam(EntityPlayerSP player, int selectedMaceSlot, int selectedTargetId) {
+    private void beginStunSlam(EntityPlayerSP player, int selectedMaceSlot, Object target, boolean automatic) {
         InventoryPlayer inventory = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6();
         this.originalSlot = inventory.v();
+        this.weaponSlot = this.originalSlot;
+        this.weaponPlayerObject = player.getObject();
+        this.weaponWorldObject = Minecraft.theWorld().getObject();
         this.maceSlot = selectedMaceSlot;
         this.originalAttackTick = player.l();
-        this.targetId = selectedTargetId;
-        this.weaponSwapActive = true;
+        this.stunSlamTargetObject = target;
+        this.stunSlamAutomatic = automatic;
+        this.stunSlamAxeObserved = false;
         this.stunSlamFollowupPending = true;
         this.weaponSwapTicks = 0;
+        this.weaponSwapActive = true;
     }
 
     private void completeStunSlamFollowup(EntityPlayerSP player) {
-        if (player.isNotNull() && this.isValidMaceSlot(player, this.maceSlot)) {
-            player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().g(this.maceSlot);
-            AttackKeyController.releaseAttackKey();
-            this.releasePending = this.requestSyntheticAttack(true);
+        if (player.isNull() || !this.isValidMaceSlot(player, this.maceSlot)
+                || this.smashOnly.getEffectiveValue().booleanValue() && !RotationUtil.u(player)
+                || !this.isCrosshairTarget(this.stunSlamTargetObject)) {
+            this.abortWeaponSwap(player);
+            return;
+        }
+        player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().g(this.maceSlot);
+        this.weaponSlot = this.maceSlot;
+        AttackKeyController.releaseAttackKey();
+        if (!this.requestSyntheticAttack(true, this.stunSlamAutomatic)) {
+            this.abortWeaponSwap(player);
+            return;
         }
         this.stunSlamFollowupPending = false;
         this.maceSlot = -1;
         this.originalAttackTick = -1;
-        this.targetId = -1;
+        this.stunSlamTargetObject = null;
     }
 
     private boolean isValidMaceSlot(EntityPlayerSP player, int slot) {
@@ -349,7 +409,7 @@ public class AutoMace extends Mod {
     }
 
     private void updateAutoAttack(EntityPlayerSP player) {
-        if (!this.attack.getEffectiveValue().booleanValue() || this.weaponSwapActive || this.releasePending
+        if (!this.attack.getEffectiveValue().booleanValue() || this.weaponSwapActive || this.attackGate.isBusy()
                 || player.l$src$Z$1io4duf() || player.Y$src$Z$154rldp() || !this.isFalling(player)
                 || !this.inputTimer.hasTimeElapsed(50L) || !this.canUseAttackInput()) {
             return;
@@ -371,10 +431,13 @@ public class AutoMace extends Mod {
         }
 
         final boolean[] cancelled = new boolean[1];
-        this.handleAttack(value -> cancelled[0] = value);
+        this.handleAttack(value -> cancelled[0] = value, true);
         if (!cancelled[0] && (heldMaceReady || alternateMaceReady || this.stunSlamFollowupPending)) {
             AttackKeyController.releaseAttackKey();
-            this.releasePending = this.requestSyntheticAttack(false);
+            // An AutoMace-owned slot swap must not be re-swapped by HitSwap
+            // or ShieldBreaker while its synthetic action is dispatched.
+            if (!this.requestSyntheticAttack(this.weaponSwapActive, true)
+                    && this.weaponSwapActive) this.abortWeaponSwap(player);
         }
     }
 
@@ -603,7 +666,7 @@ public class AutoMace extends Mod {
         if (world.isNull()) blockers.append("worldNull ");
         if (this.movementSnapshot == null) blockers.append("noSnapshot ");
         if (this.weaponSwapActive) blockers.append("weaponSwap ");
-        if (this.releasePending) blockers.append("releasePending ");
+        if (this.attackGate.isBusy()) blockers.append("attackPending ");
         if (player.l$src$Z$1io4duf()) blockers.append("usingItem ");
         if (player.b$src$Z$fqlxe4()) blockers.append("sprint ");
         if (player.f$src$Z$fst3rk()) blockers.append("fst3rk ");
@@ -734,7 +797,7 @@ public class AutoMace extends Mod {
             this.sawDownwardMotion = true;
         }
         if (!this.sawDownwardMotion || verticalMotion <= 0.05 || this.weaponSwapActive
-                || this.releasePending || player.l$src$Z$1io4duf()
+                || this.attackGate.isBusy() || player.l$src$Z$1io4duf()
                 || SharedModuleControlClaims.rightClickUse.isClaimed()) {
             return;
         }
@@ -1040,14 +1103,15 @@ public class AutoMace extends Mod {
         return this.targetFilter.isValidTarget(entity) ? new EntityLivingBase(entity.getObject()) : null;
     }
 
-    private boolean isCrosshairTarget(int entityId) {
-        RayTraceResult rayTrace = RotationManager.INSTANCE.getExtendedReachRayTrace();
-        return rayTrace != null && rayTrace.isNotNull() && rayTrace.getEntity().isNotNull()
-                && rayTrace.getEntity().S() == entityId;
+    private boolean isCrosshairTarget(Object expectedTarget) {
+        EntityLivingBase target = this.getCrosshairTarget();
+        return expectedTarget != null && target != null && target.getObject() == expectedTarget;
     }
 
     private boolean canOperate() {
-        if (Minecraft.currentScreen().isNotNull()) {
+        if (Minecraft.currentScreen().isNotNull() || Minecraft.theWorld().isNull()
+                || !ClientSettings.INSTANCE.isInputEnabled()
+                || !InputEventDispatcher.getInstance().getFocusState().isFocused()) {
             return false;
         }
         EntityPlayerSP player = Minecraft.thePlayer();
@@ -1264,16 +1328,51 @@ public class AutoMace extends Mod {
         return Math.max(min, Math.min(max, value));
     }
 
-    private boolean requestSyntheticAttack(boolean markInProgress) {
-        if (!markInProgress) {
-            return AttackKeyController.requestSyntheticAttack(this);
-        }
-        this.dispatchingSyntheticAttack = true;
-        try {
-            return AttackKeyController.requestSyntheticAttack(this);
-        } finally {
-            this.dispatchingSyntheticAttack = false;
-        }
+    private boolean requestSyntheticAttack(boolean guardOwnedSwap, boolean automatic) {
+        EntityPlayerSP player = Minecraft.thePlayer();
+        WorldClient world = Minecraft.theWorld();
+        EntityLivingBase target = this.getCrosshairTarget();
+        if (player.isNull() || world.isNull() || target == null || target.isNull()) return false;
+        InventoryPlayer inventory = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6();
+        final int expectedSlot = inventory.v();
+        ItemStack stack = inventory.c(expectedSlot);
+        if (stack == null || stack.isNull()) return false;
+        final Object expectedPlayer = player.getObject();
+        final Object expectedWorld = world.getObject();
+        final Object expectedTarget = target.getObject();
+        final Object expectedStack = stack.getObject();
+        final boolean expectedSwap = this.weaponSwapActive;
+        final boolean expectedStunSlam = this.stunSlamFollowupPending;
+        if (guardOwnedSwap && !expectedSwap) return false;
+        final long ticket = this.attackGate.begin(guardOwnedSwap);
+        if (ticket < 0L) return false;
+        this.queuedAttackTicks = 0;
+        AttackKeyController.requestValidatedSyntheticAttack(this, () -> {
+            if (!this.attackGate.isCurrent(ticket) || !this.isEnabled()
+                    || Minecraft.currentScreen().isNotNull() || !ClientSettings.INSTANCE.isInputEnabled()
+                    || !InputEventDispatcher.getInstance().getFocusState().isFocused()) return false;
+            EntityPlayerSP current = Minecraft.thePlayer();
+            WorldClient currentWorld = Minecraft.theWorld();
+            if (current.isNull() || current.getObject() != expectedPlayer || currentWorld.isNull()
+                    || currentWorld.getObject() != expectedWorld
+                    || current.l$src$Z$1io4duf() || current.Y$src$Z$154rldp()) return false;
+            if (expectedSwap && (!this.weaponSwapActive || this.weaponPlayerObject != expectedPlayer
+                    || this.weaponWorldObject != expectedWorld || this.weaponSlot != expectedSlot)) return false;
+            InventoryPlayer currentInventory = current.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6();
+            if (currentInventory.v() != expectedSlot) return false;
+            ItemStack currentStack = currentInventory.c(expectedSlot);
+            if (currentStack == null || currentStack.isNull() || currentStack.getObject() != expectedStack) return false;
+            if (expectedStunSlam && !this.stunSlam.getEffectiveValue().booleanValue()) return false;
+            if (this.isMace(currentStack) && this.smashOnly.getEffectiveValue().booleanValue()
+                    && !RotationUtil.u(current)) return false;
+            if (automatic && (!this.attack.getEffectiveValue().booleanValue() || !this.isFalling(current))) return false;
+            EntityLivingBase currentTarget = this.getCrosshairTarget();
+            return currentTarget != null && currentTarget.getObject() == expectedTarget;
+        }, pressed -> {
+            if (this.attackGate.complete(ticket, pressed)) AttackKeyController.releaseAttackKey();
+        });
+        // This means accepted for execution, not that the attack has fired.
+        return true;
     }
 
     public boolean canHandleMaceAttack() {
@@ -1287,7 +1386,7 @@ public class AutoMace extends Mod {
     }
 
     public boolean isSyntheticAttackInProgress() {
-        return this.dispatchingSyntheticAttack;
+        return this.attackGate.isGuardedDispatch();
     }
 
     public boolean hasReadyMace() {
@@ -1295,20 +1394,31 @@ public class AutoMace extends Mod {
     }
 
     private void abortWeaponSwap(EntityPlayerSP player) {
-        if (player.isNotNull() && this.originalSlot != -1) {
-            player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6().g(this.originalSlot);
+        if (this.attackGate.cancel()) AttackKeyController.releaseAttackKey();
+        this.queuedAttackTicks = 0;
+        if (player.isNotNull() && player.getObject() == this.weaponPlayerObject && this.originalSlot != -1) {
+            InventoryPlayer inventory = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6();
+            if (inventory.v() == this.weaponSlot && inventory.v() != this.originalSlot) {
+                inventory.g(this.originalSlot);
+            }
         }
         this.originalSlot = -1;
         this.clearWeaponSwapState();
     }
 
     private void clearWeaponSwapState() {
-        this.weaponSwapActive = false;
         this.weaponSwapTicks = 0;
+        this.weaponSlot = -1;
+        this.weaponPlayerObject = null;
+        this.weaponWorldObject = null;
+        this.stunSlamAxeObserved = false;
         this.stunSlamFollowupPending = false;
+        this.stunSlamAutomatic = false;
         this.maceSlot = -1;
         this.originalAttackTick = -1;
-        this.targetId = -1;
+        this.stunSlamTargetObject = null;
+        // Publish the inactive state only after all swap fields are cleared.
+        this.weaponSwapActive = false;
     }
 
     private void releaseRotation() {
@@ -1330,18 +1440,7 @@ public class AutoMace extends Mod {
         }
         this.releaseRotation();
         this.movementSnapshot = null;
-        if (this.releasePending) {
-            AttackKeyController.releaseAttackKey();
-        }
-        this.releasePending = false;
-        this.weaponSwapActive = false;
-        this.originalSlot = -1;
-        this.weaponSwapTicks = 0;
-        this.stunSlamFollowupPending = false;
-        this.maceSlot = -1;
-        this.originalAttackTick = -1;
-        this.targetId = -1;
-        this.dispatchingSyntheticAttack = false;
+        this.abortWeaponSwap(player);
         this.resetElytraFlightState(true);
     }
 
