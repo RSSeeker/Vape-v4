@@ -18,7 +18,10 @@ implements ClientLifecycleCallback {
                     String name = child.getName();
                     if (name.equals("cache")
                             || name.equals("config.json")
-                            || name.equals("log")) {
+                            || name.equals("log")
+                            // 用户脚本和脚本持久化数据必须保留，否则每次启动都会把
+                            // .vapeclient/scripts 整个删掉（示例脚本会被重建，看起来像正常）。
+                            || name.equals("scripts")) {
                         continue;
                     }
                     deleteRecursively(child);

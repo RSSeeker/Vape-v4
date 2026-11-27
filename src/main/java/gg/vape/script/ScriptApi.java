@@ -16,9 +16,17 @@ import gg.vape.value.ModeValue;
 import gg.vape.value.NumberValue;
 import gg.vape.value.StringValue;
 import gg.vape.value.Value;
+import gg.vape.runtime.NativeBridge;
+import gg.vape.wrapper.impl.Block;
+import gg.vape.wrapper.impl.CPacketHeldItemChange;
+import gg.vape.wrapper.impl.PlayerControllerMP;
+import gg.vape.wrapper.impl.WorldInfo;
 import gg.vape.wrapper.impl.Entity;
+import gg.vape.wrapper.impl.EntityLiving;
 import gg.vape.wrapper.impl.EntityLivingBase;
 import gg.vape.wrapper.impl.EntityPlayerSP;
+import gg.vape.wrapper.impl.InventoryPlayer;
+import gg.vape.wrapper.impl.ItemStack;
 import gg.vape.wrapper.impl.Minecraft;
 import gg.vape.wrapper.impl.WorldClient;
 import java.awt.Color;
@@ -64,6 +72,11 @@ import org.mozilla.javascript.Undefined;
  *       名称可以是字符串，也可以是 {@code {en: "Speed", zh: "速度"}} 对象（中文界面显示译文，
  *       英文界面显示原文，配置 key 始终用英文）。
  *       声明必须写在顶层代码里，写在 {@code onEnable} 里 GUI 不会显示、也不会保存。</li>
+ *   <li>{@code inv}：热栏与装备的最小接口——{@code inv.slot(i)}（0–8，返回
+ *       {@code { slot, name, count, displayName }}，空槽为 {@code null}）、
+ *       {@code inv.selected()}、{@code inv.select(i)}、{@code inv.use(i)}（切槽并让服务端
+ *       使用该槽物品，装备类即穿上）、{@code inv.wearingElytra()}。{@code name} 是语言
+ *       无关的物品 id（如 {@code minecraft:elytra}），跨版本/跨语言匹配都用它。</li>
  * </ul></p>
  */
 public final class ScriptApi {
@@ -231,6 +244,79 @@ public final class ScriptApi {
         ScriptableObject.putProperty(setting, "keybind", new CallbackFunction("keybind", 2,
                 (cx, s, args) -> callSettingHost(settingHost, cx, s, "keybind", args)));
         ScriptableObject.putProperty(scope, "setting", setting);
+        Scriptable inventory = context.newObject(scope);
+        ScriptableObject.putProperty(inventory, "size", new CallbackFunction("size", 0,
+                (cx, s, args) -> INVENTORY_SLOT_COUNT));
+        // slot(i)：0-8 热栏、9-35 背包、36-39 装备（靴/腿/胸/头）、40 副手。
+        ScriptableObject.putProperty(inventory, "slot", new CallbackFunction("slot", 1,
+                (cx, s, args) -> inventorySlot(cx, s, (int) numberArgument(args, 0, -1.0))));
+        ScriptableObject.putProperty(inventory, "hotbar", new CallbackFunction("hotbar", 1,
+                (cx, s, args) -> hotbarSlot(cx, s, (int) numberArgument(args, 0, -1.0))));
+        ScriptableObject.putProperty(inventory, "selected", new CallbackFunction("selected", 0,
+                (cx, s, args) -> {
+                    InventoryPlayer inventoryPlayer = localInventory();
+                    return inventoryPlayer == null ? -1 : inventoryPlayer.v();
+                }));
+        ScriptableObject.putProperty(inventory, "select", new CallbackFunction("select", 1,
+                (cx, s, args) -> {
+                    int slot = (int) numberArgument(args, 0, -1.0);
+                    return selectHotbarSlot(slot);
+                }));
+        ScriptableObject.putProperty(inventory, "use", new CallbackFunction("use", 1,
+                (cx, s, args) -> useHotbarItem((int) numberArgument(args, 0, -1.0))));
+        ScriptableObject.putProperty(inventory, "wearingElytra", new CallbackFunction("wearingElytra", 0,
+                (cx, s, args) -> isWearingElytra()));
+        ScriptableObject.putProperty(inventory, "armor", new CallbackFunction("armor", 0,
+                (cx, s, args) -> armorSlots(cx, s)));
+        ScriptableObject.putProperty(inventory, "offhand", new CallbackFunction("offhand", 0,
+                (cx, s, args) -> inventorySlot(cx, s, OFFHAND_SLOT)));
+        ScriptableObject.putProperty(inventory, "find", new CallbackFunction("find", 1,
+                (cx, s, args) -> findItemSlots(cx, s, stringArg(args, 0))));
+        ScriptableObject.putProperty(inventory, "count", new CallbackFunction("count", 1,
+                (cx, s, args) -> countItems(stringArg(args, 0))));
+        ScriptableObject.putProperty(scope, "inv", inventory);
+
+        Scriptable world = context.newObject(scope);
+        ScriptableObject.putProperty(world, "time", new CallbackFunction("time", 0,
+                (cx, s, args) -> worldTime()));
+        ScriptableObject.putProperty(world, "blockAt", new CallbackFunction("blockAt", 3,
+                (cx, s, args) -> blockAt(cx, s, (int) numberArgument(args, 0, 0.0),
+                        (int) numberArgument(args, 1, 0.0), (int) numberArgument(args, 2, 0.0))));
+        ScriptableObject.putProperty(scope, "world", world);
+
+        ScriptableObject.putProperty(scope, "attack", new CallbackFunction("attack", 1,
+                (cx, s, args) -> attackTarget(args.length > 0 ? args[0] : null)));
+        ScriptableObject.putProperty(scope, "swing", new CallbackFunction("swing", 0,
+                (cx, s, args) -> {
+                    swingHand();
+                    return Undefined.instance;
+                }));
+        ScriptableObject.putProperty(scope, "useItem", new CallbackFunction("useItem", 0,
+                (cx, s, args) -> {
+                    InventoryPlayer inventoryPlayer = localInventory();
+                    return inventoryPlayer != null && useHotbarItem(inventoryPlayer.v());
+                }));
+
+        Scriptable util = context.newObject(scope);
+        ScriptableObject.putProperty(util, "time", new CallbackFunction("time", 0,
+                (cx, s, args) -> System.currentTimeMillis()));
+        ScriptableObject.putProperty(util, "random", new CallbackFunction("random", 0,
+                (cx, s, args) -> Math.random()));
+        ScriptableObject.putProperty(util, "dist", new CallbackFunction("dist", 6,
+                (cx, s, args) -> {
+                    double dx = numberArgument(args, 3, 0.0) - numberArgument(args, 0, 0.0);
+                    double dy = numberArgument(args, 4, 0.0) - numberArgument(args, 1, 0.0);
+                    double dz = numberArgument(args, 5, 0.0) - numberArgument(args, 2, 0.0);
+                    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+                }));
+        ScriptableObject.putProperty(util, "clamp", new CallbackFunction("clamp", 3,
+                (cx, s, args) -> {
+                    double value = numberArgument(args, 0, 0.0);
+                    double min = numberArgument(args, 1, 0.0);
+                    double max = numberArgument(args, 2, 0.0);
+                    return value < min ? min : Math.min(value, max);
+                }));
+        ScriptableObject.putProperty(scope, "util", util);
         updateBindings(context, scope);
     }
 
@@ -452,6 +538,11 @@ public final class ScriptApi {
         }
         catch (Throwable ignored) {
         }
+        try {
+            ScriptableObject.putProperty(handle, "id", entity.S());
+        }
+        catch (Throwable ignored) {
+        }
         ScriptableObject.putProperty(handle, "distance", distance);
         ScriptableObject.putProperty(handle, "isSelf", self);
         boolean playerEntity = false;
@@ -543,6 +634,16 @@ public final class ScriptApi {
             ScriptableObject.putProperty(snapshot, "onGround", player.b$src$Z$fqlxe4());
             ScriptableObject.putProperty(snapshot, "yaw", player.J());
             ScriptableObject.putProperty(snapshot, "pitch", player.V());
+            try {
+                ScriptableObject.putProperty(snapshot, "entityId", player.S());
+            }
+            catch (Throwable ignored) {
+            }
+            try {
+                ScriptableObject.putProperty(snapshot, "fallDistance", player.getFallDistance());
+            }
+            catch (Throwable ignored) {
+            }
             // 生命/饥饿在个别版本上映射缺失，单独兜底，避免一个字段失败把整个 player 置空
             try {
                 ScriptableObject.putProperty(snapshot, "health", player.w$src$F$15l9epb());
@@ -561,6 +662,393 @@ public final class ScriptApi {
             // 玩家快照失败（例如还没进世界、映射未就绪）时把 player 置空，不能影响脚本运行
             ScriptableObject.putProperty(scope, "player", null);
         }
+    }
+
+    private static InventoryPlayer localInventory() {
+        EntityPlayerSP player = Minecraft.thePlayer();
+        if (player == null || player.isNull()) {
+            return null;
+        }
+        try {
+            InventoryPlayer inventory = player.V$src$Lgg_vape_wrapper_impl_InventoryPlayer_$erqak6();
+            return inventory == null || inventory.isNull() ? null : inventory;
+        }
+        catch (Throwable throwable) {
+            return null;
+        }
+    }
+
+    private static boolean selectHotbarSlot(int slot) {
+        if (slot < 0 || slot > 8) {
+            return false;
+        }
+        try {
+            EntityPlayerSP player = Minecraft.thePlayer();
+            InventoryPlayer inventory = localInventory();
+            if (player == null || player.isNull() || inventory == null) {
+                return false;
+            }
+            if (inventory.v() != slot) {
+                inventory.g(slot);
+            }
+            // Fabric 上控制器发 UseItem 前会自己补 C09；旧平台仍要手动同步一次。
+            if (!NativeBridge.isFabricRuntime()) {
+                try {
+                    player.sendQueue().addToSendQueue(CPacketHeldItemChange.create(slot));
+                }
+                catch (Throwable ignored) {
+                }
+            }
+            return true;
+        }
+        catch (Throwable throwable) {
+            Vape.logError("[Script] inv.select failed: " + throwable);
+            return false;
+        }
+    }
+
+    private static Scriptable hotbarSlot(Context context, Scriptable scope, int slot) {
+        if (slot < 0 || slot > 8) {
+            return null;
+        }
+        try {
+            InventoryPlayer inventory = localInventory();
+            if (inventory == null) {
+                return null;
+            }
+            ItemStack stack = inventory.c(slot);
+            if (stack == null || stack.isNull()) {
+                return null;
+            }
+            Scriptable handle = context.newObject(scope);
+            ScriptableObject.putProperty(handle, "slot", slot);
+            // name 是语言无关的物品 id（例如 minecraft:elytra），脚本用它做匹配。
+            ScriptableObject.putProperty(handle, "name", stack.f());
+            ScriptableObject.putProperty(handle, "count", stack.y());
+            ScriptableObject.putProperty(handle, "displayName", stack.x());
+            return handle;
+        }
+        catch (Throwable throwable) {
+            Vape.logError("[Script] inv.slot failed: " + throwable);
+            return null;
+        }
+    }
+
+    private static boolean useHotbarItem(int slot) {
+        if (slot < 0 || slot > 8) {
+            return false;
+        }
+        try {
+            EntityPlayerSP player = Minecraft.thePlayer();
+            InventoryPlayer inventory = localInventory();
+            if (player == null || player.isNull() || inventory == null) {
+                return false;
+            }
+            if (inventory.v() != slot && !selectHotbarSlot(slot)) {
+                return false;
+            }
+            ItemStack stack = inventory.c(slot);
+            if (stack == null || stack.isNull()) {
+                return false;
+            }
+            Minecraft.playerController().sendUseItem(player, player.getWorld(), stack);
+            return true;
+        }
+        catch (Throwable throwable) {
+            Vape.logError("[Script] inv.use failed: " + throwable);
+            return false;
+        }
+    }
+
+    private static final int INVENTORY_SLOT_COUNT = 41;
+    private static final int OFFHAND_SLOT = 40;
+
+    private static Scriptable inventorySlot(Context context, Scriptable scope, int slot) {
+        if (slot < 0 || slot >= INVENTORY_SLOT_COUNT) {
+            return null;
+        }
+        try {
+            InventoryPlayer inventory = localInventory();
+            if (inventory == null) {
+                return null;
+            }
+            return slotSnapshot(context, scope, slot, inventory.c(slot));
+        }
+        catch (Throwable throwable) {
+            Vape.logError("[Script] inv.slot failed: " + throwable);
+            return null;
+        }
+    }
+
+    private static Scriptable slotSnapshot(Context context, Scriptable scope, int slot, ItemStack stack) {
+        if (stack == null || stack.isNull()) {
+            return null;
+        }
+        Scriptable handle = context.newObject(scope);
+        ScriptableObject.putProperty(handle, "slot", slot);
+        ScriptableObject.putProperty(handle, "area", slotArea(slot));
+        // name 是语言无关的物品 id（例如 minecraft:elytra），脚本用它做匹配。
+        ScriptableObject.putProperty(handle, "name", stack.f());
+        ScriptableObject.putProperty(handle, "count", stack.y());
+        ScriptableObject.putProperty(handle, "displayName", stack.x());
+        return handle;
+    }
+
+    private static String slotArea(int slot) {
+        if (slot <= 8) {
+            return "hotbar";
+        }
+        if (slot <= 35) {
+            return "main";
+        }
+        if (slot <= 39) {
+            return "armor";
+        }
+        return "offhand";
+    }
+
+    private static Scriptable armorSlots(Context context, Scriptable scope) {
+        Scriptable handle = context.newObject(scope);
+        // 36 靴、37 腿、38 胸、39 头；个别版本 36-39 取不到时回退实体护甲列表。
+        ScriptableObject.putProperty(handle, "boots", armorSnapshot(context, scope, 0, "boots"));
+        ScriptableObject.putProperty(handle, "leggings", armorSnapshot(context, scope, 1, "leggings"));
+        ScriptableObject.putProperty(handle, "chestplate", armorSnapshot(context, scope, 2, "chestplate"));
+        ScriptableObject.putProperty(handle, "helmet", armorSnapshot(context, scope, 3, "helmet"));
+        return handle;
+    }
+
+    private static Scriptable armorSnapshot(Context context, Scriptable scope, int index, String area) {
+        try {
+            InventoryPlayer inventory = localInventory();
+            if (inventory != null) {
+                Scriptable direct = slotSnapshot(context, scope, 36 + index, inventory.c(36 + index));
+                if (direct != null) {
+                    ScriptableObject.putProperty(direct, "area", area);
+                    return direct;
+                }
+            }
+            EntityPlayerSP player = Minecraft.thePlayer();
+            if (player != null && !player.isNull()) {
+                ArrayList<ItemStack> armor = new EntityLiving(player.getObject())
+                        .I$src$Ljava_util_ArrayList_$15zosdi();
+                if (armor != null && index < armor.size()) {
+                    Scriptable fallback = slotSnapshot(context, scope, 36 + index, armor.get(index));
+                    if (fallback != null) {
+                        ScriptableObject.putProperty(fallback, "area", area);
+                        return fallback;
+                    }
+                }
+            }
+        }
+        catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private static Scriptable findItemSlots(Context context, Scriptable scope, String id) {
+        List<Integer> slots = new ArrayList<>();
+        InventoryPlayer inventory = localInventory();
+        if (inventory != null && id != null && !id.isEmpty()) {
+            String needle = id.toLowerCase(java.util.Locale.ROOT);
+            for (int slot = 0; slot < INVENTORY_SLOT_COUNT; slot++) {
+                try {
+                    ItemStack stack = inventory.c(slot);
+                    if (stack == null || stack.isNull()) {
+                        continue;
+                    }
+                    String name = stack.f();
+                    if (name != null && name.toLowerCase(java.util.Locale.ROOT).contains(needle)) {
+                        slots.add(slot);
+                    }
+                }
+                catch (Throwable ignored) {
+                }
+            }
+        }
+        Scriptable array = context.newArray(scope, slots.size());
+        for (int index = 0; index < slots.size(); index++) {
+            ScriptableObject.putProperty(array, index, slots.get(index));
+        }
+        return array;
+    }
+
+    private static double countItems(String id) {
+        InventoryPlayer inventory = localInventory();
+        if (inventory == null || id == null || id.isEmpty()) {
+            return 0.0;
+        }
+        String needle = id.toLowerCase(java.util.Locale.ROOT);
+        double total = 0.0;
+        for (int slot = 0; slot < INVENTORY_SLOT_COUNT; slot++) {
+            try {
+                ItemStack stack = inventory.c(slot);
+                if (stack == null || stack.isNull()) {
+                    continue;
+                }
+                String name = stack.f();
+                if (name != null && name.toLowerCase(java.util.Locale.ROOT).contains(needle)) {
+                    total += stack.y();
+                }
+            }
+            catch (Throwable ignored) {
+            }
+        }
+        return total;
+    }
+
+    private static long worldTime() {
+        try {
+            WorldClient world = Minecraft.theWorld();
+            if (world == null || world.isNull()) {
+                return 0L;
+            }
+            return new WorldInfo(world.getWorldInfo().getObject()).getWorldTime();
+        }
+        catch (Throwable throwable) {
+            Vape.logError("[Script] world.time failed: " + throwable);
+            return 0L;
+        }
+    }
+
+    private static Scriptable blockAt(Context context, Scriptable scope, int x, int y, int z) {
+        try {
+            WorldClient world = Minecraft.theWorld();
+            if (world == null || world.isNull()) {
+                return null;
+            }
+            Block block = world.getBlockByPos(x, y, z);
+            if (block == null || block.isNull()) {
+                return null;
+            }
+            Scriptable handle = context.newObject(scope);
+            ScriptableObject.putProperty(handle, "x", x);
+            ScriptableObject.putProperty(handle, "y", y);
+            ScriptableObject.putProperty(handle, "z", z);
+            ScriptableObject.putProperty(handle, "id", block.U());
+            return handle;
+        }
+        catch (Throwable throwable) {
+            // 未加载区块或映射缺失时返回 null，由脚本自己判断。
+            return null;
+        }
+    }
+
+    private static boolean attackTarget(Object target) {
+        try {
+            EntityPlayerSP player = Minecraft.thePlayer();
+            WorldClient world = Minecraft.theWorld();
+            if (player == null || player.isNull() || world == null || world.isNull()) {
+                return false;
+            }
+            Entity entity = resolveEntity(target, world);
+            if (entity == null || entity.isNull() || entity.getObject() == player.getObject()) {
+                return false;
+            }
+            Minecraft.playerController().attackEntity(player, entity);
+            return true;
+        }
+        catch (Throwable throwable) {
+            Vape.logError("[Script] attack failed: " + throwable);
+            return false;
+        }
+    }
+
+    private static Entity resolveEntity(Object target, WorldClient world) {
+        int id = -1;
+        if (target instanceof Number) {
+            id = ((Number) target).intValue();
+        }
+        else if (target instanceof Scriptable) {
+            Object value = ScriptableObject.getProperty((Scriptable) target, "id");
+            if (value instanceof Number) {
+                id = ((Number) value).intValue();
+            }
+        }
+        return id < 0 ? null : world.V(id);
+    }
+
+    private static void swingHand() {
+        try {
+            EntityPlayerSP player = Minecraft.thePlayer();
+            if (player != null && !player.isNull()) {
+                player.swingItem();
+            }
+        }
+        catch (Throwable throwable) {
+            Vape.logError("[Script] swing failed: " + throwable);
+        }
+    }
+
+    private static boolean isWearingElytra() {
+        EntityPlayerSP player = Minecraft.thePlayer();
+        if (player == null || player.isNull()) {
+            return false;
+        }
+        InventoryPlayer inventory = localInventory();
+        // 1.21.6+ 上 InventoryPlayer.i() 的护甲索引不可靠（1.21.11 Fabric 会取到热栏物品），
+        // 优先走实体护甲槽列表，失败再退回旧路径，和 AutoMace 的判定保持一致。
+        try {
+            ArrayList<ItemStack> armor = new EntityLiving(player.getObject())
+                    .I$src$Ljava_util_ArrayList_$15zosdi();
+            for (ItemStack stack : armor) {
+                if (isElytraItem(stack) && !isHotbarStack(inventory, stack)) {
+                    return true;
+                }
+            }
+        }
+        catch (Throwable ignored) {
+        }
+        // 旧路径在 1.21.11 上可能读到热栏物品；热栏里的鞘翅只是准备换上的候选，
+        // 不能当成「正穿着鞘翅」，否则方向会反过来去热栏找胸甲。按对象身份排除热栏物品。
+        try {
+            if (inventory != null) {
+                for (Object object : inventory.i()) {
+                    if (object == null) {
+                        continue;
+                    }
+                    ItemStack stack = new ItemStack(object);
+                    if (isElytraItem(stack) && !isHotbarStack(inventory, stack)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * 判断该物品栈是否就是当前热栏某格里的那一件（按底层对象身份比较）。
+     * 只用于排除误判：热栏里的鞘翅/胸甲是待换物品，不是穿在身上的那件。
+     */
+    private static boolean isHotbarStack(InventoryPlayer inventory, ItemStack stack) {
+        if (inventory == null || stack == null) {
+            return false;
+        }
+        Object handle = stack.getObject();
+        if (handle == null) {
+            return false;
+        }
+        try {
+            for (int slot = 0; slot <= 8; slot++) {
+                ItemStack hotbar = inventory.c(slot);
+                if (hotbar != null && !hotbar.isNull() && hotbar.getObject() == handle) {
+                    return true;
+                }
+            }
+        }
+        catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    private static boolean isElytraItem(ItemStack stack) {
+        if (stack == null || stack.isNull()) {
+            return false;
+        }
+        String name = stack.f();
+        return name != null && name.toLowerCase(java.util.Locale.ROOT).contains("elytra");
     }
 
     private static Object resolveModule(Context context, Scriptable scope, Object[] args) {

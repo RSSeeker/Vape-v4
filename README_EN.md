@@ -119,7 +119,8 @@ The client embeds Mozilla Rhino 1.7.15 (relocated to `gg.vape.shaded.org.mozilla
 ```
 
 - `example.json` + `example.js` are generated on first launch; the example template is rewritten when a newer version ships
-- Script capabilities: read/write modules and settings (including color and keybind), player and entity queries, screen drawing, callbacks `onEnable` / `onDisable` / `onTick` / `onRender2D` / `onKeyPress` / `onChat` / `onAttack` / `onMove` / `onWorldChange` / `onPacketSend` / `onPacketReceive`, `storage` persistence, `after()` timers and multi-file `load()`
+- Script capabilities: read/write modules and settings (including color and keybind), player and entity queries (with entity `id`), screen drawing, a complete 41-slot `inv` (hotbar / main / armor / offhand: inspect, select and equip), `world` (time / blocks), `attack()` / `swing()` / `useItem()` / `util.*`, plus callbacks `onEnable` / `onDisable` / `onTick` / `onRender2D` / `onKeyPress` / `onChat` / `onAttack` / `onMove` / `onWorldChange` / `onPacketSend` / `onPacketReceive`, `storage` persistence, `after()` timers and multi-file `load()`
+- A built-in **script console** (sidebar under Extension): run arbitrary JS expressions, browse history and print results on the spot; its scope is isolated from loaded script modules and it carries an instruction budget so infinite loops are aborted
 - The "Reload Scripts" module hot-reloads: recompiles existing scripts, registers newly added json files and disables modules whose json was removed
 - Load or runtime errors show an in-game notification and are written to `.vapeclient\extension.log`
 

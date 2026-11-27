@@ -56,6 +56,9 @@ private:
     std::unique_ptr<Gdiplus::Image> loadImage(int resourceId);
     void updateFrame();
     void drawTransitionMasks(Gdiplus::Graphics& graphics);
+    // Draws the loader's own window chrome (minimize / close capsules) inside
+    // the content canvas, because the window is created without a system frame.
+    void drawChrome(Gdiplus::Graphics& graphics);
     // Settings flyout: slides in when the pointer reaches the left edge and
     // closes automatically once it moves away. Only shown on the process
     // selection page, which is where the auto-inject toggle belongs.
@@ -75,6 +78,8 @@ private:
     std::unique_ptr<Gdiplus::Image> maskLeft_;
     std::unique_ptr<Gdiplus::Image> maskRight_;
     std::unique_ptr<Gdiplus::Image> roundedRect_;
+    std::unique_ptr<Gdiplus::Image> minimize_;
+    std::unique_ptr<Gdiplus::Image> close_;
     std::vector<IStream*> imageStreams_;
     Focus focus_{Focus::None};
     float scaleX_{1.0f};
@@ -95,4 +100,6 @@ private:
     float settingsProgress_{};
     float settingsHintProgress_{};
     bool settingsToggleHovered_{};
+    bool minimizeHovered_{};
+    bool closeHovered_{};
 };

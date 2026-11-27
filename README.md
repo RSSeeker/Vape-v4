@@ -120,10 +120,13 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 ```
 
 - 首次启动自动生成 `example.json` + `example.js` 示例，脚本模板随版本升级自动重写
-- 脚本能力：读写模块与设置项（含颜色、快捷键）、玩家与实体查询、屏幕绘制，以及
+- 脚本能力：读写模块与设置项（含颜色、快捷键）、玩家与实体查询（含实体 `id`）、屏幕绘制、
+  `inv` 完整物品栏（41 格：热栏 / 背包 / 装备 / 副手，可查、可切、可装备）、`world`（时间 / 方块）、
+  `attack()` / `swing()` / `useItem()` / `util.*`，以及
   `onEnable` / `onDisable` / `onTick` / `onRender2D` / `onKeyPress` / `onChat` / `onAttack` /
   `onMove` / `onWorldChange` / `onPacketSend` / `onPacketReceive` 回调、`storage` 持久化、
   `after()` 定时器、`load()` 多文件
+- 内置**脚本控制台**（扩展分类侧边栏）：临时执行任意 JS 表达式、翻历史、打印结果；作用域与脚本模块隔离，带指令预算防死循环
 - 「重新加载脚本」模块可热重载：重新编译已有脚本、注册新增 json、禁用已删除 json 对应的模块
 - 脚本加载或运行出错会在游戏内弹提示，并写入 `.vapeclient\extension.log`
 

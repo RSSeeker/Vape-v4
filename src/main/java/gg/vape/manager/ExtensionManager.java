@@ -304,7 +304,7 @@ public final class ExtensionManager {
         }
     }
 
-    private static void registerReloadModule(ModManager modManager, Set<String> usedNames) {
+private static void registerReloadModule(ModManager modManager, Set<String> usedNames) {
         if (reloadModuleRegistered || usedNames.contains("reload scripts")) {
             return;
         }
@@ -359,8 +359,13 @@ public final class ExtensionManager {
                 "//",
                 "// API:",
                 "//   log(message), notify(title, message), chat(message), isFriend(name)",
-                "//   player{name,x,y,z,onGround,yaw,pitch,health,food}",
-                "//   entities() / players(): snapshots {name,type,x,y,z,distance,isSelf,isPlayer,isFriend,health}",
+                "//   player{name,x,y,z,onGround,yaw,pitch,health,food,entityId,fallDistance}",
+                "//   entities() / players(): snapshots {id,name,type,x,y,z,distance,isSelf,isPlayer,isFriend,health}",
+                "//   inv: size(), slot(i), hotbar(i), armor(), offhand(), find(id), count(id),",
+                "//        selected(), select(i), use(i), wearingElytra()",
+                "//   world.time(), world.blockAt(x, y, z)",
+                "//   attack(entityOrId), swing(), useItem()",
+                "//   util.time(), util.random(), util.dist(x1,y1,z1,x2,y2,z2), util.clamp(v,min,max)",
                 "//   module(name): {name,category,enabled,visible,setEnabled(v),toggle(),setting(name),settings()}",
                 "//   modules(): every registered module handle",
                 "//   setting.toggle(name, default), setting.number(name, default, min, max)",

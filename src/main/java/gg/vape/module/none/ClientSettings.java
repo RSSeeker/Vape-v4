@@ -49,6 +49,7 @@ import gg.vape.ui.click.frame.impl.FrameMacros;
 import gg.vape.ui.click.frame.impl.ModuleCategoryFrame;
 import gg.vape.ui.click.frame.impl.ModuleCategoryFrameHeader;
 import gg.vape.ui.click.frame.impl.ModuleSearchFrame;
+import gg.vape.ui.click.frame.impl.ScriptConsoleFrame;
 import gg.vape.ui.click.frame.impl.SessionSpoofFrame;
 import gg.vape.ui.click.frame.impl.VisibleModuleListFrame;
 import gg.vape.ui.click.frame.impl.hud.ActiveModuleStackFrame;
@@ -712,6 +713,7 @@ extends Mod {
         ClientSettings.registerFrame((Frame)legitModuleCategoryFrame, mainStack);
         ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.OTHER), mainStack);
         ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.EXTENSION), mainStack);
+        ClientSettings.registerFrame((Frame)new ScriptConsoleFrame(), mainStack);
         ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.RENDER), mainStack);
         ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.UTILITY), mainStack);
         ClientSettings.registerFrame((Frame)new ModuleCategoryFrame(Category.WORLD), mainStack);

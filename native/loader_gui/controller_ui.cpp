@@ -60,6 +60,8 @@ ControllerUi::ControllerUi(HINSTANCE instance, ControllerModel& model)
     maskLeft_ = loadImage(IDR_ASSET_MASK_LEFT);
     maskRight_ = loadImage(IDR_ASSET_MASK_RIGHT);
     roundedRect_ = loadImage(IDR_ASSET_ROUNDED_RECT);
+    minimize_ = loadImage(IDR_ASSET_MINIMIZE);
+    close_ = loadImage(IDR_ASSET_CLOSE);
 }
 
 ControllerUi::~ControllerUi() {
@@ -69,6 +71,8 @@ ControllerUi::~ControllerUi() {
     maskLeft_.reset();
     maskRight_.reset();
     roundedRect_.reset();
+    minimize_.reset();
+    close_.reset();
     for (IStream* stream : imageStreams_) stream->Release();
     imageStreams_.clear();
     if (gdiplusToken_) Gdiplus::GdiplusShutdown(gdiplusToken_);
@@ -108,13 +112,18 @@ int ControllerUi::run(int showCommand) {
     const UINT dpi = GetDpiForSystem();
     const int clientWidth = MulDiv(824, dpi, 96);
     const int clientHeight = MulDiv(484, dpi, 96);
-    RECT bounds{0, 0, clientWidth, clientHeight};
-    AdjustWindowRectExForDpi(&bounds, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
-        WS_MINIMIZEBOX, FALSE, 0, dpi);
-    window_ = CreateWindowExW(0, klass.lpszClassName, L"Vape v4",
-        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-        CW_USEDEFAULT, CW_USEDEFAULT, bounds.right - bounds.left,
-        bounds.bottom - bounds.top, nullptr, nullptr, instance_, this);
+    // Frameless per-pixel-alpha window: the loader paints its own chrome and
+    // rounds the content rect, so the desktop shows through the corners.
+    RECT workArea{};
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0);
+    const int windowX = workArea.left +
+        ((workArea.right - workArea.left) - clientWidth) / 2;
+    const int windowY = workArea.top +
+        ((workArea.bottom - workArea.top) - clientHeight) / 2;
+    window_ = CreateWindowExW(WS_EX_APPWINDOW | WS_EX_LAYERED, klass.lpszClassName,
+        L"Vape v4", WS_POPUP | WS_MINIMIZEBOX,
+        windowX, windowY, clientWidth, clientHeight,
+        nullptr, nullptr, instance_, this);
     if (!window_) return 1;
     lastFrame_ = std::chrono::steady_clock::now();
     pageChanged_ = lastFrame_;
@@ -346,9 +355,25 @@ LRESULT ControllerUi::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) 
     case WM_TIMER:
         if (wParam == 1) updateFrame();
         return 0;
+    case WM_NCHITTEST: {
+        // The window has no system frame, so dragging is provided here: the
+        // whole top strip acts as a caption, except the two chrome buttons.
+        POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        ScreenToClient(window_, &point);
+        const float x = static_cast<float>(point.x) / (scaleX_ > 0.0f ? scaleX_ : 1.0f);
+        const float y = static_cast<float>(point.y) / (scaleY_ > 0.0f ? scaleY_ : 1.0f);
+        if (hit(x, y, 735.0f, 24.0f, 30.0f, 24.0f) ||
+            hit(x, y, 767.0f, 24.0f, 30.0f, 24.0f)) {
+            return HTCLIENT;
+        }
+        if (y >= 0.0f && y < 52.0f) return HTCAPTION;
+        return HTCLIENT;
+    }
     case WM_MOUSEMOVE: {
-        mouseX_ = static_cast<float>(GET_X_LPARAM(lParam)) / scaleX_;
-        mouseY_ = static_cast<float>(GET_Y_LPARAM(lParam)) / scaleY_;
+        mouseX_ = static_cast<float>(GET_X_LPARAM(lParam)) / (scaleX_ > 0.0f ? scaleX_ : 1.0f);
+        mouseY_ = static_cast<float>(GET_Y_LPARAM(lParam)) / (scaleY_ > 0.0f ? scaleY_ : 1.0f);
+        minimizeHovered_ = hit(mouseX_, mouseY_, 735.0f, 24.0f, 30.0f, 24.0f);
+        closeHovered_ = hit(mouseX_, mouseY_, 767.0f, 24.0f, 30.0f, 24.0f);
         if (!trackingMouse_) {
             TRACKMOUSEEVENT tracking{sizeof(tracking), TME_LEAVE, window_, 0};
             TrackMouseEvent(&tracking);
@@ -360,11 +385,22 @@ LRESULT ControllerUi::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) 
     case WM_MOUSELEAVE:
         mouseX_ = mouseY_ = -1.0f;
         trackingMouse_ = false;
+        minimizeHovered_ = closeHovered_ = false;
         InvalidateRect(window_, nullptr, FALSE);
         return 0;
     case WM_LBUTTONDOWN: {
-        const float x = static_cast<float>(GET_X_LPARAM(lParam)) / scaleX_;
-        const float y = static_cast<float>(GET_Y_LPARAM(lParam)) / scaleY_;
+        const float x = static_cast<float>(GET_X_LPARAM(lParam)) / (scaleX_ > 0.0f ? scaleX_ : 1.0f);
+        const float y = static_cast<float>(GET_Y_LPARAM(lParam)) / (scaleY_ > 0.0f ? scaleY_ : 1.0f);
+        // Chrome buttons are checked first: their rects sit inside the caption
+        // strip but must stay clickable instead of starting a window drag.
+        if (hit(x, y, 735.0f, 24.0f, 30.0f, 24.0f)) {
+            ShowWindow(window_, SW_MINIMIZE);
+            return 0;
+        }
+        if (hit(x, y, 767.0f, 24.0f, 30.0f, 24.0f)) {
+            PostMessageW(window_, WM_CLOSE, 0, 0);
+            return 0;
+        }
         const auto page = model_.page();
         if (page == ControllerPage::Login) {
             if (hit(x, y, 278, 183, 268, 36)) focus_ = Focus::Username;
@@ -475,9 +511,11 @@ LRESULT ControllerUi::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) 
         return 0;
     case WM_DPICHANGED: {
         const auto* suggested = reinterpret_cast<RECT*>(lParam);
+        const UINT dpi = HIWORD(wParam);
+        const int clientWidth = MulDiv(824, dpi, 96);
+        const int clientHeight = MulDiv(484, dpi, 96);
         SetWindowPos(window_, nullptr, suggested->left, suggested->top,
-            suggested->right - suggested->left, suggested->bottom - suggested->top,
-            SWP_NOACTIVATE | SWP_NOZORDER);
+            clientWidth, clientHeight, SWP_NOACTIVATE | SWP_NOZORDER);
         return 0;
     }
     case WM_DESTROY:
@@ -492,14 +530,36 @@ LRESULT ControllerUi::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) 
 
 void ControllerUi::paint() {
     PAINTSTRUCT paint{};
-    HDC target = BeginPaint(window_, &paint);
+    BeginPaint(window_, &paint);
     RECT client{};
     GetClientRect(window_, &client);
-    const int width = client.right - client.left;
-    const int height = client.bottom - client.top;
-    HDC bufferDc = CreateCompatibleDC(target);
-    HBITMAP buffer = CreateCompatibleBitmap(target, width, height);
+    const int width = std::max<LONG>(1, client.right - client.left);
+    const int height = std::max<LONG>(1, client.bottom - client.top);
+
+    // Render into a 32bpp premultiplied DIB and hand it to UpdateLayeredWindow:
+    // the window has no system frame, so the rounded content and the freeform
+    // corners come from this alpha channel instead.
+    BITMAPINFO bitmapInfo{};
+    bitmapInfo.bmiHeader.biSize = sizeof(bitmapInfo.bmiHeader);
+    bitmapInfo.bmiHeader.biWidth = width;
+    bitmapInfo.bmiHeader.biHeight = -height;  // top-down rows
+    bitmapInfo.bmiHeader.biPlanes = 1;
+    bitmapInfo.bmiHeader.biBitCount = 32;
+    bitmapInfo.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HDC screenDc = GetDC(nullptr);
+    HDC bufferDc = CreateCompatibleDC(screenDc);
+    HBITMAP buffer = CreateDIBSection(screenDc, &bitmapInfo, DIB_RGB_COLORS,
+        &bits, nullptr, 0);
+    ReleaseDC(nullptr, screenDc);
+    if (buffer == nullptr || bits == nullptr) {
+        DeleteDC(bufferDc);
+        EndPaint(window_, &paint);
+        return;
+    }
     const auto previous = SelectObject(bufferDc, buffer);
+    std::memset(bits, 0, static_cast<std::size_t>(width) * height * 4);
+
     Gdiplus::Graphics graphics(bufferDc);
     graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
     graphics.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
@@ -507,8 +567,15 @@ void ControllerUi::paint() {
     scaleX_ = static_cast<float>(width) / CanvasWidth;
     scaleY_ = static_cast<float>(height) / CanvasHeight;
     graphics.ScaleTransform(scaleX_, scaleY_);
+
+    // Rounded content panel; everything outside this path stays transparent.
+    Gdiplus::GraphicsPath panel;
+    addRoundedPath(panel, 0.0f, 0.0f, CanvasWidth, CanvasHeight, 12.0f);
     Gdiplus::SolidBrush background(Gdiplus::Color(255, 26, 25, 26));
-    graphics.FillRectangle(&background, 0.0f, 0.0f, CanvasWidth, CanvasHeight);
+    graphics.FillPath(&background, &panel);
+    Gdiplus::Pen panelEdge(Gdiplus::Color(255, 35, 34, 35), 1.0f);
+    graphics.DrawPath(&panelEdge, &panel);
+    graphics.SetClip(&panel);
 
     switch (model_.page()) {
     case ControllerPage::Login: drawLogin(graphics); break;
@@ -530,12 +597,49 @@ void ControllerUi::paint() {
         }
     }
     drawSettingsPanel(graphics);
+    drawChrome(graphics);
+    graphics.ResetClip();
 
-    BitBlt(target, 0, 0, width, height, bufferDc, 0, 0, SRCCOPY);
+    RECT bounds{};
+    GetWindowRect(window_, &bounds);
+    POINT destination{bounds.left, bounds.top};
+    POINT source{0, 0};
+    SIZE size{width, height};
+    BLENDFUNCTION blend{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+    UpdateLayeredWindow(window_, nullptr, &destination, &size, bufferDc,
+        &source, 0, &blend, ULW_ALPHA);
+
     SelectObject(bufferDc, previous);
     DeleteObject(buffer);
     DeleteDC(bufferDc);
     EndPaint(window_, &paint);
+}
+
+void ControllerUi::drawChrome(Gdiplus::Graphics& graphics) {
+    // Capsule hit targets mirroring the reference GUI: minimize at 735..765,
+    // close at 767..797, both 24px tall.
+    const auto capsule = [&](float x, bool hovered) {
+        drawRoundedRect(graphics, x, 24.0f, 30.0f, 24.0f, 10.0f,
+            Gdiplus::Color(hovered ? 0x18 : 0x04, 255, 255, 255));
+    };
+    capsule(735.0f, minimizeHovered_);
+    capsule(767.0f, closeHovered_);
+
+    const auto icon = [&](Gdiplus::Image* image, float x, float y, float width,
+                          float height, bool hovered) {
+        if (image == nullptr || image->GetLastStatus() != Gdiplus::Ok) return;
+        const float alpha = hovered ? 1.0f : 0.6f;
+        Gdiplus::ColorMatrix matrix{{
+            {1, 0, 0, 0, 0}, {0, 1, 0, 0, 0}, {0, 0, 1, 0, 0},
+            {0, 0, 0, alpha, 0}, {0, 0, 0, 0, 1}}};
+        Gdiplus::ImageAttributes attributes;
+        attributes.SetColorMatrix(&matrix);
+        graphics.DrawImage(image, Gdiplus::RectF(x, y, width, height),
+            0.0f, 0.0f, static_cast<float>(image->GetWidth()),
+            static_cast<float>(image->GetHeight()), Gdiplus::UnitPixel, &attributes);
+    };
+    icon(minimize_.get(), 748.0f, 35.0f, 8.0f, 2.0f, minimizeHovered_);
+    icon(close_.get(), 777.0f, 32.0f, 8.0f, 8.0f, closeHovered_);
 }
 
 void ControllerUi::drawRoundedRect(Gdiplus::Graphics& graphics, float x, float y,

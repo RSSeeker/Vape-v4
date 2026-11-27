@@ -18,6 +18,7 @@ import gg.vape.ui.click.frame.Frame;
 import gg.vape.ui.click.frame.FrameNavigationButtonComponent;
 import gg.vape.ui.click.frame.FrameStackManager;
 import gg.vape.ui.click.frame.ModuleCategoryNavigationButtonComponent;
+import gg.vape.ui.click.frame.ScriptConsoleNavigationButtonComponent;
 import gg.vape.ui.click.frame.impl.profile.ProfilesFrameNavigationButtonComponent;
 import gg.vape.ui.click.frame.impl.profile.ProfilesSettingsFrame;
 import gg.vape.ui.click.frame.impl.quickactions.QuickActionsFrame;
@@ -224,6 +225,7 @@ extends ModuleCategoryFrame {
         this.addDefaultMenuComponent(new ModuleCategoryNavigationButtonComponent("Minigames", Category.MINIGAMES.getIconKey()));
         this.addDefaultMenuComponent(new ModuleCategoryNavigationButtonComponent("Other", "other").Q(1));
         this.addDefaultMenuComponent(new ModuleCategoryNavigationButtonComponent("Extension", Category.EXTENSION.getIconKey()).Q(1));
+        this.addDefaultMenuComponent(new ScriptConsoleNavigationButtonComponent());
         this.addDefaultMenuComponent(new SpacerComponent(1.0, 2.0));
         this.addDefaultMenuComponent(new SimpleTextLabelComponent("  MISC", 0.625));
         this.addDefaultMenuComponent(new SpacerComponent(1.0, 2.0));
