@@ -352,6 +352,12 @@ ClassLoader。随后 DLL 注册原生方法，并调用
 | `.\gradlew.bat buildNative` | 构建 x64 DLL 和注入器 |
 | `.\gradlew.bat prepareInjectionBundle` | 汇总可供隔离测试的 native bundle |
 
+## 贡献者
+
+- **Vinject**（[Bilibili](https://space.bilibili.com/3747587773433948)）：Vape GUI 界面设计。
+  4.21.60 的加载器无边框窗口（透明外缘、圆角面板、自绘 −/× 按钮与可拖动标题区）参考了他的 UI 方案。
+- 其他贡献见提交记录与 [CHANGELOG.md](CHANGELOG.md)。
+
 ## 许可证
 
 本仓库以 [CC0 1.0 Universal](LICENSE) 方式提供。在适用范围内，CC0 仅覆盖仓库贡献者

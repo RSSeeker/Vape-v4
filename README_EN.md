@@ -329,6 +329,12 @@ The injector only performs `LoadLibraryW`. Once loaded the DLL waits for the JVM
 | `.\gradlew.bat buildNative` | Build the x64 DLL and injector |
 | `.\gradlew.bat prepareInjectionBundle` | Produce the native bundle for isolated testing |
 
+## Contributors
+
+- **Vinject** ([Bilibili](https://space.bilibili.com/3747587773433948)): Vape GUI visual design.
+  The frameless loader window added in 4.21.60 (transparent outer edge, rounded panel, custom minimize/close buttons and a draggable title area) follows his UI design.
+- See the commit history and [CHANGELOG.md](CHANGELOG.md) for other contributions.
+
 ## License
 
 This repository is provided under [CC0 1.0 Universal](LICENSE). To the extent applicable, CC0 only covers what the repository contributors have the right to dispose of; third-party libraries, trademarks, fonts, textures and other pre-existing material remain subject to their respective rights.
