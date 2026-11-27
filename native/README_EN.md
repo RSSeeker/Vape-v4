@@ -1,4 +1,4 @@
-# Vape 4.21 native test bridge
+# Soulbound V1 native test bridge
 
 > **Language:** English | [中文](README.md)
 
@@ -53,10 +53,10 @@ implementation used controller command `0x269` over a persistent EXE socket.
 
 The Product design has two explicit launch modes:
 
-- Direct `Vape-v4.21.<version>.exe -nogui` injection has no Loader bootstrap, so
+- Direct `SoulboundV1.exe -nogui` injection has no Loader bootstrap, so
   native `gat()` returns the string `"0"`.
 - Loader startup obtains a long-lived token from the loopback Service by
-  username and exposes it to `Vape-v4.21Native.dll` through the temporary
+  username and exposes it to `SoulboundNative.dll` through the temporary
   loopback controller socket. The DLL requests it with command `0x269`, caches
   it for `gat()`, reports `trs(step)` with `0x25c`, and reports completion with
   `0x25e`. The Loader remains open through the Finished Loading page.
@@ -74,10 +74,14 @@ The token and loading state use the decomp-supported controller commands over
 loopback. The full design is documented at
 `../../native_method_research/loader_product_token_handoff_design.md`.
 
+## Data and validation
+
+A fresh install uses `.soulbound` next to the launcher; a legacy-only `.vapeclient` is reused, and `.soulbound` wins if both exist. Nothing is moved or deleted. The paths below show the fresh-install case. Back up your selected folder before testing. The compatibility matrix is inherited from the recovery project and is not a claim of live Soulbound gameplay testing.
+
 ## Language
 
 The GUI and Java payload default to English. An explicit Chinese setting in
-`<exe>\.vapeclient\config.json` is honored on the next launch; missing,
+`<exe>\.soulbound\config.json` is honored on the next launch; missing,
 unreadable or malformed settings default to English. The `-nogui` console is
 English. Both GUI and console modes reject an adjacent DLL unless it matches
 the executable's embedded DLL; an older external copy cannot replace it.
@@ -95,14 +99,14 @@ The default build randomizes product class names, like the supplied EXE:
 
 For native-only development, invoke CMake directly — these are the two steps the
 Gradle `configureNative` / `buildNative` tasks perform (`nativeJavaHome` is passed
-as `VAPE421_JAVA_HOME`, and `VAPE421_VERSION` comes from the version in
-`build.gradle`):
+as `VAPE421_JAVA_HOME`, and `VAPE421_VERSION` comes from the `soulboundVersion` in
+`gradle.properties`):
 
 ```powershell
 cmake -S native -B build/native -A x64 `
   -DVAPE421_JAVA_HOME="C:\Program Files\Java\jdk1.8.0_301" `
-  -DVAPE421_PRODUCT_JAR="build\libs\vape421-product-recovery-4.21.58-injection.jar" `
-  -DVAPE421_VERSION=4.21.58
+  -DVAPE421_PRODUCT_JAR="build\libs\soulbound-1-injection.jar" `
+  -DVAPE421_VERSION=1
 cmake --build build/native --config Release
 ```
 
@@ -114,11 +118,11 @@ ctest --test-dir build/native -C Release --output-on-failure
 
 Outputs are written to `build/native/dist`:
 
-- `Vape-v4.21Native.dll` — carries the recovered product JAR as an `RCDATA`
+- `SoulboundNative.dll` — carries the recovered product JAR as an `RCDATA`
   resource
-- `Vape-v4.21.<version>.exe` — single-file GUI loader (embeds the DLL above)
+- `SoulboundV1.exe` — single-file GUI loader (embeds the DLL above)
 
-> There is no separate `Vape-v4.21Injector.exe` any more: console injection is
+> There is no separate injector EXE: console injection is
 > the `-nogui` mode of the same exe (`injector.c` is compiled into it).
 
 `prepareInjectionBundle` copies those two artifacts plus this README into
@@ -128,26 +132,26 @@ Those checks do not replace gameplay testing or guarantee identical behavior.
 
 ## Direct injection
 
-`Vape-v4.21Native.dll` contains the recovered Java product as an `RCDATA`
+`SoulboundNative.dll` contains the recovered Java product as an `RCDATA`
 resource. Start a supported Minecraft instance with a 64-bit JVM (including
 Forge-enabled Lunar Client and Badlion Client 1.8.9), then run the loader from
 the bundle directory:
 
 ```powershell
-Vape-v4.21.<version>.exe
+SoulboundV1.exe
 ```
 
-With no arguments this opens the GUI loader (window title "Vape v4"): it
+With no arguments this opens the GUI loader (window title "Soulbound V1"): it
 auto-refreshes the visible Java windows, shows their window titles (for example
 `Minecraft` or `Lunar Client`), and injects into the process you pick.
-In GUI mode an adjacent `Vape-v4.21Native.dll` is used only if it matches the
+In GUI mode an adjacent `SoulboundNative.dll` is used only if it matches the
 embedded copy. Otherwise the embedded resource is extracted to an unused
 recovery filename; existing files are not recursively deleted or truncated.
 
 Console mode requires `-nogui` as the first argument:
 
 ```powershell
-Vape-v4.21.<version>.exe -nogui <minecraft-pid>
+SoulboundV1.exe -nogui <minecraft-pid>
 ```
 
 Without a pid it opens the auto-refreshing Java window picker (Up/Down to select,
@@ -172,7 +176,7 @@ It is then attached per runtime:
 It then registers the nine authoritative methods plus the Product `gat()`
 compatibility native, and calls `NativeBridge.start()` automatically. No second
 command or start flag is required. Inspect the per-injection log under
-`.vapeclient\log\vape421-native-<pid>-<timestamp>.log` next to the bundle for
+`.soulbound\log\soulbound-native-<pid>-<timestamp>.log` next to the bundle for
 the exact result.
 
 The injection payload is compiled with `--release 8`; its project classes use

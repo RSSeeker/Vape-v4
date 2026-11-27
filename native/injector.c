@@ -151,7 +151,7 @@ static void render_selector(const process_candidate *candidates, size_t count,
         SetConsoleCursorPosition(output, home);
         previous_rows = rows;
     }
-    wprintf(L"Vape injector\n");
+    wprintf(L"Soulbound injector\n");
     wprintf(L"DLL: %ls\n\n", dll_path);
     wprintf(L"Select a Java game window (Up/Down to select, Enter to inject, Esc to exit)\n\n");
     if (count == 0) {
@@ -371,7 +371,7 @@ static int inject_library(DWORD process_id, const wchar_t *dll_path) {
     }
     if (result == 0) {
         fwprintf(stderr, L"LoadLibraryW returned, but the DLL was not mapped. "
-                L"Check .vapeclient\\log for bootstrap errors.\n");
+                L"Check the selected client folder's log directory for bootstrap errors.\n");
         goto cleanup;
     }
 
@@ -388,14 +388,14 @@ cleanup:
 static void usage(void) {
     wchar_t executable[MAX_PATH];
     if (GetModuleFileNameW(NULL, executable, MAX_PATH) == 0) {
-        wcsncpy_s(executable, MAX_PATH, L"Vape.exe", _TRUNCATE);
+        wcsncpy_s(executable, MAX_PATH, L"Soulbound.exe", _TRUNCATE);
     }
     executable[MAX_PATH - 1] = L'\0';
     fwprintf(stderr,
             L"Usage: \"%ls\" -nogui [minecraft-pid]\n"
             L"Without a PID, an auto-refreshing Java window picker is shown.\n"
             L"An adjacent DLL is used only when it matches the embedded DLL.\n"
-            L"Otherwise, the embedded DLL is extracted to <exe>\\.vapeclient\\Vape-v4.21Recovery.\n",
+            L"Otherwise, the embedded DLL is extracted into the selected client folder.\n",
             executable);
 }
 
@@ -421,7 +421,7 @@ int console_main(int argc, wchar_t **argv) {
     }
     /* Use the same checked, non-destructive materializer as GUI mode. */
     if (!vape421_materialize_dll(process_id, dll_path, MAX_PATH)) {
-        fwprintf(stderr, L"Could not extract the embedded Vape-v4.21Native.dll.\n");
+        fwprintf(stderr, L"Could not extract the embedded SoulboundNative.dll.\n");
         return 2;
     }
     if (argc != 1) {

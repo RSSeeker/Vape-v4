@@ -1,6 +1,7 @@
 #include "embedded_dll_materializer.h"
 #include "embedded_resource_integrity.h"
 #include "locked_resource_file.h"
+#include "client_data_path.h"
 
 #include <windows.h>
 
@@ -44,17 +45,19 @@ extern "C" int vape421_materialize_dll(unsigned long processId, wchar_t* output,
     if (!embeddedDll(bytes, size) || !executableDirectory(exeDir)) return 0;
 
     // An optional bundled copy is usable only if it is byte-for-byte identical.
-    const std::wstring external = exeDir + L"\\Vape-v4.21Native.dll";
+    const std::wstring external = exeDir + L"\\SoulboundNative.dll";
     if (embedded_resource_integrity::matchesFile(external, bytes, size)) {
         return copyResult(external, output, capacity) ? 1 : 0;
     }
-    const std::wstring root = exeDir + L"\\.vapeclient";
+    wchar_t rootBuffer[MAX_PATH]{};
+    if (!soulbound_client_directory(exeDir.c_str(), rootBuffer, std::size(rootBuffer))) return 0;
+    const std::wstring root(rootBuffer);
     if (!CreateDirectoryW(root.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS) return 0;
     const DWORD attributes = GetFileAttributesW(root.c_str());
     if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_HIDDEN) == 0) {
         SetFileAttributesW(root.c_str(), attributes | FILE_ATTRIBUTE_HIDDEN);
     }
-    const std::wstring directory = root + L"\\Vape-v4.21Recovery";
+    const std::wstring directory = root + L"\\SoulboundRecovery";
     if (!CreateDirectoryW(directory.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS) return 0;
 
     // Do not sweep the directory or truncate any existing file. A reused file
@@ -63,9 +66,9 @@ extern "C" int vape421_materialize_dll(unsigned long processId, wchar_t* output,
         wchar_t target[MAX_PATH]{};
         const int length = attempt == 0
             ? _snwprintf_s(target, std::size(target), _TRUNCATE,
-                L"%ls\\Vape-v4.21Native-%lu.dll", directory.c_str(), processId)
+                L"%ls\\SoulboundNative-%lu.dll", directory.c_str(), processId)
             : _snwprintf_s(target, std::size(target), _TRUNCATE,
-                L"%ls\\Vape-v4.21Native-%lu-%lu-%u.dll", directory.c_str(), processId,
+                L"%ls\\SoulboundNative-%lu-%lu-%u.dll", directory.c_str(), processId,
                 static_cast<unsigned long>(GetCurrentProcessId()), attempt);
         if (length < 0 || static_cast<size_t>(length) >= capacity) return 0;
         HANDLE file = CreateFileW(target, GENERIC_WRITE, FILE_SHARE_READ, nullptr,

@@ -1,7 +1,7 @@
 param(
     [string]$BuildDir = "build/native",
     [string]$Version = "",
-    [string]$Subject = "CN=OpenVape",
+    [string]$Subject = "CN=Soulbound",
     [switch]$Quiet
 )
 
@@ -13,13 +13,17 @@ function Write-Step($msg) {
 
 # Resolve the injector version from the dist folder when not supplied.
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    $candidate = Get-ChildItem -Path (Join-Path $BuildDir "dist") -Filter "Vape-v*.exe" -ErrorAction SilentlyContinue |
-        Sort-Object Name -Descending | Select-Object -First 1
-    if ($candidate -and $candidate.Name -match '^Vape-v(.+)\.exe$') { $Version = $Matches[1] }
+    $candidates = @(Get-ChildItem -Path (Join-Path $BuildDir "dist") -Filter "SoulboundV*.exe" -File -ErrorAction SilentlyContinue)
+    if ($candidates.Count -ne 1) {
+        throw "Supply -Version when the dist directory does not contain exactly one Soulbound executable."
+    }
+    if ($candidates[0].Name -match '^SoulboundV([1-9][0-9]*(\.[0-9]+)*)\.exe$') { $Version = $Matches[1] }
 }
 
-$dllPath = Join-Path $BuildDir "dist/Vape-v4.21Native.dll"
-$exePath = Join-Path $BuildDir "dist/Vape-v$Version.exe"
+if ($Version -notmatch '^[1-9][0-9]*(\.[0-9]+)*$') { throw "Invalid Soulbound version: $Version" }
+
+$dllPath = Join-Path $BuildDir "dist/SoulboundNative.dll"
+$exePath = Join-Path $BuildDir "dist/SoulboundV$Version.exe"
 
 if (-not (Test-Path $dllPath)) { throw "missing native dll: $dllPath" }
 if (-not (Test-Path $exePath)) { throw "missing injector exe: $exePath" }

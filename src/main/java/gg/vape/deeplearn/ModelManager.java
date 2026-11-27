@@ -22,7 +22,7 @@ import java.util.logging.Logger;
  */
 public final class ModelManager {
 
-    private static final Logger LOGGER = Logger.getLogger("Vape/AI/ModelManager");
+    private static final Logger LOGGER = Logger.getLogger("Soulbound/AI/ModelManager");
 
     private static final String[] BUILT_IN_COMBAT_MODELS = {"21KC11KP", "19KC8KP"};
 

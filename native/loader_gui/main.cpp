@@ -65,7 +65,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, wchar_t*, int showCommand) 
     }
 
     ControllerModel model;
-    // Follow the language the product saved in <exe>\.vapeclient\config.json so
+    // Follow the language saved in the selected client folder's config.json so
     // the very first screen already matches the in-game setting. Read before the
     // UI is constructed; any failure keeps the loader on English.
     loaderStringsInitialize(model.cacheDirectory());

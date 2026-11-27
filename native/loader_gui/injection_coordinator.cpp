@@ -182,16 +182,20 @@ bool writeTextFile(const std::wstring& path, const std::wstring& text) {
  * <client root>\.vapeclient) so a marker survives a hidden-folder surprise. */
 void writeInjectionMarker(const std::wstring& installDirectory, bool manualMapped,
         const std::wstring& manualMapError, std::uint32_t processId) {
-    const std::wstring marker = L"\\.vapeclient\\";
+    const std::wstring currentMarker = L"\\.soulbound\\";
+    const std::wstring legacyMarker = L"\\.vapeclient\\";
     const std::wstring fileName = manualMapped ? L"manual-map-ok.txt"
                                                : L"manual-map-fallback.txt";
     const std::wstring otherName = manualMapped ? L"manual-map-fallback.txt"
                                                 : L"manual-map-ok.txt";
     std::vector<std::wstring> directories;
     directories.push_back(installDirectory);
-    const auto position = installDirectory.rfind(marker);
+    const auto current = installDirectory.rfind(currentMarker);
+    const auto legacy = installDirectory.rfind(legacyMarker);
+    const bool useCurrent = current != std::wstring::npos && (legacy == std::wstring::npos || current > legacy);
+    const auto position = useCurrent ? current : legacy;
     if (position != std::wstring::npos) {
-        directories.push_back(installDirectory.substr(0, position) + marker);
+        directories.push_back(installDirectory.substr(0, position) + (useCurrent ? currentMarker : legacyMarker));
     }
     SYSTEMTIME now{};
     GetLocalTime(&now);
@@ -347,7 +351,7 @@ bool InjectionCoordinator::injectProductDll(std::uint32_t processId,
      * process module list. Fall back to the LoadLibraryW loader when the
      * reflective loader is unavailable or refuses the image. */
     const std::wstring installDirectory = parentDirectory(dllPath);
-    const std::wstring manualJarBase = installDirectory + L"\\Vape-v4.21-product-" +
+    const std::wstring manualJarBase = installDirectory + L"\\Soulbound-product-" +
         std::to_wstring(processId);
     std::wstring manualJarPath;
     bool manualMapped = false;

@@ -41,16 +41,23 @@ public final class ObfuscatedClassAudit {
             "gg/vape/event/impl/EventRenderWorldPassExecutorDrain"));
     // Localization edits and separately reviewed module behavior changes.
     private static final Set<String> EXPECTED_ENGLISH_MODULE_CHANGES = new HashSet<>(Arrays.asList(
-            "gg/vape/module/none/ClientSettings", "gg/vape/module/render/SpawnerFinder",
-            "gg/vape/module/render/StorageESP",
-            "gg/vape/module/combat/SilentAura", "gg/vape/module/combat/AimAssist",
-            "gg/vape/module/combat/AutoMace", "gg/vape/module/combat/HitSwap",
-            "gg/vape/module/combat/Triggerbot", "gg/vape/module/render/Search",
-            "gg/vape/module/render/search/SearchBlockChunkScanner",
-            "gg/vape/module/combat/automace/AutoMaceRotationController",
+            "gg/vape/module/combat/AimAssist",
+            "gg/vape/module/combat/AutoMace",
+            "gg/vape/module/combat/HitSwap",
+            "gg/vape/module/combat/SilentAura",
+            "gg/vape/module/combat/Triggerbot",
             "gg/vape/module/combat/aimassist/AimAssistKissSubModule",
             "gg/vape/module/combat/aimassist/AimAssistRotationSubModule",
-            "gg/vape/module/combat/aimassist/AimAssistTargetingSubModule"));
+            "gg/vape/module/combat/aimassist/AimAssistTargetingSubModule",
+            "gg/vape/module/combat/automace/AutoMaceRotationController",
+            "gg/vape/module/extension/ReloadScriptsModule",
+            "gg/vape/module/none/ClientSettings",
+            "gg/vape/module/none/TextGuiSettings",
+            "gg/vape/module/render/Search",
+            "gg/vape/module/render/SpawnerFinder",
+            "gg/vape/module/render/StorageESP",
+            "gg/vape/module/render/hud/MotionBlur",
+            "gg/vape/module/render/search/SearchBlockChunkScanner"));
 
     private static final class Metadata extends ClassVisitor {
         String source;

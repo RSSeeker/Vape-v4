@@ -53,7 +53,7 @@ extends TutorialOverlayPanelBase {
         this.h(new IconGlyphComponent("mask_l_1", 32.0f, 38.0f), "topLeft");
         this.h(new IconGlyphComponent("mask_r_1", 32.0f, 46.0f), "bottomRight");
         this.h(new WrappingTextLabelComponent("Welcome", 1.25, TutorialWelcomePanel.J.Z), "spanwidth, offsetY 20, offsetX 10");
-        this.h(new WrappingTextLabelComponent("Thank you for choosing Vape V4!\n \nIf you are new to Vape, or clients in general, please proceed with the tutorial", 0.8, TutorialWelcomePanel.J.Z), "spanwidth, offsetY 30, offsetX 20");
+        this.h(new WrappingTextLabelComponent("Thank you for choosing Soulbound!\n \nIf you are new to Soulbound, or clients in general, please proceed with the tutorial", 0.8, TutorialWelcomePanel.J.Z), "spanwidth, offsetY 30, offsetX 20");
         UnderlinedTextLabel underlinedTextLabel = new UnderlinedTextLabel("Skip tutorial", 0.85, TutorialWelcomePanel.J.h);
         this.h(underlinedTextLabel, "offsetX 30, offsetY 80");
         TutorialWelcomeStartButton tutorialWelcomeStartButton = new TutorialWelcomeStartButton(this, "Tutorial", TutorialWelcomePanel.J.U, TutorialWelcomePanel.J.U.brighter());

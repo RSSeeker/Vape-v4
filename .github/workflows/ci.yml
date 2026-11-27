@@ -149,9 +149,9 @@ jobs:
         run: |
           $baseline = @(Get-ChildItem -Path 'build/module-parity-baseline/build/libs' -Filter '*-injection.jar' -File)
           $current = @(Get-ChildItem -Path 'build/libs' -Filter '*-injection.jar' -File)
-          $executables = @(Get-ChildItem -Path 'build/injection' -Filter 'Vape-v*.exe' -File)
+          $executables = @(Get-ChildItem -Path 'build/injection' -Filter 'SoulboundV*.exe' -File)
           if ($baseline.Count -ne 1 -or $current.Count -ne 1 -or $executables.Count -ne 1) {
-            throw 'Expected exactly one baseline JAR, English JAR, and English EXE.'
+            throw 'Expected exactly one baseline JAR, Soulbound JAR, and Soulbound EXE.'
           }
           python -B -X utf8 tools/verify_module_parity.py `
             --baseline-source 'build/module-parity-baseline' --current-source '.' `
@@ -159,7 +159,7 @@ jobs:
             --embedded-jar 'build/obfuscated-payload/payload.jar' `
             --original-exe (Join-Path $env:RUNNER_TEMP 'Vape-v4.21.58-original.exe') `
             --original-jar-output (Join-Path $env:RUNNER_TEMP 'Vape-original-payload.jar') `
-            --current-exe $executables[0].FullName --current-dll 'build/injection/Vape-v4.21Native.dll' `
+            --current-exe $executables[0].FullName --current-dll 'build/injection/SoulboundNative.dll' `
             --report 'build/injection/MODULE-PARITY-REPORT.txt'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -206,9 +206,9 @@ jobs:
       - name: Record bundle checksums
         shell: pwsh
         run: |
-          $executables = @(Get-ChildItem -Path build/injection -Filter 'Vape-v*.exe' -File)
+          $executables = @(Get-ChildItem -Path build/injection -Filter 'SoulboundV*.exe' -File)
           if ($executables.Count -ne 1) { throw "Expected exactly one rebuilt EXE" }
-          $dll = Get-Item -LiteralPath 'build/injection/Vape-v4.21Native.dll'
+          $dll = Get-Item -LiteralPath 'build/injection/SoulboundNative.dll'
           $checksums = foreach ($file in ($executables + @($dll))) {
             $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $($file.Name)"
@@ -216,6 +216,17 @@ jobs:
           $checksums | Set-Content -LiteralPath 'build/injection/SHA256SUMS.txt' -Encoding ascii
           Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '## Rebuilt bundle SHA-256'
           $checksums | ForEach-Object { Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- $_" }
+
+      - name: Verify product, bundle and embedded versions agree
+        shell: pwsh
+        run: |
+          $exe = @(Get-ChildItem -Path build/injection -Filter 'SoulboundV*.exe' -File)
+          $jar = @(Get-ChildItem -Path build/libs -Filter '*-injection.jar' -File)
+          if ($exe.Count -ne 1 -or $jar.Count -ne 1) { throw 'Expected one executable and one source payload.' }
+          python -B -X utf8 tools/verify_release_version.py --executable $exe[0].FullName `
+            --dll 'build/injection/SoulboundNative.dll' --checksums 'build/injection/SHA256SUMS.txt' `
+            --payload $jar[0].FullName --payload 'build/obfuscated-payload/payload.jar'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload un-obfuscated Java source-build payload
         uses: actions/upload-artifact@v4
@@ -225,13 +236,29 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload English Windows x64 bundle
+      - name: Upload Soulbound Windows x64 bundle
         uses: actions/upload-artifact@v4
         with:
-          name: windows-x64-english-bundle
+          name: windows-x64-soulbound-bundle
           path: build/injection/
           if-no-files-found: error
           retention-days: 14
+
+      # Exercise incrementing versions in the same build tree *after* uploading
+      # the release candidate. These diagnostic builds must never be published.
+      - name: Test incremental 1.1 and 1.2 versioned bundles
+        shell: pwsh
+        run: |
+          foreach ($version in @('1.1', '1.2')) {
+            .\gradlew.bat prepareInjectionBundle -PtargetRelease=8 -PnoObfuscation "-PsoulboundVersion=$version" "-PnativeJavaHome=${{ steps.setup-jdk8.outputs.path }}" --stacktrace
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $properties = Join-Path $env:RUNNER_TEMP "soulbound-version-$version.properties"
+            "soulboundVersion=$version" | Set-Content -LiteralPath $properties -Encoding ascii
+            python -B -X utf8 tools/verify_release_version.py --properties $properties --tag "SoulboundV$version" `
+              --payload "build/libs/soulbound-$version-injection.jar" `
+              --executable "build/injection/SoulboundV$version.exe" --dll 'build/injection/SoulboundNative.dll'
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
   scan-bundle:
     name: Scan the rebuilt bundle as data
@@ -242,7 +269,7 @@ jobs:
       - name: Download this run's Windows bundle
         uses: actions/download-artifact@v4
         with:
-          name: windows-x64-english-bundle
+          name: windows-x64-soulbound-bundle
           path: bundle
       - name: Hash and scan without executing the bundle
         shell: bash

@@ -1,13 +1,13 @@
-# Vape 4.21 Product Recovery
+# Soulbound V1 — 产品恢复
 
 > **语言 / Language:** 中文 | [English](README.md)
 >
-> 发布页：[Releases](https://github.com/RSSeeker/Vape-v4/releases)
+> Soulbound 发布页：[Releases](https://github.com/arsnexc/Vape-v421/releases) · [上游参考](https://github.com/RSSeeker/Vape-v4/releases)
 >
 > 源代码来源：[OpenVapeCN/OpenVape](https://github.com/OpenVapeCN/OpenVape)
 > （本项目基于该公开仓库的源代码进行恢复、整理与本地化）。
 
-Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附带完整中文本地化。
+Soulbound 是基于 Vape 4.21 恢复源码的独立研究性重命名版本，包含 Java 层、Windows x64 原生桥接层及中英文界面。
 
 ## 免责声明与版权说明
 
@@ -31,21 +31,26 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 
 ## 安全性声明
 
-本项目仅通过本 GitHub 仓库与 B站账号 [RS_Seeker](https://space.bilibili.com/649086235) 视频附带资源发布源码与构建产物，以上渠道发布的文件可保证安全性。
-任何在其他 GitHub 仓库、Discord、QQ群、Telegram群、第三方网站或网盘等渠道发布的 "Vape" 相关程序安全性均无法保证。本项目不对这些程序及其可能造成的损失承担任何责任。
+请核验下载来源、签名和哈希；任何发布渠道都不能保证安全。旧构建曾被报告出现 VirusTotal 检测，但未提供报告与检测名称；单次 ClamAV 未检出并不能证明安全。详见[安全调查](docs/security-investigation.md)。在独立调查之前请隔离被标记的文件，不要添加杀毒软件排除项。
+
+## 数据路径与版本
+
+新安装默认使用 exe 旁的 `.soulbound`。若只有旧目录 `.vapeclient`，则继续使用旧目录；两者同时存在时优先 `.soulbound`。不会移动或删除旧数据。所选目录中，若不存在 `soulbound-service.json`，服务会复用 `vape-service.json`；若不存在 `texture-cache`，纹理缓存会复用 `vapeTextures`。无原生启动器提供 `vape.directory` 时，配置回退到工作目录，服务与纹理缓存保留原来的 `user.home` 回退。测试前请备份。
+
+以下示例以 V1 和 `.soulbound` 为例。版本由 `gradle.properties` 的 `soulboundVersion` 控制；具体构建及发布方法见[主文档](README.md#versioning-and-releases)。为兼容旧数据，`gg.vape.*`、JNI、配置档中的 `4.21` 等标识不会改名。
 
 ## 主要产物
 
 | 文件 | 说明 |
 | --- | --- |
-| `Vape-v4.21.*.exe` | GUI 单文件加载器（内嵌完整 DLL 与 Java 载荷 + 图标） |
+| `SoulboundV1.exe` | GUI 单文件加载器（内嵌完整 DLL 与 Java 载荷 + 图标） |
 
-**可选外部 DLL**：GUI 和控制台只接受与 exe 内嵌 DLL 逐字节一致的 `Vape-v4.21Native.dll`；否则使用内嵌版本。此检查不能证明 exe 或 DLL 安全。
+**可选外部 DLL**：GUI 和控制台只接受与 exe 内嵌 DLL 逐字节一致的 `SoulboundNative.dll`；否则使用内嵌版本。此检查不能证明 exe 或 DLL 安全。
 
 **使用方式**：
 
-- 双击运行 → GUI 界面（窗口标题「Vape v4」），直接选择 Minecraft 进程注入，无需登录
-- 命令行注入器：`Vape-v4.21.*.exe -nogui [pid]` —— 不带 pid 弹出进程选择器，带 pid 直接注入
+- 双击运行 → GUI 界面（窗口标题「Soulbound V1」），直接选择 Minecraft 进程注入，无需登录
+- 命令行注入器：`SoulboundV1.exe -nogui [pid]` —— 不带 pid 弹出进程选择器，带 pid 直接注入
 - 注入完成后游戏中按 右Shift（默认）打开功能界面
 
 ## 特性
@@ -55,8 +60,8 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 - 集成上游 VapeLoader 图形界面（GDI+ 自绘，支持中英文）：进程选择 / 注入进度 / 加载完成
 - 去掉登录页与缓存询问页：启动即选进程注入，本地生成 token
 - **DLL 完整性检查**：外部 DLL 必须与内嵌资源一致；否则解压内嵌版本，不覆盖已有恢复文件
-- 窗口标题「Vape v4」，图标与产品一致
-- 文件落盘全部收拢进 exe 旁隐藏的 `.vapeclient` 目录（解压的 DLL/JAR、日志、配置、服务数据、纹理缓存）
+- 窗口标题「Soulbound V1」，图标与产品一致
+- 文件落盘全部收拢进 exe 旁隐藏的 `.soulbound` 目录（解压的 DLL/JAR、日志、配置、服务数据、纹理缓存）
 
 **注入方式**
 
@@ -75,7 +80,7 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 
 - 内嵌 **VapeService**（HTTP 8080 + Zeus TCP 8091 配套服务），游戏内自动后台启动：
   - 账号 / 设置 / 配置档 / 好友 / 小队 / 位置共享等在线功能本地跑通
-  - 服务数据存于 exe 旁 `.vapeclient\vape-service.json`，与本地配置（`.vapeclient\config.json`）分离存储，互不冲突
+  - 服务数据存于 exe 旁 `.soulbound\soulbound-service.json`，与本地配置（`.soulbound\config.json`）分离存储，互不冲突
   - 端口占用自动向上探测空闲端口；启动失败静默降级，不影响游戏
   - 支持环境变量配置（见下文「内嵌服务配置」）
 
@@ -96,9 +101,9 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 - **26.2 图形后端**：26.2 引入 Vulkan 后端，Vape 基于 OpenGL，需将图形 API 切换为 OpenGL 后使用（详见下方兼容性说明）
 - 新增 1.21.0+ / 26.x 渲染管线适配（`blitToScreen` 帧末钩子），动态模糊等后处理可跨版本工作
 - 版本探测增强：区分 Vanilla / Forge / NeoForge / Fabric 运行时，避免旧版 Fabric 误判（1.20.1-Fabric 除外，见兼容性表）
-- 配置本地持久化：模块设置、配置档、好友、框架位置保存至 `.vapeclient\config.json`，自动保存 + 退出兜底
-- 原生日志与 Java 日志统一到 `.vapeclient\log\`，每次注入生成独立日志文件
-- 单文件注入器：`Vape-v4.21.*.exe` 内嵌完整 DLL 与 Java 载荷
+- 配置本地持久化：模块设置、配置档、好友、框架位置保存至 `.soulbound\config.json`，自动保存 + 退出兜底
+- 原生日志与 Java 日志统一到 `.soulbound\log\`，每次注入生成独立日志文件
+- 单文件注入器：`SoulboundV1.exe` 内嵌完整 DLL 与 Java 载荷
 
 ### 它不是 Vape 官方源码、原始发布包或厂商签名产物，也不保证具备与原产品完全一致的行为。
 
@@ -107,10 +112,10 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 
 ## 脚本扩展
 
-客户端内嵌 Mozilla Rhino 1.7.15（重定位到 `gg.vape.shaded.org.mozilla`，解释执行、不生成字节码），可从 `.vapeclient\scripts\` 加载自定义模块脚本：
+客户端内嵌 Mozilla Rhino 1.7.15（重定位到 `gg.vape.shaded.org.mozilla`，解释执行、不生成字节码），可从 `.soulbound\scripts\` 加载自定义模块脚本：
 
 ```text
-.vapeclient/
+.soulbound/
   scripts/
     example.json      模块描述（必需）
     example.js        脚本入口（默认与 json 同名，可用 main 指定）
@@ -125,7 +130,7 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
   `onMove` / `onWorldChange` / `onPacketSend` / `onPacketReceive` 回调、`storage` 持久化、
   `after()` 定时器、`load()` 多文件
 - 「重新加载脚本」模块可热重载：重新编译已有脚本、注册新增 json、禁用已删除 json 对应的模块
-- 脚本加载或运行出错会在游戏内弹提示，并写入 `.vapeclient\extension.log`
+- 脚本加载或运行出错会在游戏内弹提示，并写入 `.soulbound\extension.log`
 
 完整开发文档（JSON 字段、全部 API、示例、版本白名单、限制与安全）见
 [`docs/scripting.md`](docs/scripting.md)。
@@ -136,6 +141,8 @@ Vape 4.21 的 Java 层与 Windows x64 原生桥接层研究性恢复工程，附
 > 脚本等同于运行来源不明的程序。
 
 ## Minecraft 兼容性
+
+下表是恢复工程的预期范围，并不表示 Soulbound V1 已经实机测试；已知映射和显示问题仍然存在。
 
 | Minecraft | Vanilla | Forge | Fabric |
 | --- | :---: | :---: | :---: |
@@ -208,7 +215,7 @@ Loader 依赖 Java 进程和可见窗口标题来发现游戏，只有窗口标�
 
 若第一次注入失败，请重启 Minecraft 后重新注入。
 
-### 3. Loader 提示 Vape421Native.dll was not found beside the Loader
+### 3. Loader 提示 SoulboundNative.dll was not found beside the Loader
 
 此提示表示 DLL 无法打开或校验。外部 DLL 并非必需，但必须与内嵌资源一致；请检查解压和恢复目录权限，不要为了加载而绕过安全警告。
 
@@ -216,15 +223,15 @@ Loader 依赖 Java 进程和可见窗口标题来发现游戏，只有窗口标�
 
 Vape 4.21 支持 1.7.10、1.8.9、1.12.2、1.21.11 和 26.2 的 Vanilla，1.21.10 的 Forge / NeoForge（该版本各加载器均为实验性支持），以及 1.21.11 / 26.2 的 Fabric；其他 Fabric 版本、以及 1.21.10 的 Fabric 不在当前支持范围。
 
-出现该提示说明 Vape 注入失败：请确认 Minecraft 是否为受支持的版本，重启游戏后重新注入。若问题依旧，请检查 `vape421-native.log` 并反馈问题。
+出现该提示说明 Vape 注入失败：请确认 Minecraft 是否为受支持的版本，重启游戏后重新注入。若问题依旧，请检查 每次注入的 `soulbound-native-*.log` 并反馈问题。
 
 ### 5. Loader 显示 Finished Loading，但游戏中没有出现 Finished Loading 提示
 
-说明 Vape 注入失败：请确认 Minecraft 是否为受支持的版本，重启游戏后重新注入。若问题依旧，请检查 `vape421-native.log` 并反馈问题。
+说明 Vape 注入失败：请确认 Minecraft 是否为受支持的版本，重启游戏后重新注入。若问题依旧，请检查 每次注入的 `soulbound-native-*.log` 并反馈问题。
 
 ### 6. 出现 injection error code，或字段 / 方法映射失败、客户端崩溃
 
-请确认 Minecraft 是否为受支持的版本，重启游戏后重新注入。若问题依旧，请检查 `vape421-native.log` 并反馈问题。
+请确认 Minecraft 是否为受支持的版本，重启游戏后重新注入。若问题依旧，请检查 每次注入的 `soulbound-native-*.log` 并反馈问题。
 
 ### 7. ClickGUI 能打开，但无法点击、鼠标位置错误或按键卡住
 
@@ -232,22 +239,22 @@ Vape 4.21 支持 1.7.10、1.8.9、1.12.2、1.21.11 和 26.2 的 Vanilla，1.21.1
 
 ### 8. Render 模块导致 OpenGL 1283、HUD 消失、画面损坏或崩溃
 
-Minecraft 1.16.5 及其他未列出的 1.16+ 版本兼容性仍然不佳。请使用下列已验证的组合：
+Minecraft 1.16.5 及其他未列出的 1.16+ 版本兼容性仍然不佳。上游列出过下列组合，但 Soulbound 版本尚未实机验证：
 
-- 1.21.11 Forge：Forge 61.0.8（已验证）
+- 1.21.11 Forge：Forge 61.0.8
 - 1.21.11 Fabric：Fabric Loader 0.19.3
-- 26.2 Forge：Forge 65.1.0（已验证）
+- 26.2 Forge：Forge 65.1.0
 - 26.2 Fabric：Fabric Loader 0.19.3
 
 ### 9. 配置消失、保存失败、好友或小队（Party）状态异常
 
-VapeService 使用单个本地 JSON 文件保存账户与配置，数据路径相对于启动目录 —— 换目录启动会看起来像创建了全新账户。文件损坏、无写权限、磁盘已满、同时运行多个 Service 实例或异常退出都可能影响保存。同一账户的新 Zeus 连接会替换旧连接；Service 重启、系统休眠或网络切换后，高频在线状态也不会自动恢复。
+内嵌服务在所选客户端目录中保存账户数据；独立服务默认使用相对于工作目录的 `data/vape-service.json`，换目录启动可能看起来像创建了全新账户。文件损坏、无写权限、磁盘已满、同时运行多个 Service 实例或异常退出都可能影响保存。同一账户的新 Zeus 连接会替换旧连接；Service 重启、系统休眠或网络切换后，高频在线状态也不会自动恢复。
 
 建议始终使用明确的 `--data-file` 路径并定期备份，同时避免两个 Service 实例写同一文件。当前 Service 是实验性兼容层：部分公共配置、评论、举报、标签和分页行为为简化实现，连接成功不等于所有原版 Online 功能完整可用。
 
-### 10. Release 里的类名为什么不是随机的？
+### 10. 产品类名是否随机化？
 
-Release 发布包按原类名编译，**不做类名混淆**，方便核对与排查。想要每次构建都得到随机的包名与类名，请自行编译：本地执行 `gradlew.bat build verifyInjectionPayload prepareInjectionBundle` 时默认开启编译时混淆（所有自有的 `gg.vape.*` 类会重命名为随机 16 位名字，被 native 硬编码的三个类保留原名），每次构建结果都不同，映射表写入 `build/rename-mapping.txt`，用于反混淆崩溃日志。
+本分支的 CI 发布构建默认随机化产品类名；native 硬编码的三个类保留原名。`-PnoObfuscation` 可用于诊断构建。CI 会在名称还原后比较内嵌模块类，但这不能证明运行时行为一致或避免检测。
 
 ## 内嵌服务配置
 
@@ -259,7 +266,7 @@ VapeService 在游戏内自动启动，默认监听 `127.0.0.1:8080`（HTTP）�
 | `VAPE_BIND_ADDRESS` | `127.0.0.1` | 绑定地址；设为 `0.0.0.0` 可允许局域网访问 |
 | `VAPE_HTTP_PORT` | `8080` | HTTP 端口 |
 | `VAPE_ZEUS_PORT` | `8091` | Zeus TCP 端口 |
-| `VAPE_DATA_FILE` | `<exe>/.vapeclient/vape-service.json` | 服务数据文件路径 |
+| `VAPE_DATA_FILE` | `<exe>/.soulbound/soulbound-service.json` | 服务数据文件路径 |
 
 客户端侧已有 `VAPE_ONLINE_BASE_URL` / `VAPE_ZEUS_ADDRESS` 覆盖服务地址，与上述变量配合
 可实现局域网多端互联。
@@ -268,8 +275,7 @@ VapeService 在游戏内自动启动，默认监听 `127.0.0.1:8080`（HTTP）�
 
 仅编译和校验 Java 层需要：
 
-- JDK 17，用作 Gradle toolchain；输出默认编译为 Java 17 字节码，传
-  `-PtargetRelease=8` 可输出 Java 8 字节码（CI 构建即采用该参数）
+- JDK 17，用作 Gradle toolchain；`gradle.properties` 默认使用 Java 8 兼容字节码，CI 也明确传入 `-PtargetRelease=8`
 - 项目自带的 Gradle Wrapper；构建脚本固定要求 Gradle 8.8
 - 可访问 Maven Central 和 Gradle Plugin Portal 的网络连接
 
@@ -308,36 +314,36 @@ VapeService 在游戏内自动启动，默认监听 `127.0.0.1:8080`（HTTP）�
   -PnativeJavaHome="C:\Program Files\Java\jdk1.8.0_301"
 ```
 
-完整测试包输出到 `build/injection/`（文件名随项目版本号变化，如 `Vape-v4.21.*.exe`）：
+完整测试包输出到 `build/injection/`（exe 文件名随项目版本号变化）：
 
 ```text
-Vape-v4.21.*.exe   GUI 单文件加载器（内嵌 DLL 与全部资源）
-README.md
+SoulboundV1.exe   GUI 单文件加载器（内嵌 DLL 与全部资源）
+SoulboundNative.dll   可选且必须匹配的 DLL
+README.md / README_EN.md
 ```
 
 DLL 将 Java injection JAR 作为 `RCDATA` 嵌入，不要求另行放置 payload。原生桥接层恢复
-样本的 `RegisterNatives` 接口表，另将样本未实现声明的 native 方法注册为安全占位桩，
-避免 `UnsatisfiedLinkError`。更多细节见 [`native/README.md`](native/README.md)。
+样本的 `RegisterNatives` 接口表，并保留另行记录的 `gat()` 兼容方法；其他未实现的声明不会凭空注册。更多细节见 [`native/README.md`](native/README.md)。
 
 ## 隔离环境运行
 
-启动使用 64 位 JVM 的受支持 Minecraft 实例（包括 1.21.11、26.1.2、26.2 Fabric）后，直接运行 `Vape-v4.21.*.exe` 打开 GUI，选择 Minecraft 进程点击注入（无登录、
+启动使用 64 位 JVM 的受支持 Minecraft 实例（包括 1.21.11、26.1.2、26.2 Fabric）后，直接运行 `SoulboundV1.exe` 打开 GUI，选择 Minecraft 进程点击注入（无登录、
 无外部 DLL）。
 
 也可用命令行方式注入：
 
 ```powershell
 # 指定进程 ID 注入
-.\Vape-v4.21.*.exe -nogui <pid>
+.\SoulboundV1.exe -nogui <pid>
 # 不带 pid：弹出自动刷新的 Java 窗口选择器（↑/↓ 选择，回车注入，Esc 退出）
-.\Vape-v4.21.*.exe -nogui
+.\SoulboundV1.exe -nogui
 ```
 
-注入器仅执行 `LoadLibraryW`。DLL 加载后会等待 JVM 与 Minecraft `Client thread`，通过其
+GUI 首先尝试反射映射，失败时可能回退到 `LoadLibraryW`；控制台使用 `LoadLibraryW`。DLL 加载后会等待 JVM 与 Minecraft `Client thread`，通过其
 上下文 ClassLoader 加载内嵌 JAR；Fabric 实例会通过 Fabric Launcher API 将载荷加入 Knot
 ClassLoader。随后 DLL 注册原生方法，并调用
 `gg.vape.runtime.NativeBridge.start()`。每次注入的日志位于注入器 EXE 同目录的
-`.vapeclient\log\vape421-native-<pid>-<时间戳>.log`。
+`.soulbound\log\soulbound-native-<pid>-<时间戳>.log`。
 
 ## 常用校验任务
 

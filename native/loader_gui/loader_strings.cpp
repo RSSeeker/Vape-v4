@@ -52,7 +52,7 @@ const wchar_t* const kChinese[] = {
     L"否",
 
     // loading complete page
-    L"Vape 加载完成",
+    L"Soulbound 加载完成",
     L"游戏中按 右Shift（默认）打开界面",
     L"关闭窗口",
 
@@ -62,8 +62,8 @@ const wchar_t* const kChinese[] = {
 
     // error page
     L"加载出错。阶段 0",
-    L"该游戏进程里已经有一份 Vape 在运行（上次注入的 DLL 仍在进程内），请完全关闭游戏后重新启动，再注入一次。",
-    L"加载器与游戏之间的令牌握手失败，请重新打开 Vape 启动器再试。",
+    L"该游戏进程里已经有一份 Soulbound 在运行（上次注入的 DLL 仍在进程内），请完全关闭游戏后重新启动，再注入一次。",
+    L"加载器与游戏之间的令牌握手失败，请重新打开 Soulbound 启动器再试。",
     L"没有等到游戏的 Java 虚拟机（jvm.dll）。请确认游戏已经启动并进入主界面，26+ 版本请先进入世界再注入。",
     L"游戏使用的 Java 虚拟机缺少必要的导出函数，可能是被裁剪过的运行时，请更换官方 Java 后再试。",
     L"Java 虚拟机没有返回可用的实例，通常是注入时机太早。请等游戏完全启动（26+ 先进入世界）后再注入。",
@@ -77,8 +77,8 @@ const wchar_t* const kChinese[] = {
     L"无法登录本地服务（请先启动 Minecraft）",
     L"无法登录本地服务",
     L"无法创建加载器控制套接字",
-    L"无法解压内嵌的 Vape-v4.21Native.dll",
-    L"注入 Vape421Native.dll 失败",
+    L"无法解压内嵌的 SoulboundNative.dll",
+    L"注入 SoulboundNative.dll 失败",
     L"无法启动浏览器登录",
     L"浏览器登录超时",
     L"原生加载连接意外关闭",
@@ -88,7 +88,7 @@ const wchar_t* const kChinese[] = {
     L"加载器控制端口不可用",
     L"VAPE_ONLINE_BASE_URL 对引导块来说过长",
     L"VAPE_ZEUS_ADDRESS 必须使用 host:port 格式",
-    L"加载器旁未找到 Vape421Native.dll",
+    L"加载器旁未找到 SoulboundNative.dll",
     L"原生 DLL 与加载器中的内嵌资源不匹配，或无法安全读取",
     L"该进程已存在加载器引导块",
     L"无法创建加载器引导对象",
@@ -99,7 +99,7 @@ const wchar_t* const kChinese[] = {
     L"产品 DLL 加载超时",
     L"产品 DLL 未确认套接字引导块",
     L"产品 DLL 拒绝了套接字引导块",
-    L"控制器旁未找到 vape_v4.dll",
+    L"控制器旁未找到 SoulboundNative.dll",
     L"未找到反射加载器导出",
     L"无法写入反射映像",
     L"启动反射加载器失败",
@@ -149,7 +149,7 @@ const wchar_t* const kEnglish[] = {
     L"No",
 
     // loading complete page
-    L"Vape loaded",
+    L"Soulbound loaded",
     L"Press Right Shift (default) in game to open the GUI",
     L"Close window",
 
@@ -159,13 +159,13 @@ const wchar_t* const kEnglish[] = {
 
     // error page
     L"Load error. Stage 0",
-    L"Vape is already loaded inside this game process (the DLL injected by an earlier attempt is still there). Fully close the game, start it again, then inject once.",
-    L"The token handshake between the loader and the game failed. Reopen the Vape launcher and try again.",
+    L"Soulbound is already loaded inside this game process (the DLL injected by an earlier attempt is still there). Fully close the game, start it again, then inject once.",
+    L"The token handshake between the loader and the game failed. Reopen the Soulbound launcher and try again.",
     L"Timed out waiting for the game's Java VM (jvm.dll). Make sure the game is running and past the main menu; on 26+ open a world before injecting.",
     L"The game's Java VM is missing a required export. Please use an unmodified official Java runtime and try again.",
     L"The Java VM did not report a usable instance. This usually means the injection happened too early; wait until the game is fully loaded (on 26+, open a world first).",
     L"Could not attach to the game thread. Restart the game and try again.",
-    L"Vape attached to the game's Java VM but failed during injection. Restart the game and retry; if this happens every time, send this error report to the developer.",
+    L"Soulbound attached to the game's Java VM but failed during injection. Restart the game and retry; if this happens every time, send this error report to the developer.",
     L"An unrecognised error occurred during injection. Restart the game and retry; if this happens every time, send this error report to the developer.",
     L"Copy error",
 
@@ -174,8 +174,8 @@ const wchar_t* const kEnglish[] = {
     L"Cannot log in to the local service (start Minecraft first)",
     L"Cannot log in to the local service",
     L"Cannot create the loader control socket",
-    L"Cannot extract the embedded Vape-v4.21Native.dll",
-    L"Failed to inject Vape421Native.dll",
+    L"Cannot extract the embedded SoulboundNative.dll",
+    L"Failed to inject SoulboundNative.dll",
     L"Cannot open the browser for login",
     L"Browser login timed out",
     L"Native load connection closed unexpectedly",
@@ -185,7 +185,7 @@ const wchar_t* const kEnglish[] = {
     L"Loader control port unavailable",
     L"VAPE_ONLINE_BASE_URL is too long for the bootstrap block",
     L"VAPE_ZEUS_ADDRESS must use the host:port format",
-    L"Vape421Native.dll not found next to the loader",
+    L"SoulboundNative.dll not found next to the loader",
     L"The native DLL does not match the embedded resource or cannot be read safely",
     L"This process already has a loader bootstrap block",
     L"Cannot create the loader bootstrap object",
@@ -196,7 +196,7 @@ const wchar_t* const kEnglish[] = {
     L"Product DLL load timed out",
     L"Product DLL did not acknowledge the socket bootstrap block",
     L"Product DLL rejected the socket bootstrap block",
-    L"vape_v4.dll not found next to the controller",
+    L"SoulboundNative.dll not found next to the controller",
     L"Reflection loader export not found",
     L"Cannot write the reflection image",
     L"Failed to start the reflection loader",

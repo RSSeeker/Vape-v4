@@ -1,6 +1,7 @@
 package gg.vape.utils.render;
 
 import gg.vape.Vape;
+import gg.vape.brand.SoulboundPaths;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -42,11 +43,7 @@ public class RemoteImageHttpDownloader {
 
     static {
         RemoteImageHttpDownloader.setEnabled(true);
-        String base = System.getProperty("vape.directory");
-        if (base == null || base.trim().isEmpty()) {
-            base = System.getProperty("user.home");
-        }
-        CACHE_DIRECTORY = base + File.separator + ".vapeclient" + File.separator + "vapeTextures" + File.separator;
+        CACHE_DIRECTORY = SoulboundPaths.textureCacheDirectory(SoulboundPaths.clientDirectoryFromNativeOrHome()).getPath() + File.separator;
         imageCache = new LinkedHashMap<String, byte[]>();
     }
 

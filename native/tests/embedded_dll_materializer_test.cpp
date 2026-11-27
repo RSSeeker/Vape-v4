@@ -1,4 +1,5 @@
 #include "embedded_dll_materializer.h"
+#include "client_data_path.h"
 
 #include <windows.h>
 #include <cstdio>
@@ -42,13 +43,15 @@ int main() {
     const auto slash = dir.find_last_of(L"\\/");
     if (slash == std::wstring::npos) return 1;
     dir.resize(slash);
-    const std::wstring root = dir + L"\\.vapeclient";
-    const std::wstring recovery = root + L"\\Vape-v4.21Recovery";
+    wchar_t rootBuffer[MAX_PATH]{};
+    if (!soulbound_client_directory(dir.c_str(), rootBuffer, std::size(rootBuffer))) return 1;
+    const std::wstring root(rootBuffer);
+    const std::wstring recovery = root + L"\\SoulboundRecovery";
     CreateDirectoryW(root.c_str(), nullptr);
     CreateDirectoryW(recovery.c_str(), nullptr);
     const unsigned long pid = GetCurrentProcessId();
-    const std::wstring external = dir + L"\\Vape-v4.21Native.dll";
-    const std::wstring stale = recovery + L"\\Vape-v4.21Native-" + std::to_wstring(pid) + L".dll";
+    const std::wstring external = dir + L"\\SoulboundNative.dll";
+    const std::wstring stale = recovery + L"\\SoulboundNative-" + std::to_wstring(pid) + L".dll";
     const std::wstring sentinel = recovery + L"\\materializer-sentinel-" + std::to_wstring(pid);
     const unsigned char wrong[] = {0x4d, 0x5a, 0x00, 0x11};
     const unsigned char expected[] = {0x4d, 0x5a, 0x00, 0x10};

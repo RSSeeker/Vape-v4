@@ -767,6 +767,7 @@ public class Vape {
 
     static {
         Vape.setOpaqueState(66);
+        // Retained as a compatibility identifier; visible branding uses SoulboundBrand.
         VERSION = "4.21";
         supportedVersionIds = new int[]{13, 15, 23, 35, 36, 37, 47, 50, 51, 52,
                 54, 55, 56, 60, 61, 100, 110};
@@ -855,7 +856,7 @@ public class Vape {
             NativeBridge.sce("DEBUG " + normalizedMessage);
         }
         catch (Throwable nativeLoggingFailure) {
-            System.err.println("[Vape421] " + normalizedMessage);
+            System.err.println("[Soulbound] " + normalizedMessage);
         }
     }
 

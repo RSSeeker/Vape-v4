@@ -70,7 +70,7 @@ extends SettingsSubpageFrame {
     public OnlineFriendsFrame() {
         super("newfriends", "Friends");
         this.contentPanel = new PanelComponent(104.0, 130.0);
-        this.modeToggle = new OnlineFriendsFrameModeToggleComponent(this, "VAPE FRIENDS", "MINECRAFT FRIENDS", true);
+        this.modeToggle = new OnlineFriendsFrameModeToggleComponent(this, "Soulbound FRIENDS", "MINECRAFT FRIENDS", true);
         this.friendManagementPanel = new FriendManagementPanel();
         this.friendRequestsPanel = new FriendRequestsPanel();
         this.addFriendsButton = new IconButtonComponent("add friends@2x", 1.0, new Color(180, 180, 180), Color.WHITE, 13.0, 13.0);
@@ -87,7 +87,7 @@ extends SettingsSubpageFrame {
         this.addThemeSettings();
         this.buildLayout();
         this.showContent(this.emptyStatePanel);
-        this.addFriendsButton.w("Add Vape friends");
+        this.addFriendsButton.w("Add Soulbound friends");
         this.modeToggle.setTooltips("", "");
         this.notificationOverlay = new NotificationToastOverlay(this);
         this.addMouseListener(this.popupOutsideClickListener);

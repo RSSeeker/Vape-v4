@@ -93,7 +93,8 @@ class JarComparisonTests(unittest.TestCase):
                         "gg/vape/rotation/Helper.java": "hash"}
         patches = [mock.patch.object(parity, "APPROVED_ENHANCEMENTS", enhancements),
                    mock.patch.object(parity, "ENHANCED_MODULE_SOURCES", {"gg/vape/module/combat/Enhanced.java", "gg/vape/module/render/SpawnerFinder.java"}),
-                   mock.patch.object(parity, "JAVA_ADDED_CLASSES", {self.added})]
+                   mock.patch.object(parity, "JAVA_ADDED_CLASSES", {self.added}),
+                   mock.patch.object(parity, "APPROVED_PRODUCT_RESOURCE_CHANGES", {})]
         for patch in patches:
             patch.start()
             self.addCleanup(patch.stop)
@@ -152,6 +153,16 @@ class JarComparisonTests(unittest.TestCase):
         del self.english[self.other]
         with self.assertRaises(parity.ParityError):
             parity.audit_jars(jar(self.reference), jar(self.english), jar(self.reference))
+
+    def test_allows_only_pinned_wordmark_bytes(self):
+        image = "resources/textures/vapelogo.png"
+        self.reference[image] = b"old image"
+        self.english[image] = b"new image"
+        with mock.patch.object(parity, "APPROVED_PRODUCT_RESOURCE_CHANGES", {image: parity.sha256(b"new image")}):
+            parity.audit_jars(jar(self.reference), jar(self.english), jar(self.reference))
+            self.english[image] = b"tampered"
+            with self.assertRaises(parity.ParityError):
+                parity.audit_jars(jar(self.reference), jar(self.english), jar(self.reference))
 
     def test_reports_but_does_not_misrepresent_official_compiler_difference(self):
         official = dict(self.reference)
@@ -290,6 +301,20 @@ class SourceComparisonTests(unittest.TestCase):
             self.put(self.current / "src/main/java", "gg/vape/rotation/Unexpected.java", b"extra")
             with self.assertRaises(parity.ParityError):
                 parity.audit_sources(self.baseline, self.current)
+
+    def test_tree_deletion_must_be_explicit_and_match_baseline(self):
+        retired = "native/old.ico"
+        keep = "native/keep.c"
+        self.put(self.baseline, keep, b"same\n")
+        self.put(self.current, keep, b"same\n")
+        self.put(self.baseline, retired, b"old icon")
+        with self.assertRaises(parity.ParityError):
+            parity.audit_tree(self.baseline, self.current, "native", {}, set())
+        deleted = {retired: parity.sha256(b"old icon")}
+        self.assertEqual(parity.audit_tree(self.baseline, self.current, "native", {}, set(), deletions=deleted), (2, 1))
+        self.put(self.baseline, retired, b"different icon")
+        with self.assertRaises(parity.ParityError):
+            parity.audit_tree(self.baseline, self.current, "native", {}, set(), deletions=deleted)
 
     def test_tree_checks_inventory_and_binary_assets(self):
         unchanged = "native/bridge.c"

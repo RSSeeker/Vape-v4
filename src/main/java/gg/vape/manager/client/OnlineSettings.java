@@ -44,7 +44,7 @@ public class OnlineSettings {
     private OnlineSettingsPayload payload;
 
     public OnlineSettings() {
-        this.autoLogin = BooleanValue.create(null, "Auto login", true, "Automatically logs you into Vape online friend services when loading is complete");
+        this.autoLogin = BooleanValue.create(null, "Auto login", true, "Automatically logs you into Soulbound online friend services when loading is complete");
         this.shareServer = BooleanValue.create(null, "Share server", true, "Display your current server in friends list\nYour server may be shown if you join a party");
         this.shareUsername = BooleanValue.create(null, "Share username", true, "Display your Minecraft username in friends list\nYour username may be shown if you join a party\nFriend won't be able to sync you as a Minecraft friend with this disabled");
         this.shareInventory = BooleanValue.create(null, "Share inventory", true, "Shares your inventory contents to party members.");

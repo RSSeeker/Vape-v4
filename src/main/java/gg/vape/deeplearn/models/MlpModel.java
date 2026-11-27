@@ -30,7 +30,7 @@ import java.util.logging.Logger;
  */
 public final class MlpModel {
 
-    private static final Logger LOGGER = Logger.getLogger("Vape/AI/MlpModel");
+    private static final Logger LOGGER = Logger.getLogger("Soulbound/AI/MlpModel");
 
     private static final float BATCHNORM_EPS = 1e-5f;
 

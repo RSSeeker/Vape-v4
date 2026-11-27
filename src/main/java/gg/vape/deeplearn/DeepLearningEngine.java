@@ -16,7 +16,7 @@ import java.util.logging.Logger;
  */
 public final class DeepLearningEngine {
 
-    private static final Logger LOGGER = Logger.getLogger("Vape/AI");
+    private static final Logger LOGGER = Logger.getLogger("Soulbound/AI");
 
     private static final File VAPE_ROOT = new File(System.getProperty("user.home"), ".vape");
     private static final File DEEP_LEARNING_FOLDER = mkdir(new File(VAPE_ROOT, "deeplearning"));

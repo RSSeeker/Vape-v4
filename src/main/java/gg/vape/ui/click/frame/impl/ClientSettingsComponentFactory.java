@@ -149,7 +149,7 @@ public final class ClientSettingsComponentFactory {
 
     private static void lambda$createMainChildren$12() {
         if (OnlineConnectionManager.INSTANCE.getConnectionState() != OnlineConnectionState.ONLINE) {
-            Vape.INSTANCE.getNotificationManager().showInfo("Vape Online", "You must be logged in to perform this action!", 3000L);
+            Vape.INSTANCE.getNotificationManager().showInfo("Soulbound Online", "You must be logged in to perform this action!", 3000L);
             return;
         }
         ZeusConnectionManager.T().u().w(ClientSettingsComponentFactory::lambda$null$10, ClientSettingsComponentFactory::lambda$null$11);
@@ -164,9 +164,9 @@ public final class ClientSettingsComponentFactory {
 
     private static void lambda$null$10(GroupCreateResponsePacket groupCreateResponsePacket) {
         if (groupCreateResponsePacket.getStatus() == GroupCreateStatus.SUCCESS) {
-            Vape.INSTANCE.getNotificationManager().showInfo("Vape Online", "Party created", 3000L);
+            Vape.INSTANCE.getNotificationManager().showInfo("Soulbound Online", "Party created", 3000L);
         } else {
-            Vape.INSTANCE.getNotificationManager().showInfo("Vape Online", NotificationText.localize("Party creation error: ") + (Object)((Object)groupCreateResponsePacket.getStatus()), 3000L);
+            Vape.INSTANCE.getNotificationManager().showInfo("Soulbound Online", NotificationText.localize("Party creation error: ") + (Object)((Object)groupCreateResponsePacket.getStatus()), 3000L);
         }
     }
 
@@ -205,7 +205,7 @@ public final class ClientSettingsComponentFactory {
     public static Map<ThemeComponentGroupKey, GuiComponent[]> d(ThemeColors themeColors, gg.vape.config.ClientSettings clientSettings, ClientSettings clientSettings2, boolean bl) {
         PublicProfileSettings publicProfileSettings = Vape.INSTANCE.getPublicProfileSettings();
         LinkedHashMap<ThemeComponentGroupKey, GuiComponent[]> linkedHashMap = new LinkedHashMap<ThemeComponentGroupKey, GuiComponent[]>();
-        linkedHashMap.put(new ThemeComponentGroupKey("General", null), new GuiComponent[]{new BooleanToggleComponent(clientSettings2.multiKeybinding), new BooleanToggleComponent(publicProfileSettings.autoSave), new BooleanToggleComponent(OnlineConnectionManager.INSTANCE.getGlobalSettingsController().getCacheData()), new PublicProfileModeDropdownComponent(publicProfileSettings.language), new ClientSettingsActionButtonRowComponent("Reset current profile", ClientSettingsComponentFactory::lambda$createSubmenuComponents$13).w("This will set your current profile to the default settings of Vape")});
+        linkedHashMap.put(new ThemeComponentGroupKey("General", null), new GuiComponent[]{new BooleanToggleComponent(clientSettings2.multiKeybinding), new BooleanToggleComponent(publicProfileSettings.autoSave), new BooleanToggleComponent(OnlineConnectionManager.INSTANCE.getGlobalSettingsController().getCacheData()), new PublicProfileModeDropdownComponent(publicProfileSettings.language), new ClientSettingsActionButtonRowComponent("Reset current profile", ClientSettingsComponentFactory::lambda$createSubmenuComponents$13).w("This will set your current profile to the default settings of Soulbound")});
         linkedHashMap.put(new ThemeComponentGroupKey("Modules", null), new GuiComponent[]{new ColorDividerComponent(themeColors.l), new BooleanToggleComponent(clientSettings.lobbyCheck), new BooleanToggleComponent(clientSettings.sanityCheck), new BooleanToggleComponent(clientSettings.showNbtTags), new BooleanToggleComponent(clientSettings.healthPrediction), new BooleanToggleComponent(clientSettings.disableFreecamOnInject), new ClientSettingsEntityCheckDependentToggleComponent(clientSettings.estimateFoodHealing, clientSettings), new ClientSettingsThemeBooleanToggle(clientSettings.estimateFallDamage, clientSettings)});
         linkedHashMap.put(new ThemeComponentGroupKey("Silent Aim", null), new GuiComponent[]{new DropdownSelectComponent(clientSettings.movementCorrection), new BooleanToggleComponent(clientSettings.thirdPersonAimView), new BooleanToggleComponent(clientSettings.aimIndicator), new BooleanToggleComponent(clientSettings.useReach), new BooleanToggleComponent(clientSettings.useHitboxes)});
         linkedHashMap.put(new ThemeComponentGroupKey("GUI", "newgui"), ClientSettingsComponentFactory.W(clientSettings2, bl));

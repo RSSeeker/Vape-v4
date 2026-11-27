@@ -127,7 +127,7 @@ extends HudModule {
                 "Renders a faded grayscale trail instead of RGB");
         this.applyOnMenuValue = BooleanValue.create(this,
                 "Apply On Menu", true,
-                "Keep applying the blur while the Vape GUI is open");
+                "Keep applying the blur while the Soulbound GUI is open");
         this.applyOnGameMenuValue = BooleanValue.create(this,
                 "Apply On Game Menu", true,
                 "Keep applying the blur while a game menu (pause/inventory/chat) is open");

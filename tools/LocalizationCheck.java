@@ -28,7 +28,7 @@ public final class LocalizationCheck {
 
         checkPair(english, chinese, "cache_data", "Cache data");
         checkPair(english, chinese, "cache_data.tooltip",
-                "Caches data locally to improve load time (.vapeclient)");
+                "Caches data in the client folder to improve load time");
         checkPair(english, chinese, "spawner", "Spawner");
         checkPair(english, chinese, "storageesp.render_barrel", "Render Barrel");
         checkPair(english, chinese, "storageesp.barrel_color", "Barrel Color");

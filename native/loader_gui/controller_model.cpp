@@ -2,6 +2,7 @@
 #include "embedded_dll_materializer.h"
 #include "injection_coordinator.h"
 #include "loader_strings.h"
+#include "client_data_path.h"
 
 #include <windows.h>
 #include <tlhelp32.h>
@@ -112,11 +113,12 @@ void captureWindowTitles(std::vector<MinecraftProcess>& candidates) {
 }
 
 std::wstring executableDirectory();
+std::wstring clientDirectory();
 
 // Diagnostic trail for the automatic-injection watchdog. Kept next to the
 // preferences so a user report can include it when auto injection misbehaves.
 void appendAutoInjectLog(const std::wstring& line) {
-    const std::wstring directory = executableDirectory() + L"\\.vapeclient\\";
+    const std::wstring directory = clientDirectory() + L"\\";
     CreateDirectoryW(directory.c_str(), nullptr);
     SYSTEMTIME now{};
     GetLocalTime(&now);
@@ -177,11 +179,17 @@ std::wstring executableDirectory() {
     return separator == std::wstring::npos ? L"." : result.substr(0, separator);
 }
 
-// Ensures <exe>\.vapeclient exists and is hidden. The injected DLL derives
-// the client directory from its own module path (<exe>\.vapeclient\Vape-v4.21Recovery),
-// so no TEMP marker file is needed; this just makes the folder available early.
+std::wstring clientDirectory() {
+    const std::wstring base = executableDirectory();
+    wchar_t output[MAX_PATH]{};
+    if (soulbound_client_directory(base.c_str(), output, std::size(output))) return output;
+    return base + L"\\.soulbound";
+}
+
+// Ensures the selected client folder exists and is hidden. The injected DLL
+// derives the launcher directory from its own path; no TEMP marker is needed.
 void ensureClientDirectoryHidden() {
-    const std::wstring directory = executableDirectory() + L"\\.vapeclient";
+    const std::wstring directory = clientDirectory();
     if (CreateDirectoryW(directory.c_str(), nullptr) ||
             GetLastError() == ERROR_ALREADY_EXISTS) {
         const DWORD attributes = GetFileAttributesW(directory.c_str());
@@ -301,7 +309,7 @@ void ControllerModel::persistAutoInjectPreference(bool enabled) {
     const auto directory = cacheDirectory();
     if (CreateDirectoryW(directory.c_str(), nullptr) ||
             GetLastError() == ERROR_ALREADY_EXISTS) {
-        const std::wstring clientRoot = executableDirectory() + L"\\.vapeclient";
+        const std::wstring clientRoot = clientDirectory();
         const DWORD attributes = GetFileAttributesW(clientRoot.c_str());
         if (attributes != INVALID_FILE_ATTRIBUTES &&
                 (attributes & FILE_ATTRIBUTE_HIDDEN) == 0) {
@@ -587,8 +595,7 @@ bool ControllerModel::injectMinecraft(std::uint32_t processId, bool reportFailur
         }
         return false;
     }
-    // The injected DLL derives the client directory from its own module path
-    // (<exe>\.vapeclient\Vape-v4.21Recovery); ensure the hidden folder exists.
+    // Ensure the selected hidden client folder exists before injecting.
     ensureClientDirectoryHidden();
     const std::wstring dllPath(dllPathBuffer);
     if (!InjectionCoordinator::injectProductDll(processId, dllPath, service_.port(),
@@ -624,7 +631,7 @@ bool ControllerModel::injectMinecraft(std::uint32_t processId, bool reportFailur
 
 std::string ControllerModel::httpPost(const wchar_t* host, const wchar_t* path,
                                       const std::string& body) {
-    HINTERNET session = WinHttpOpen(L"Vape4/Launcher",
+    HINTERNET session = WinHttpOpen(L"Soulbound/Launcher",
         WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS, 0);
     if (!session) return {};
@@ -666,7 +673,7 @@ std::string ControllerModel::httpPostJson(const std::wstring& baseUrl,
         return {};
     }
     const std::wstring host(components.lpszHostName, components.dwHostNameLength);
-    HINTERNET session = WinHttpOpen(L"Vape4/Loader",
+    HINTERNET session = WinHttpOpen(L"Soulbound/Loader",
         WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS, 0);
     if (!session) return {};
@@ -738,7 +745,7 @@ void ControllerModel::cancelBrowserAuthentication() {
 }
 
 std::wstring ControllerModel::cacheDirectory() const {
-    const std::wstring directory = executableDirectory() + L"\\.vapeclient\\";
+    const std::wstring directory = clientDirectory() + L"\\";
     return directory;
 }
 
@@ -747,7 +754,7 @@ void ControllerModel::persistCachePreference(bool enabled) {
     const auto directory = cacheDirectory();
     if (CreateDirectoryW(directory.c_str(), nullptr) ||
             GetLastError() == ERROR_ALREADY_EXISTS) {
-        const std::wstring clientRoot = executableDirectory() + L"\\.vapeclient";
+        const std::wstring clientRoot = clientDirectory();
         const DWORD attributes = GetFileAttributesW(clientRoot.c_str());
         if (attributes != INVALID_FILE_ATTRIBUTES &&
                 (attributes & FILE_ATTRIBUTE_HIDDEN) == 0) {

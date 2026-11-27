@@ -1,11 +1,14 @@
 cmake_minimum_required(VERSION 3.21)
 project(Vape421Native VERSION 1.0 LANGUAGES C CXX RC)
 
-# 附件 exe 命名版本号（由 Gradle 以 -DVAPE421_VERSION=... 传入），用于输出
-# Vape-v<VERSION>.exe。未传入时回退默认，避免生成空版本名。
+# Gradle supplies the same numeric product version used by the Java UI.
 if(NOT DEFINED VAPE421_VERSION OR VAPE421_VERSION STREQUAL "")
-    set(VAPE421_VERSION "4.21")
+    set(VAPE421_VERSION "1")
 endif()
+if(NOT VAPE421_VERSION MATCHES "^[1-9][0-9]*(\\.[0-9]+)*$")
+    message(FATAL_ERROR "Invalid Soulbound version: ${VAPE421_VERSION}")
+endif()
+configure_file(brand_version.h.in generated/brand_version.h @ONLY)
 
 if(NOT WIN32)
     message(FATAL_ERROR "Vape421Native is a Windows-only test bridge")
@@ -102,7 +105,7 @@ target_link_libraries(Vape421LoaderGui PRIVATE
         shlwapi
         ws2_32
 )
-target_include_directories(Vape421LoaderGui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/loader_gui" "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(Vape421LoaderGui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/loader_gui" "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 # Embed Vape421Native.dll into the GUI loader for single-file operation.
 # The shared loader materializer accepts a matching adjacent DLL or extracts
@@ -164,6 +167,12 @@ if(BUILD_TESTING)
     target_compile_options(Vape421LoaderLanguageTest PRIVATE /W4 /utf-8)
     add_test(NAME Vape421LoaderLanguage COMMAND Vape421LoaderLanguageTest)
 
+    add_executable(SoulboundClientDataPathTest tests/client_data_path_test.c)
+    target_include_directories(SoulboundClientDataPathTest PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_definitions(SoulboundClientDataPathTest PRIVATE WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(SoulboundClientDataPathTest PRIVATE /W4 /utf-8)
+    add_test(NAME SoulboundClientDataPath COMMAND SoulboundClientDataPathTest)
+
     add_executable(Vape421ResourceIntegrityTest tests/embedded_resource_integrity_test.cpp)
     target_include_directories(Vape421ResourceIntegrityTest PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/loader_gui")
@@ -186,7 +195,7 @@ if(BUILD_TESTING)
             tests/materializer_fixture.rc
             loader_gui/embedded_dll_materializer.cpp)
     target_include_directories(Vape421DllMaterializerTest PRIVATE
-            "${CMAKE_CURRENT_SOURCE_DIR}/loader_gui")
+            "${CMAKE_CURRENT_SOURCE_DIR}/loader_gui" "${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_features(Vape421DllMaterializerTest PRIVATE cxx_std_17)
     target_compile_definitions(Vape421DllMaterializerTest PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_compile_options(Vape421DllMaterializerTest PRIVATE /W4 /utf-8)
@@ -206,9 +215,9 @@ set_property(TARGET Vape421Native Vape421LoaderGui
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 
 set_target_properties(Vape421Native PROPERTIES
-        OUTPUT_NAME "Vape-v4.21Native")
+        OUTPUT_NAME "SoulboundNative")
 set_target_properties(Vape421LoaderGui PROPERTIES
-        OUTPUT_NAME "Vape-v${VAPE421_VERSION}")
+        OUTPUT_NAME "SoulboundV${VAPE421_VERSION}")
 
 set_target_properties(Vape421Native Vape421LoaderGui PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/dist")

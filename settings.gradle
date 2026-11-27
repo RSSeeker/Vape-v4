@@ -20,4 +20,4 @@ if (GradleVersion.current().version != '8.8') {
             + GradleVersion.current().version)
 }
 
-rootProject.name = 'vape421-product-recovery'
+rootProject.name = 'soulbound'

@@ -2,6 +2,7 @@
 #include "loader_bootstrap.h"
 #include "manual_map.h"
 #include "safe_file_materialization.h"
+#include "client_data_path.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -61,14 +62,14 @@ static void injector_diag(const wchar_t *format, ...) {
     (void)format;
 }
 
-/* The injected DLL is always extracted to
- * <exe>\.vapeclient\Vape-v4.21Recovery\Vape-v4.21Native-<pid>.dll, so the
- * injector EXE directory can be derived from the module path instead of a
- * shared TEMP marker file. Everything stays inside the .vapeclient tree and
- * nothing is ever written to %TEMP%. */
+/* A matching DLL may be adjacent to the launcher, or the embedded DLL may
+ * be extracted under <exe>\<selected client folder>\SoulboundRecovery.
+ * Derive the launcher directory from either path without a shared TEMP marker. */
 static int injector_directory(wchar_t *output, size_t capacity) {
     wchar_t *marker;
     wchar_t *last = NULL;
+    const wchar_t *markers[] = {L"\\.soulbound\\", L"\\.vapeclient\\"};
+    size_t i;
     if (output == NULL || capacity == 0) {
         injector_diag(L"injector_directory: null args");
         return 0;
@@ -77,12 +78,13 @@ static int injector_directory(wchar_t *output, size_t capacity) {
         injector_diag(L"injector_directory: no module directory");
         return 0;
     }
-    /* Find the LAST \.vapeclient\ separator so an EXE path that happens to
-     * contain that substring is still truncated at the real client root. */
-    for (marker = wcsstr(output, L"\\.vapeclient\\");
-            marker != NULL;
-            marker = wcsstr(marker + 1, L"\\.vapeclient\\")) {
-        last = marker;
+    /* Find the last matching separator, so a parent folder with the same
+     * name does not shadow the actual client root. */
+    for (i = 0; i < sizeof(markers) / sizeof(markers[0]); ++i) {
+        for (marker = wcsstr(output, markers[i]); marker != NULL;
+                marker = wcsstr(marker + 1, markers[i])) {
+            if (last == NULL || marker > last) last = marker;
+        }
     }
     if (last != NULL && last != output) {
         *last = L'\0';
@@ -96,13 +98,11 @@ static int injector_directory(wchar_t *output, size_t capacity) {
 
 static int client_directory(wchar_t *output, size_t capacity) {
     DWORD length;
-    size_t base;
     if (output == NULL || capacity == 0) {
         return 0;
     }
-    /* Prefer the injector EXE directory (derived from this DLL's module path
-     * at <exe>\.vapeclient\Vape-v4.21Recovery), so .vapeclient lands next to
-     * Vape-v4.21.exe instead of the temp folder used for remote injection. */
+    /* Prefer the launcher directory, derived from the adjacent or extracted
+     * DLL path, so the selected client folder stays next to the executable. */
     if (!injector_directory(output, capacity)) {
         if (!module_directory(output, capacity)) {
             length = GetEnvironmentVariableW(L"APPDATA", output,
@@ -112,16 +112,14 @@ static int client_directory(wchar_t *output, size_t capacity) {
             }
         }
     }
-    base = wcslen(output);
-    if (base + wcslen(L"\\.vapeclient") + 1 > capacity) {
+    if (!soulbound_client_directory(output, output, capacity)) {
         return 0;
     }
-    wcscat_s(output, capacity, L"\\.vapeclient");
     if (!CreateDirectoryW(output, NULL)
             && GetLastError() != ERROR_ALREADY_EXISTS) {
         return 0;
     }
-    /* Keep the whole .vapeclient tree hidden from Explorer. */
+    /* Keep the selected client tree hidden from Explorer. */
     {
         DWORD attributes = GetFileAttributesW(output);
         if (attributes != INVALID_FILE_ATTRIBUTES
@@ -154,7 +152,7 @@ static void ensure_log_path(void) {
     process_id = GetCurrentProcessId();
     GetLocalTime(&now);
     _snwprintf_s(g_log_file, MAX_PATH, _TRUNCATE,
-            L"%ls\\vape421-native-%lu-%04u%02u%02u-%02u%02u%02u.log",
+            L"%ls\\soulbound-native-%lu-%04u%02u%02u-%02u%02u%02u.log",
             log_directory, (unsigned long)process_id,
             now.wYear, now.wMonth, now.wDay,
             now.wHour, now.wMinute, now.wSecond);
@@ -312,14 +310,14 @@ static int materialize_embedded_product_jar(
     }
     _snwprintf_s(temp_directory,
             sizeof(temp_directory) / sizeof(temp_directory[0]), _TRUNCATE,
-            L"%ls\\Vape-v4.21Recovery", temp_root);
+            L"%ls\\SoulboundRecovery", temp_root);
     if (!CreateDirectoryW(temp_directory, NULL)
             && GetLastError() != ERROR_ALREADY_EXISTS) {
         vape_log(L"CreateDirectoryW failed: %lu", GetLastError());
         return 0;
     }
     if (_snwprintf_s(jar_base, MAX_PATH, _TRUNCATE,
-            L"%ls\\Vape-v4.21-product-%lu", temp_directory,
+            L"%ls\\Soulbound-product-%lu", temp_directory,
             (unsigned long)GetCurrentProcessId()) < 0) {
         vape_log(L"temporary product JAR path is too long");
         return 0;
@@ -981,7 +979,7 @@ static int vape_acquire_single_instance(void) {
     }
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
         CloseHandle(mutex);
-        vape_log(L"another Vape instance is already attached to this process; skipping injection");
+        vape_log(L"another client instance is already attached to this process; skipping injection");
         return 0;
     }
     g_single_instance_mutex = mutex;

@@ -16,7 +16,7 @@ public class GlobalSettingsController {
     private boolean loadFailed = false;
     // Keep the historical ID while using a translatable English display label.
     private final BooleanValue cacheData = BooleanValue.createFull(null, "缓存数据", "Cache data", false,
-            "Caches data locally to improve load time (.vapeclient)");
+            "Caches data in the client folder to improve load time");
 
     public boolean isFirstRun() {
         return this.firstRun;

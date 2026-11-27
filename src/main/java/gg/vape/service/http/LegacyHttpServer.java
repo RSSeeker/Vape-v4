@@ -36,7 +36,7 @@ public final class LegacyHttpServer implements AutoCloseable {
         this.server = HttpServer.create(new InetSocketAddress(bindAddress, port), 64);
         this.server.createContext("/", this::handle);
         this.server.setExecutor(Executors.newCachedThreadPool(runnable -> {
-            Thread thread = new Thread(runnable, "vape-http");
+            Thread thread = new Thread(runnable, "Soulbound-http");
             thread.setDaemon(true);
             return thread;
         }));
@@ -121,11 +121,11 @@ public final class LegacyHttpServer implements AutoCloseable {
         requireMethod(exchange, "GET");
         if (!store.approveChallenge(challenge)) {
             sendText(exchange, 404, "text/html; charset=utf-8",
-                    "<!doctype html><title>Vape Auth</title><h1>Invalid or expired challenge</h1>");
+                    "<!doctype html><title>Soulbound Auth</title><h1>Invalid or expired challenge</h1>");
             return;
         }
         sendText(exchange, 200, "text/html; charset=utf-8",
-                "<!doctype html><title>Vape Auth</title><h1>Authentication complete</h1>");
+                "<!doctype html><title>Soulbound Auth</title><h1>Authentication complete</h1>");
     }
 
     private void handleAuthStatus(HttpExchange exchange) throws IOException {

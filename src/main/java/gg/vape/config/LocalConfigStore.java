@@ -3,6 +3,7 @@ package gg.vape.config;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import gg.vape.api.ApiHttpClient;
+import gg.vape.brand.SoulboundPaths;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -14,9 +15,10 @@ import java.nio.file.StandardCopyOption;
 
 /**
  * Local, offline config storage. Writes a single JSON document to
- * {@code <vape.directory>\.vapeclient\config.json} (i.e. the same directory as
- * the injected exe). It never reads or writes any other location: the old
- * %APPDATA% fallback and the legacy %APPDATA% import were removed.
+ * {@code <vape.directory>\.soulbound\config.json} for a fresh install, or
+ * {@code <vape.directory>\.vapeclient\config.json} if only the legacy folder
+ * exists. Without a launcher-supplied directory it uses the working directory;
+ * it does not import data from the old %APPDATA% location.
  */
 public final class LocalConfigStore {
     private static final String FILE_NAME = "config.json";
@@ -28,11 +30,10 @@ public final class LocalConfigStore {
 
     public static File baseDirectory() {
         String nativeDirectory = System.getProperty("vape.directory");
-        if (nativeDirectory != null && !nativeDirectory.trim().isEmpty()) {
-            return new File(nativeDirectory, ".vapeclient");
+        if (nativeDirectory == null || nativeDirectory.trim().isEmpty()) {
+            nativeDirectory = System.getProperty("user.dir", ".");
         }
-        // 只使用本地目录：不再回退到 %APPDATA%\.vapeclient（那是"别的地方的配置"）
-        return new File(System.getProperty("user.dir", "."), ".vapeclient");
+        return SoulboundPaths.clientDirectory(new File(nativeDirectory));
     }
 
     public static File directory() {

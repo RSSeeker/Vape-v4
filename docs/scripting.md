@@ -1,4 +1,4 @@
-# Vape 脚本 API（Rhino / ES6）
+# Soulbound 脚本 API（Rhino / ES6）
 
 > 适用版本：4.21.55 及以后（脚本系统内嵌 Mozilla Rhino 1.7.15，解释执行）。
 > 脚本是**解释执行**的，不需要编译；改完用「重新加载脚本」模块热重载即可。
@@ -8,7 +8,7 @@
 ## 1. 目录与文件
 
 ```
-.vapeclient/
+.soulbound/
   scripts/
     example.json          ← 模块描述（必需）
     example.js            ← 脚本入口（默认与 json 同名；可用 main 指定）
@@ -18,7 +18,7 @@
   extension.log           ← 脚本加载/运行日志
 ```
 
-`.vapeclient` 位于游戏/客户端的工作目录（`LocalConfigStore.directory()`）。
+新安装时 `.soulbound` 位于启动器 exe 旁（无原生目录时为工作目录）。如果只有旧的 `.vapeclient`，会继续使用旧目录；两者同时存在时优先 `.soulbound`。以下路径以新安装为例（`LocalConfigStore.directory()`）。
 首次启动会自动生成 `example.json` + `example.js` 示例，之后的示例模板升级会自动重写占位示例。
 
 ---
@@ -148,7 +148,7 @@ storage.remove("key");
 storage.clear();
 ```
 
-对象/数组会以 JSON 文本存进 `.vapeclient/scripts/data/<id>.json`。同一脚本的多个 js 文件共享同一份 storage。
+对象/数组会以 JSON 文本存进 `.soulbound/scripts/data/<id>.json`。同一脚本的多个 js 文件共享同一份 storage。
 
 ### 4.7 定时器与多文件
 
@@ -157,7 +157,7 @@ after(1000, function () { log("1 秒后执行"); });   // 毫秒；只执行一�
 load("lib/helper.js");                             // 同一作用域执行另一个脚本文件
 ```
 
-`load()` 只能加载 `.vapeclient/scripts/` 目录内的文件（会校验规范路径），重复加载同一文件只执行一次。
+`load()` 只能加载 `.soulbound/scripts/` 目录内的文件（会校验规范路径），重复加载同一文件只执行一次。
 
 ### 4.8 设置项声明（加载期调用）
 

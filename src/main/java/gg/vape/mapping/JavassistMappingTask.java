@@ -141,7 +141,7 @@ implements MappingTask {
 
     private void dumpFailedCommit(int errorCode) {
         try {
-            File directory = new File(gg.vape.config.LocalConfigStore.baseDirectory(), "Vape-v4.21Recovery");
+            File directory = new File(gg.vape.config.LocalConfigStore.baseDirectory(), "SoulboundRecovery");
             if (!directory.exists()) {
                 directory.mkdirs();
             }

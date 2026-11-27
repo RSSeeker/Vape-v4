@@ -70,7 +70,7 @@ public class ClientSettings {
     public final BooleanValue useReach;
     public static final ModeOption NO_MOVEMENT_CORRECTION;
     public final ModeValue movementCorrection;
-    public ColorValue guiColor = ColorValue.create(this, "Gui Color", new Color(5, 134, 105));
+    public ColorValue guiColor = ColorValue.create(this, "Gui Color", new Color(126, 105, 218));
     public final BooleanValue disableFreecamOnInject;
     public static final ModeOption PROPER_MOVEMENT_CORRECTION;
     private static boolean injectFreecamCheckCompleted;

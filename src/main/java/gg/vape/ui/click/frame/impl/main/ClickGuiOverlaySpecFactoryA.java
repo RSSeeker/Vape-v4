@@ -19,7 +19,7 @@ public final class ClickGuiOverlaySpecFactoryA {
     }
 
     public static ClickGuiOverlaySpec o() {
-        return ClickGuiOverlaySpec.builder().title("Vape Online Login").sidecarIcon("login").initializeContent(ClickGuiOverlaySpecFactoryA::B).transitionMode(ClickGuiOverlayTransitionMode.REPLACE).build();
+        return ClickGuiOverlaySpec.builder().title("Soulbound Online Login").sidecarIcon("login").initializeContent(ClickGuiOverlaySpecFactoryA::B).transitionMode(ClickGuiOverlayTransitionMode.REPLACE).build();
     }
 }
 

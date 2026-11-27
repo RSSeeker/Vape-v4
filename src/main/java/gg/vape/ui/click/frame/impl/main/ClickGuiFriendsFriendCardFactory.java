@@ -17,7 +17,7 @@ public final class ClickGuiFriendsFriendCardFactory {
     }
 
     public static ClickGuiOverlaySpec createOverlay(OnlineFriend onlineFriend) {
-        String string = onlineFriend != null && onlineFriend.getDisplayName() != null ? onlineFriend.getDisplayName() : "Vape Online User";
+        String string = onlineFriend != null && onlineFriend.getDisplayName() != null ? onlineFriend.getDisplayName() : "Soulbound Online User";
         return ClickGuiOverlaySpec.builder().title(string).sidecarIcon("user").initializeContent(panel -> ClickGuiFriendsFriendCardFactory.populate(panel, onlineFriend)).transitionMode(ClickGuiOverlayTransitionMode.REPLACE).build();
     }
 

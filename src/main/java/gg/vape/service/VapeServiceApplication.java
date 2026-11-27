@@ -33,9 +33,9 @@ public final class VapeServiceApplication {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             httpServer.close();
             zeusServer.close();
-        }, "vape-service-shutdown"));
+        }, "Soulbound-service-shutdown"));
 
-        System.out.printf("Vape experimental service started: http://%s:%d, zeus://%s:%d, data=%s%n",
+        System.out.printf("Soulbound experimental service started: http://%s:%d, zeus://%s:%d, data=%s%n",
                 config.bindAddress(), config.httpPort(), config.bindAddress(), config.zeusPort(),
                 config.dataFile().toAbsolutePath());
         new CountDownLatch(1).await();
@@ -46,7 +46,7 @@ public final class VapeServiceApplication {
         output.println("  --bind-address <address>  Bind address (default: 127.0.0.1)");
         output.println("  --http-port <port>        HTTP port (default: 8080)");
         output.println("  --zeus-port <port>        Zeus port (default: 8091)");
-        output.println("  --data-file <path>        Data file (default: data/vape-service.json)");
+        output.println("  --data-file <path>        Data file (defaults to the legacy file under data/)");
         output.println("  --help                    Show this help");
     }
 }

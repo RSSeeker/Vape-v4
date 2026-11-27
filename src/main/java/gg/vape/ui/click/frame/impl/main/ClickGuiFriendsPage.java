@@ -115,7 +115,7 @@ extends ClickGuiPageBase {
 
     private void renderOnlinePlaceholder() {
         this.getMainContent().removeMarkedChildren();
-        SimpleTextLabelComponent simpleTextLabelComponent = new SimpleTextLabelComponent("Under construction. Use frames GUI mode to use Vape friends for now.");
+        SimpleTextLabelComponent simpleTextLabelComponent = new SimpleTextLabelComponent("Under construction. Use frames GUI mode to use Soulbound friends for now.");
         simpleTextLabelComponent.setFontScale(0.8);
         simpleTextLabelComponent.setTextColor(ClickGuiFriendsPage.J.A);
         simpleTextLabelComponent.setOffsetX(0.0f);
@@ -137,7 +137,7 @@ extends ClickGuiPageBase {
         this.getSidebarContent().removeMarkedChildren();
         FriendModuleInteractiveComponent friendModuleInteractiveComponent = new FriendModuleInteractiveComponent("Minecraft Friends", null, this::isMinecraftSource, null, "expandarrow");
         friendModuleInteractiveComponent.addClickListener(this::selectMinecraftSource);
-        FriendModuleInteractiveComponent friendModuleInteractiveComponent2 = new FriendModuleInteractiveComponent("VAPE Friends", null, this::isOnlineSource, ClickGuiFriendsPage::getOnlineSourceBadgeCount, "expandarrow");
+        FriendModuleInteractiveComponent friendModuleInteractiveComponent2 = new FriendModuleInteractiveComponent("Soulbound Friends", null, this::isOnlineSource, ClickGuiFriendsPage::getOnlineSourceBadgeCount, "expandarrow");
         friendModuleInteractiveComponent2.addClickListener(this::selectOnlineSource);
         this.getSidebarContent().h((GuiComponent)new PaddedComponent(0.0, 3.0, 0.0, 0.0, (GuiComponent)friendModuleInteractiveComponent), new Object[]{"wrap"});
         this.getSidebarContent().h((GuiComponent)new PaddedComponent(0.0, 3.0, 0.0, 0.0, (GuiComponent)friendModuleInteractiveComponent2), new Object[]{"wrap"});
@@ -432,10 +432,10 @@ extends ClickGuiPageBase {
         ArrayList<OnlineFriend> arrayList = new ArrayList<OnlineFriend>(Vape.INSTANCE.getOnlineFriendManager().getFriends());
         arrayList.sort(Comparator.comparingInt(ClickGuiFriendsPage::getOnlineStatusOrder).thenComparing(ClickGuiFriendsPage::getOnlineFriendName, String.CASE_INSENSITIVE_ORDER));
         int n = arrayList.size();
-        object = n > 0 ? "VAPE Friends (" + n + ")" : "VAPE Friends";
+        object = n > 0 ? "Soulbound Friends (" + n + ")" : "Soulbound Friends";
         this.getMainContent().h((GuiComponent)new PaddedComponent(0.0, 3.0, 0.0, 0.0, (GuiComponent)this.createSectionLabel((String)object)), new Object[]{"wrap"});
         if (arrayList.isEmpty()) {
-            this.getMainContent().h((GuiComponent)new PaddedComponent(0.0, 0.0, 0.0, 0.0, (GuiComponent)this.createInfoLabel("No VAPE friends online yet.")), new Object[]{"wrap"});
+            this.getMainContent().h((GuiComponent)new PaddedComponent(0.0, 0.0, 0.0, 0.0, (GuiComponent)this.createInfoLabel("No Soulbound friends online yet.")), new Object[]{"wrap"});
             this.updateMainChildWidths();
             return;
         }

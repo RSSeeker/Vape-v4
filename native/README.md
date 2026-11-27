@@ -1,4 +1,4 @@
-# Vape 4.21 原生测试桥
+# Soulbound V1 原生测试桥
 
 > **语言 / Language:** 中文 | [English](README_EN.md)
 
@@ -46,10 +46,10 @@ inv(Method, Object, Object[]) : Object
 
 Product 的设计里有两种明确的启动模式：
 
-- 直接用 `Vape-v4.21.<版本>.exe -nogui` 注入时没有 Loader 引导，因此 native
+- 直接用 `SoulboundV1.exe -nogui` 注入时没有 Loader 引导，因此 native
   `gat()` 返回字符串 `"0"`。
 - 加载器启动时会按用户名从回环 Service 取得一个长期 token，并通过临时回环控制器
-  socket 把它交给 `Vape-v4.21Native.dll`。DLL 用命令 `0x269` 请求该 token、缓存
+  socket 把它交给 `SoulboundNative.dll`。DLL 用命令 `0x269` 请求该 token、缓存
   起来供 `gat()` 使用，用 `0x25c` 上报 `trs(step)`，用 `0x25e` 上报完成。加载器
   会一直停留在「加载完成」页面。
 
@@ -63,10 +63,14 @@ Java 初始化的前提下，一旦该 token 被拒绝或 Service 不存在，�
 完整设计文档见
 `../../native_method_research/loader_product_token_handoff_design.md`。
 
+## 数据路径与测试限制
+
+新安装默认使用 exe 旁的 `.soulbound`；若只有旧 `.vapeclient` 则继续使用旧目录，两者同时存在时优先 `.soulbound`。不会移动或删除旧数据；下文路径为新安装示例。测试前请备份。兼容性表来自恢复工程，不代表 Soulbound 已经实机测试。
+
 ## 构建
 
 用 Gradle 构建 Java 8 载荷、内嵌全部远程托管的运行时依赖、编译原生目标并组装
-单文件包（与 `.github/workflows/release.yml` 里 CI 的做法一致）：
+单文件包（CI 使用 `.github/workflows/ci.yml` 构建）：
 
 ```powershell
 .\gradlew.bat prepareInjectionBundle -PtargetRelease=8 `
@@ -75,13 +79,13 @@ Java 初始化的前提下，一旦该 token 被拒绝或 Service 不存在，�
 
 只想开发原生层时可以直接调 CMake —— Gradle 的 `configureNative` / `buildNative`
 两个任务做的就是下面这两步（`nativeJavaHome` 会作为 `VAPE421_JAVA_HOME` 传入，
-`VAPE421_VERSION` 取 `build.gradle` 里的版本号）：
+`VAPE421_VERSION` 取 `gradle.properties` 里的 `soulboundVersion`）：
 
 ```powershell
 cmake -S native -B build/native -A x64 `
   -DVAPE421_JAVA_HOME="C:\Program Files\Java\jdk1.8.0_301" `
-  -DVAPE421_PRODUCT_JAR="build\libs\vape421-product-recovery-4.21.39-injection.jar" `
-  -DVAPE421_VERSION=4.21.39
+  -DVAPE421_PRODUCT_JAR="build\libs\soulbound-1-injection.jar" `
+  -DVAPE421_VERSION=1
 cmake --build build/native --config Release
 ```
 
@@ -93,10 +97,10 @@ ctest --test-dir build/native -C Release --output-on-failure
 
 产物写入 `build/native/dist`：
 
-- `Vape-v4.21Native.dll` —— 以 `RCDATA` 资源内含恢复出的产品 JAR
-- `Vape-v4.21.<版本>.exe` —— 单文件 GUI 加载器（内嵌上面那个 DLL）
+- `SoulboundNative.dll` —— 以 `RCDATA` 资源内含恢复出的产品 JAR
+- `SoulboundV1.exe` —— 单文件 GUI 加载器（内嵌上面那个 DLL）
 
-> 已经没有独立的 `Vape-v4.21Injector.exe` 了：控制台注入改成同一个 exe 的
+> 没有独立的注入器 exe：控制台注入改成同一个 exe 的
 > `-nogui` 模式（`injector.c` 直接编进这个 exe）。
 
 `prepareInjectionBundle` 会把这两个产物连同本 README 一起复制到
@@ -104,23 +108,23 @@ ctest --test-dir build/native -C Release --output-on-failure
 
 ## 直接注入
 
-`Vape-v4.21Native.dll` 以 `RCDATA` 资源形式内含恢复出的 Java 产品。先以 64 位 JVM
+`SoulboundNative.dll` 以 `RCDATA` 资源形式内含恢复出的 Java 产品。先以 64 位 JVM
 启动一个受支持的 Minecraft 实例（含 Forge 环境的 Lunar Client、Badlion Client
 1.8.9），再从包目录运行加载器：
 
 ```powershell
-Vape-v4.21.<版本>.exe
+SoulboundV1.exe
 ```
 
-不带参数就是 GUI 加载器（窗口标题「Vape v4」）：自动刷新可见的 Java 窗口并显示
+不带参数就是 GUI 加载器（窗口标题「Soulbound V1」）：自动刷新可见的 Java 窗口并显示
 窗口标题（例如 `Minecraft`、`Lunar Client`），选中进程即可注入。
-GUI 和控制台仅在 exe 旁的 `Vape-v4.21Native.dll` 与内嵌副本逐字节一致时使用它；
+GUI 和控制台仅在 exe 旁的 `SoulboundNative.dll` 与内嵌副本逐字节一致时使用它；
 否则解压内嵌副本，不递归删除恢复目录，也不覆盖已有 DLL。此检查不能证明文件安全。
 
 命令行（控制台）模式要求第一个参数为 `-nogui`：
 
 ```powershell
-Vape-v4.21.<版本>.exe -nogui <minecraft-pid>
+SoulboundV1.exe -nogui <minecraft-pid>
 ```
 
 不指定 PID 时会打开自动刷新的 Java 窗口选择器（↑/↓ 选择、回车注入、Esc 退出）。
@@ -138,7 +142,7 @@ DLL 工作线程等待 JVM 与 Minecraft 的 `Client thread`，将产品 JAR 写
 
 随后它注册那九个权威方法以及 Product 的 `gat()` 兼容 native，并自动调用
 `NativeBridge.start()` —— 不需要第二条命令或启动开关。具体结果请查看包旁
-`.vapeclient\log\vape421-native-<pid>-<timestamp>.log` 里本次注入的日志。
+`.soulbound\log\soulbound-native-<pid>-<timestamp>.log` 里本次注入的日志。
 
 注入载荷以 `--release 8` 编译，其项目类使用 class-file major version 52。运行时
 依赖从 Gradle 中声明的仓库解析并合并进该载荷，而不是以 vendored 源码目录的形式

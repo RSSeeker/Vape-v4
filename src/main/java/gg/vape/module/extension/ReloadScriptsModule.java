@@ -14,11 +14,11 @@ public final class ReloadScriptsModule
 extends Mod {
     public static final String MODULE_NAME = "Reload Scripts";
     public static final String MODULE_DESCRIPTION =
-            "Rescan .vapeclient\\scripts: recompile existing scripts, register new json files and "
+            "Rescan the client scripts folder: recompile existing scripts, register new json files and "
                     + "disable modules whose json was deleted.";
     public static final String MODULE_NAME_ZH = "重新加载脚本";
     public static final String MODULE_DESCRIPTION_ZH =
-            "重新扫描 .vapeclient\\scripts：重新编译已有脚本、注册新增的 json、"
+            "重新扫描客户端脚本文件夹：重新编译已有脚本、注册新增的 json、"
                     + "并禁用已删除 json 对应的模块。";
 
     public ReloadScriptsModule() {
