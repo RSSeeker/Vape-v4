@@ -37,7 +37,7 @@ python tools/bump_soulbound_version.py 1.1
 # Add docs/releases/SoulboundV1.1.md, review changes, commit and run full CI.
 ```
 
-Tag the **exact commit** only after its entire CI run (including the scan) succeeds. Dispatch **Publish tested Soulbound release** from that commit with the existing tag (for example `SoulboundV1.1`) and that run ID. The workflow downloads that run's already-built files, checks their version, embedded DLL/JAR, checksums and scanned hashes, and publishes those exact files without rebuilding or overwriting an existing release. See [release notes](docs/releases/SoulboundV1.md) for limitations.
+Tag the **exact commit** only after its entire CI run (including the scan) succeeds. Pushing a product tag (for example `SoulboundV1.1`) starts **Publish tested Soulbound release**, which finds a successful CI run for that commit. Alternatively, dispatch it manually with the tag and an explicit successful run ID. In either case the workflow downloads that run's already-built files, checks their version, embedded DLL/JAR, checksums and scanned hashes, and publishes those exact files without rebuilding or overwriting an existing release. See [release notes](docs/releases/SoulboundV1.md) for limitations.
 
 ## Security and original checksum
 

@@ -1,8 +1,12 @@
 name: Publish tested Soulbound release
 
-# Publish existing artifacts from a completed CI run for the exact tagged commit;
-# never rebuild or overwrite an existing release.
+# A product tag can publish only after a completed CI run for that exact commit.
+# Manual dispatch remains available for selecting a specific successful run.
+# Both paths publish existing artifacts; neither rebuilds or replaces a release.
 on:
+  push:
+    tags:
+      - 'SoulboundV*'
   workflow_dispatch:
     inputs:
       tag:
@@ -19,7 +23,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: release-${{ inputs.tag }}
+  group: release-${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
   cancel-in-progress: false
 
 jobs:
@@ -28,32 +32,59 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Select and validate tag
+        id: release_tag
+        env:
+          EVENT: ${{ github.event_name }}
+          PUSH_TAG: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT" == push ]]; then TAG="$PUSH_TAG"; else TAG="$INPUT_TAG"; fi
+          [[ "$TAG" =~ ^SoulboundV[1-9][0-9]*(\.[0-9]+)*$ ]] || { echo 'Invalid product tag'; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
       - name: Check out release tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag }}
+          ref: refs/tags/${{ steps.release_tag.outputs.tag }}
           persist-credentials: false
       - name: Verify tag, source version and complete CI run
+        id: verified_run
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
-          RUN_ID: ${{ inputs.run_id }}
+          TAG: ${{ steps.release_tag.outputs.tag }}
+          EVENT: ${{ github.event_name }}
+          INPUT_RUN_ID: ${{ inputs.run_id }}
         shell: bash
         run: |
           set -euo pipefail
           python3 -B tools/verify_release_version.py --tag "$TAG"
-          [[ "$RUN_ID" =~ ^[0-9]+$ ]] || { echo 'Invalid run ID'; exit 1; }
           [[ -s "docs/releases/$TAG.md" ]] || { echo 'Missing release notes'; exit 1; }
+          commit=$(git rev-parse HEAD)
+          RUN_ID="$INPUT_RUN_ID"
+          if [[ "$EVENT" == push ]]; then
+            runs=$(gh api -X GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+              -f "head_sha=$commit" -f status=success -F per_page=100)
+            RUN_ID=$(jq -r --arg sha "$commit" --arg repo "$GITHUB_REPOSITORY" \
+              '[.workflow_runs[] | select(.head_sha == $sha and .head_repository.full_name == $repo and
+                .status == "completed" and .conclusion == "success" and
+                (.event == "push" or .event == "workflow_dispatch"))] | sort_by(.id) | last | .id // empty' <<< "$runs")
+          fi
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]] || { echo 'No successful CI run for this commit'; exit 1; }
           run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")
           workflow_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml" --jq .id)
           [[ "$(jq -r .workflow_id <<< "$run")" == "$workflow_id" ]] || { echo 'Not the CI workflow'; exit 1; }
           [[ "$(jq -r .head_repository.full_name <<< "$run")" == "$GITHUB_REPOSITORY" ]] || { echo 'Wrong repository'; exit 1; }
-          [[ "$(jq -r .head_sha <<< "$run")" == "$(git rev-parse HEAD)" ]] || { echo 'CI did not test this tag commit'; exit 1; }
+          [[ "$(jq -r .head_sha <<< "$run")" == "$commit" ]] || { echo 'CI did not test this tag commit'; exit 1; }
+          [[ "$(jq -r .event <<< "$run")" == push || "$(jq -r .event <<< "$run")" == workflow_dispatch ]] || { echo 'Unsupported CI event'; exit 1; }
           [[ "$(jq -r .status <<< "$run")" == completed && "$(jq -r .conclusion <<< "$run")" == success ]] || { echo 'Complete CI, including the scan, must succeed'; exit 1; }
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "Publishing artifacts from successful CI run $RUN_ID for $commit"
       - name: Download artifacts from that exact run
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ inputs.run_id }}
+          RUN_ID: ${{ steps.verified_run.outputs.run_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -61,7 +92,7 @@ jobs:
           gh run download "$RUN_ID" --name rebuilt-bundle-scan-report --dir scan
       - name: Verify artifacts and scanned hashes
         env:
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ steps.release_tag.outputs.tag }}
         shell: bash
         run: |
           set -euo pipefail
@@ -73,7 +104,7 @@ jobs:
       - name: Create release without overwriting assets
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ steps.release_tag.outputs.tag }}
         shell: bash
         run: |
           set -euo pipefail
