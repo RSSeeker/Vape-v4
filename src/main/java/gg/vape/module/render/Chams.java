@@ -51,7 +51,6 @@ extends Mod {
         if (ForgeVersion.MC_1_21_11.d()) {
             gg.vape.debug.ChamsRenderHooks.warmUp();
             gg.vape.debug.ChamsRenderHooks.enabled = true;
-            gg.vape.debug.ChamsModernProbe.runOnce();
         }
     }
 

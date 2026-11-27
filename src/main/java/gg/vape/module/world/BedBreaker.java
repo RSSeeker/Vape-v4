@@ -22,6 +22,7 @@ import gg.vape.module.world.bedbreaker.BedTargetRenderState;
 import gg.vape.movement.MovementInputHelper;
 import gg.vape.unmap.ModeOption;
 import gg.vape.unmap.ModeSelection;
+import gg.vape.rotation.LocalPlayerRotationUtil;
 import gg.vape.rotation.RotationAngles;
 import gg.vape.rotation.RotationManager;
 import gg.vape.utils.BlockUtil;
@@ -30,6 +31,7 @@ import gg.vape.utils.PlayerSimulationUtil;
 import gg.vape.utils.RotationUtil;
 import gg.vape.utils.RotationVectorMath;
 import gg.vape.utils.Vec3d;
+import gg.vape.wrapper.impl.ForgeVersion;
 import gg.vape.utils.render.GuiRenderPrimitives;
 import gg.vape.utils.render.OpenGlBackendHolder;
 import gg.vape.utils.render.RenderUtils;
@@ -139,6 +141,11 @@ extends Mod {
             return;
         }
         ArrayList<BedTargetRenderState> activeRenderStates = new ArrayList<BedTargetRenderState>();
+        // 1.21.10-25.x 的 GUI 批次矩阵不会每帧跟着相机走：
+        // 不刷新的话世界坐标投影只在某个朝向下才是对的（其余朝向指示器会偏出床）。
+        if (ForgeVersion.MC_1_21_10.d() && !ForgeVersion.MC_26_1.d()) {
+            LocalPlayerRotationUtil.updateProjectionMatrix(eventRender3D.getTicks());
+        }
         for (BedTargetRenderPosition bedTargetRenderPosition : this.targets) {
             boolean isFoot;
             int blockZ;

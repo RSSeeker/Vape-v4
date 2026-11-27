@@ -2841,3 +2841,17 @@ disabler.themis_blink=Themis Blink
 disabler.themis_blink.tooltip=Sends a status-only tick packet when no move or heartbeat packet went out for 200ms, so Themis sees a steady link instead of a frozen client followed by a burst.
 extension=Extension
 extension.category.tooltip=Third-party script modules
+
+
+# AutoLungeSwap (ported from Auto Lunge Swap 1.2.0)
+autolungeswap=AutoLungeSwap
+autolungeswap.tooltip=Auto-swaps to a spear for a lunge attack, then back.
+autolungeswap.trigger_key=Trigger key
+autolungeswap.wait_for_cooldown=Wait for cooldown
+autolungeswap.wait_for_cooldown.tooltip=Do not lunge while the attack cooldown is still recovering
+autolungeswap.hold_to_repeat=Hold to repeat
+autolungeswap.hold_to_repeat.tooltip=Keep lunging while the key is held down
+autolungeswap.return_to_original_slot=Return to original slot
+autolungeswap.return_to_original_slot.tooltip=Swap back to the item that was held before the lunge
+autolungeswap.min_hunger=Min hunger
+autolungeswap.swap_back_delay=Swap back delay

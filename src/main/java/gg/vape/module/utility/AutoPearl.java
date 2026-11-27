@@ -1,5 +1,6 @@
 package gg.vape.module.utility;
 
+import gg.vape.Vape;
 import gg.vape.event.EventHandler;
 import gg.vape.event.impl.EventEntityJoinWorld;
 import gg.vape.event.impl.EventPlayerUseItem;
@@ -7,6 +8,7 @@ import gg.vape.event.impl.EventPreTick;
 import gg.vape.event.impl.EventWorldChange;
 import gg.vape.input.KeyBindingHelper;
 import gg.vape.mapping.MappedClasses;
+import gg.vape.mapping.mappings.MWorld;
 import gg.vape.module.Category;
 import gg.vape.module.Mod;
 import gg.vape.module.control.SharedModuleControlClaims;
@@ -59,7 +61,7 @@ extends Mod {
     private final BooleanValue verticalCheckValue;
     private AutoPearlState state;
     private final ModeValue modeValue;
-    private static final float MAX_PLAYER_DISTANCE = 10.0f;
+    private static final float MAX_PLAYER_DISTANCE = 128.0f;
     private final TimerUtil throwDelayTimer;
     private final BooleanValue limitToItemsValue;
     private static final long MODULE_ID = -5394869744341811456L;

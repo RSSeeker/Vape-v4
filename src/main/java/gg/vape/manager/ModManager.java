@@ -85,6 +85,7 @@ import gg.vape.module.utility.ArmorSwitch;
 import gg.vape.module.utility.AutoArmor;
 import gg.vape.module.utility.InvCleaner;
 import gg.vape.module.utility.MLG;
+import gg.vape.module.utility.AutoLungeSwap;
 import gg.vape.module.utility.AutoPearl;
 import gg.vape.module.utility.AutoTool;
 import gg.vape.module.utility.AutoTotem;
@@ -198,7 +199,7 @@ implements EventListener {
         coreModules[48] = new Sprint();
         coreModules[49] = new Health();
         coreModules[50] = new HitSelect();
-        coreModules[51] = new BlockHit();
+        coreModules[51] = null; // BlockHit is registered below with a <=1.8.9 constraint
         SilentAura silentAura = new SilentAura();
         coreModules[52] = silentAura;
         coreModules[53] = new SilentAuraClicker(silentAura);
@@ -209,7 +210,7 @@ implements EventListener {
         coreModules[58] = new Timer();
         coreModules[59] = new InventoryFill();
         coreModules[60] = new BedPlates();
-        this.registerModules(Stream.of(coreModules));
+        this.registerModules(Stream.of(coreModules).filter(java.util.Objects::nonNull));
         ModRegistrationBuilder.create().setModule(new Explosions()).addVersionConstraint(ForgeVersion.MC_1_16_5.b()).registerWith(this);
         // Chams is registered on every version now: 1.17+ uses the RenderSystem-friendly
         // polygon offset path (see Chams#onRenderPlayerPre), older versions keep the
@@ -221,11 +222,15 @@ implements EventListener {
         GuiComponent[] preservedLegacyComponents = legacyComponentsSnapshot;
         ModRegistrationBuilder.create().setModule(new Freecam()).addVersionConstraint(ForgeVersion.MC_1_16_5.b()).addVersionConstraint(ForgeVersion.MC_1_21_11.n()).registerWith(this);
         this.registerModules(Stream.of(new InvWalk()), ModManager::addMinecraft189Constraint);
+        // Sword blocking only exists up to 1.8.9 (1.9+ swords cannot block), so BlockHit is hidden there.
+        this.registerModules(Stream.of(new BlockHit()), ModManager::addMinecraft189Constraint);
         this.registerModules(Stream.of(new Backtrack()), ModManager::addBacktrackVersionConstraints);
         this.registerModules(Stream.of(new AutoFish(), new BedBreaker(), new AutoLadder(), new Clutch(), new FakeLag()), ModManager::addMinecraft1710Constraint);
         this.registerModules(Stream.of(new BedPlates()), ModManager::addBedPlatesVersionConstraints);
         this.registerModules(Stream.of(new AntiBot()));
         this.registerModules(Stream.of(new Triggerbot(), new HitSwap(), new AutoMace(), new AutoAnchor(), new WindCharge(), new CrystalAura(), new AutoTotem(), new ShieldBreaker(), new PearlCatch()), ModManager::addMinecraft1214Constraint);
+        // Spear lunging only exists from 1.21.11 on (spears + Lunge enchantment).
+        ModRegistrationBuilder.create().setModule(new AutoLungeSwap()).addVersionConstraint(ForgeVersion.MC_1_21_11.n()).registerWith(this);
         this.registerModules(Stream.of(new NoSlowdown(), new Speed(), new NoItemRelease(), new Timer()), ModManager::addModernMinecraftConstraint);
         this.registerTextGuiSettings();
         this.registerHudModules();

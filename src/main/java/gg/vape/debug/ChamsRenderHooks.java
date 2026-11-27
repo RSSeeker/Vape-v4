@@ -96,6 +96,11 @@ public final class ChamsRenderHooks {
     }
 
     public static String renderTypeClassName() {
+        // Mapping tasks run before Chams is ever enabled, so warmUp() has not
+        // populated renderTypeClass yet; fall back to the mapped class directly.
+        if (renderTypeClass == null) {
+            renderTypeClass = MappedClasses.FZ;
+        }
         return renderTypeClass == null ? null : renderTypeClass.getName();
     }
 
@@ -227,7 +232,6 @@ public final class ChamsRenderHooks {
             scanNoDepthPipelines(loader);
             status = "ready";
             ready = true;
-            Vape.debugLog("[Chams] builder hooks ready");
         } catch (Throwable throwable) {
             status = "warmUp failed: " + describe(throwable);
             Vape.debugLog("[Chams] " + status);
@@ -239,13 +243,7 @@ public final class ChamsRenderHooks {
             return null;
         }
         if (!ready || !enabled) {
-            if (seenCalls++ == 0) {
-                Vape.debugLog("[Chams] map called while ready=" + ready + " enabled=" + enabled);
-            }
             return renderType;
-        }
-        if (seenCalls++ < 3) {
-            Vape.debugLog("[Chams] map call " + seenCalls + ": " + renderType);
         }
         if (mode == 3) {
             // Keep the vanilla RenderType: the replaced type is never drawn by the 1.21.6+ flush.
@@ -279,13 +277,6 @@ public final class ChamsRenderHooks {
         drawCalls++;
         if (CUSTOM.contains(renderType)) {
             customDraws++;
-            if (drawLogged < 5) {
-                drawLogged++;
-                Vape.debugLog("[Chams] custom draw " + drawLogged + ": " + renderType + " count=" + customDraws);
-            }
-        } else if (vanillaLogged < 8) {
-            vanillaLogged++;
-            Vape.debugLog("[Chams] vanilla draw: " + renderType);
         }
         inSkinDraw = isSkinRenderType(renderType);
         skinPipeline = pipelineOf(renderType);
@@ -340,9 +331,6 @@ public final class ChamsRenderHooks {
                 putFloat.invoke(unsafe, pipeline, constantOffset, Float.valueOf(-2500000.0f));
                 PATCHED_PIPELINES.put(pipeline, new Object[]{scale, constant, Boolean.FALSE});
                 patchedCount++;
-                if (patchedCount < 6) {
-                    Vape.debugLog("[Chams] patched skin pipeline " + pipeline + " bias=" + scale + "," + constant + " count=" + patchedCount);
-                }
                 return;
             }
             if (depthStencilField == null || depthStencilConstructor == null) {
@@ -361,9 +349,6 @@ public final class ChamsRenderHooks {
             putObject.invoke(unsafe, pipeline, offset, patched);
             PATCHED_PIPELINES.put(pipeline, new Object[]{state, original, Boolean.TRUE});
             patchedCount++;
-            if (patchedCount < 6) {
-                Vape.debugLog("[Chams] patched skin pipeline " + pipeline + " bias=" + original[0] + "," + original[1] + " count=" + patchedCount);
-            }
         } catch (Throwable throwable) {
             Vape.debugLog("[Chams] patch failed: " + describe(throwable));
         }
@@ -586,11 +571,6 @@ public final class ChamsRenderHooks {
         putObject.invoke(unsafe, clone, blendOffset, java.util.Optional.empty());
         long writeDepthOffset = ((Long) objectFieldOffset.invoke(unsafe, writeDepthField)).longValue();
         putBoolean.invoke(unsafe, clone, writeDepthOffset, Boolean.TRUE);
-        if (!loggedPipeline) {
-            loggedPipeline = true;
-            Vape.debugLog("[Chams] pipeline source=" + describePipeline(source));
-            Vape.debugLog("[Chams] pipeline cloned=" + describePipeline(clone));
-        }
         return clone;
     }
 
@@ -718,14 +698,6 @@ public final class ChamsRenderHooks {
         }
         Map<?, ?> textureMap = (Map<?, ?>) textures;
         if (!hasPlayerSkin(textureMap)) {
-            if (inspected < 12) {
-                inspected++;
-                StringBuilder paths = new StringBuilder();
-                for (Object entry : textureMap.values()) {
-                    paths.append(texturePath(entry)).append(' ');
-                }
-                Vape.debugLog("[Chams] no skin in " + original + " textures=" + paths);
-            }
             return null;
         }
         Object pipeline = setupPipelineField.get(setup);
@@ -737,14 +709,11 @@ public final class ChamsRenderHooks {
             return null;
         }
         String compile = precompile(replacementPipeline);
-        Vape.debugLog("[Chams] pipeline compile: " + compile + " location=" + get(replacementPipeline, "getLocation"));
         if (!compile.startsWith("valid=true")) {
             Object vanilla = pickVanillaNoDepth(pipeline);
             if (vanilla == null) {
-                Vape.debugLog("[Chams] no vanilla no-depth pipeline matches " + get(pipeline, "getVertexFormat"));
                 return null;
             }
-            Vape.debugLog("[Chams] falling back to vanilla pipeline " + get(vanilla, "getLocation"));
             replacementPipeline = vanilla;
         }
         Object[] arguments = new Object[setupParameterTypes.length];
@@ -759,9 +728,6 @@ public final class ChamsRenderHooks {
         Object replacement = createRenderTypeMethod.invoke(null, name, replacementSetup);
         if (replacement != null) {
             created++;
-            if (created == 1) {
-                Vape.debugLog("[Chams] first custom RenderType created: " + original);
-            }
         }
         return replacement;
     }
@@ -807,11 +773,6 @@ public final class ChamsRenderHooks {
                     vertexFormat, vertexFormatMode);
         }
         Object rebuilt = call(builder, "build", new Class[0]);
-        if (!loggedPipeline && rebuilt != null && rebuilt != builder) {
-            loggedPipeline = true;
-            Vape.debugLog("[Chams] pipeline source=" + describePipeline(source));
-            Vape.debugLog("[Chams] pipeline rebuilt=" + describePipeline(rebuilt));
-        }
         return rebuilt;
     }
 

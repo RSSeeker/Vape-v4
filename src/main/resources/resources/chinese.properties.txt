@@ -2857,3 +2857,17 @@ disabler.themis_blink=Themis 断流补包
 disabler.themis_blink.tooltip=出站包断流超过 200 毫秒时补发一条原地不动的移动包，避免 Themis 看到「客户端卡死、随后爆量」的封包模式。
 extension=扩展
 extension.category.tooltip=第三方脚本模块
+
+
+# AutoLungeSwap (ported from Auto Lunge Swap 1.2.0)
+autolungeswap=长矛秒切
+autolungeswap.tooltip=自动切换长矛发动突进，随后切回原物品。
+autolungeswap.trigger_key=触发按键
+autolungeswap.wait_for_cooldown=等待攻击冷却
+autolungeswap.wait_for_cooldown.tooltip=攻击冷却未恢复时不发动突进
+autolungeswap.hold_to_repeat=按住连续触发
+autolungeswap.hold_to_repeat.tooltip=按住按键时持续发动突进
+autolungeswap.return_to_original_slot=切回原物品
+autolungeswap.return_to_original_slot.tooltip=突进后切回之前手持的物品
+autolungeswap.min_hunger=最低饥饿值
+autolungeswap.swap_back_delay=切回延迟

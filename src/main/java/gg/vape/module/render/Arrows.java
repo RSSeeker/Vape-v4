@@ -1,5 +1,6 @@
 package gg.vape.module.render;
 
+import gg.vape.rotation.LocalPlayerRotationUtil;
 import gg.vape.Vape;
 import gg.vape.event.EventHandler;
 import gg.vape.event.impl.EventRender2D;
@@ -229,6 +230,10 @@ extends Mod {
         this.iconsDrawnInWorldPhase = false;
         this.projectedPositions.clear();
         RenderUtil.d();
+        // 1.21.10-25.x: GUI batch matrices do not follow the camera; arrows would lag/stick.
+        if (ForgeVersion.MC_1_21_10.d() && !ForgeVersion.MC_26_1.d()) {
+            LocalPlayerRotationUtil.updateProjectionMatrix(event.getTicks());
+        }
         for (Object entityHandle : Minecraft.theWorld().z()) {
             Entity entity = new Entity(entityHandle);
             if (!this.shouldTrack(entity)) continue;
