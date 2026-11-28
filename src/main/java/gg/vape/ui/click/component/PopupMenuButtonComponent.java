@@ -266,6 +266,15 @@ extends InteractiveComponent {
         return this.popupFrame;
     }
 
+    /** Close without opening a new menu or clearing another control's focus. */
+    public void closePopup() {
+        PopupFrame popup = this.popupFrame;
+        if (popup == null) return;
+        this.popupFrame = null;
+        if (ClientSettings.activeComponent == this) ClientSettings.activeComponent = null;
+        ClientSettings.removePopup(popup);
+    }
+
     @Override
     public void g(GuiMouseEvent mouseEvent) {
         if (this.dividerColor != null && (double)mouseEvent.getX() < this.G$src$D$1b2f02a() + this.A() - ARROW_SECTION_WIDTH && (double)mouseEvent.getY() > this.n()) {

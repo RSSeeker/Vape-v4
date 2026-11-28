@@ -51,6 +51,7 @@ public final class ObfuscatedClassAudit {
             "gg/vape/module/combat/aimassist/AimAssistTargetingSubModule",
             "gg/vape/module/combat/automace/AutoMaceRotationController",
             "gg/vape/module/extension/ReloadScriptsModule",
+            "gg/vape/module/extension/ScriptModule",
             "gg/vape/module/none/ClientSettings",
             "gg/vape/module/none/TextGuiSettings",
             "gg/vape/module/render/Search",

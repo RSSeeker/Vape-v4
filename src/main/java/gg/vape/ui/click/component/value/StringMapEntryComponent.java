@@ -4,6 +4,7 @@ import gg.vape.ui.click.GuiMouseEvent;
 import gg.vape.ui.click.component.GuiClickListener;
 import gg.vape.ui.click.component.GuiComponent;
 import gg.vape.ui.click.component.SquareIconButtonComponent;
+import gg.vape.ui.font.FontOption;
 import gg.vape.ui.font.SmoothFontRenderer;
 import gg.vape.utils.render.GuiRenderPrimitives;
 import java.awt.Color;
@@ -36,6 +37,18 @@ extends GuiComponent {
 
     public void setSelected(boolean selected) {
         this.selected = selected;
+    }
+
+    @Override
+    public void c() {
+        // Map keys and values are user data, not translation keys.
+        boolean previous = FontOption.isTranslationDisabled();
+        FontOption.setTranslationDisabled(true);
+        try {
+            super.c();
+        } finally {
+            FontOption.setTranslationDisabled(previous);
+        }
     }
 
     @Override

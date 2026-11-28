@@ -153,6 +153,18 @@ extends Value<Boolean[], EntityTargetFilterValue> {
         }
     }
 
+    @Override
+    public void setPersistenceSuppressed(boolean suppressed) {
+        super.setPersistenceSuppressed(suppressed);
+        // Profile previews temporarily update these child values as well as the
+        // composite. Keep them from scheduling saves during that operation.
+        if (this.filterValues != null) {
+            for (BooleanValue filterValue : this.filterValues) {
+                filterValue.setPersistenceSuppressed(suppressed);
+            }
+        }
+    }
+
     private void handleFilterValueChanged(BooleanValue changedFilterValue) {
         if (this.synchronizingValues) {
             return;

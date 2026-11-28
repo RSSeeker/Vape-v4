@@ -1,10 +1,13 @@
 package gg.vape.ui.click.component.value;
 
+import gg.vape.Vape;
 import gg.vape.module.none.ClientSettings;
 import gg.vape.ui.click.component.GuiComponent;
 import gg.vape.ui.click.component.value.AbstractListValueComponent;
 import gg.vape.ui.click.frame.Frame;
 import gg.vape.ui.click.frame.FrameComponent;
+import gg.vape.ui.click.frame.impl.inevitable.InevitableFrameStack;
+import gg.vape.ui.click.frame.impl.inevitable.InevitableLayout;
 import gg.vape.wrapper.impl.Minecraft;
 
 public abstract class FloatingValueDropdownLayer<T extends AbstractListValueComponent>
@@ -37,7 +40,24 @@ extends Frame {
         if (this.sourceComponent == null || ((GuiComponent)this.sourceComponent).getParentFrameComponent() == null) {
             return;
         }
-        double preferredX = ((GuiComponent)this.sourceComponent).L$src$Lgg_vape_ui_click_frame_Frame_$1djx6sa().G$src$D$1b2f02a() + ((GuiComponent)this.sourceComponent).L$src$Lgg_vape_ui_click_frame_Frame_$1djx6sa().A() + 1.0;
+        Frame sourceFrame = this.sourceComponent.L$src$Lgg_vape_ui_click_frame_Frame_$1djx6sa();
+        if (sourceFrame == null) return;
+        if (InevitableFrameStack.isPanelOrPopup(sourceFrame)) {
+            double scale = Vape.INSTANCE.getClientSettings().getGuiScaleFactor();
+            if (scale <= 0.0) return;
+            double viewportWidth = Minecraft.J() / (2.0 * scale);
+            double viewportHeight = Minecraft.h() / (2.0 * scale);
+            double maxHeight = Math.max(22.0, Math.min(300.0, viewportHeight - 2.0 * InevitableLayout.MARGIN));
+            if (Math.abs(this.d$src$D$ibccpu() - maxHeight) > 0.01) {
+                this.t(maxHeight);
+                this.l$src$V$1mibm4x();
+            }
+            double x = InevitableLayout.overlayX(sourceFrame.G$src$D$1b2f02a(), sourceFrame.A(), this.A(), viewportWidth);
+            double y = InevitableLayout.overlayY(this.sourceComponent.n(), Math.min(this.L(), maxHeight), viewportHeight);
+            if (x != this.G$src$D$1b2f02a() || y != this.n()) this.M(x, y);
+            return;
+        }
+        double preferredX = sourceFrame.G$src$D$1b2f02a() + sourceFrame.A() + 1.0;
         if (preferredX != this.lastSourceX || ((GuiComponent)this.sourceComponent).n() != this.lastSourceY) {
             double targetY = ((GuiComponent)this.sourceComponent).n();
             FrameComponent frameComponent = ((GuiComponent)this.sourceComponent).getParentFrameComponent();

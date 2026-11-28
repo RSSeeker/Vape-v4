@@ -51,7 +51,7 @@ public class ConfigJsonUtils {
         if (object.get(key) != null && !object.get(key).isJsonNull()) {
             String value = object.get(key).getAsString();
             if (value.startsWith(BASE64_PREFIX)) {
-                value = Base64Util.decodeUtf8Base64(value.split(":")[1]);
+                value = Base64Util.decodeUtf8Base64(value.substring(BASE64_PREFIX.length()));
             }
             return value;
         }

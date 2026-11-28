@@ -73,6 +73,9 @@ public class ColorUtil {
     }
 
     public static Color getAccentTextColor() {
+        if (gg.vape.ui.click.frame.impl.inevitable.InevitableRenderScope.isActive()) {
+            return new Color(45, 45, 45);
+        }
         return ColorUtil.getContrastingGray(Vape.INSTANCE.getClientSettings().guiColor.getMutableColor(), 45, 240);
     }
 

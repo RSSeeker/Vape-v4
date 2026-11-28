@@ -164,8 +164,9 @@ extends AbstractListValueComponent {
     @Override
     public void setExpanded(boolean expanded) {
         super.setExpanded(expanded);
-        if (!expanded && this.dropdownLayer != null) {
+        if (!expanded && this.dropdownLayer != null && this.frameStackManager != null) {
             this.frameStackManager.m(this.dropdownLayer);
+            this.frameStackManager = null;
         }
     }
 

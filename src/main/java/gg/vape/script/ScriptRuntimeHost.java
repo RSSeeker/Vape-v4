@@ -76,6 +76,15 @@ public final class ScriptRuntimeHost {
             return true;
         }
         this.broken = false;
+        // Includes and delayed callbacks belong to a particular script scope.
+        // A new load must neither skip old includes nor run old functions in
+        // the replacement scope. Register the main file before execution to
+        // prevent a script from recursively loading itself.
+        this.loadedScripts.clear();
+        synchronized (this.scheduledTasks) {
+            this.scheduledTasks.clear();
+        }
+        this.rememberMainScript();
         Context context = Context.enter();
         try {
             configure(context);
@@ -88,13 +97,16 @@ public final class ScriptRuntimeHost {
             script.exec(context, scriptScope);
             this.scope = scriptScope;
             this.loaded = true;
-            this.rememberMainScript();
             return true;
         }
         catch (Throwable throwable) {
             this.loaded = false;
             this.scope = null;
             this.broken = true;
+            this.loadedScripts.clear();
+            synchronized (this.scheduledTasks) {
+                this.scheduledTasks.clear();
+            }
             this.report("load", throwable);
             return false;
         }
@@ -263,7 +275,7 @@ public final class ScriptRuntimeHost {
     /**
      * 注册一个延时任务（{@code after(ms, fn)} 的底层实现），由 {@link #tickScheduler()} 驱动。
      */
-    public void schedule(long delayMillis, Function function) {
+    public synchronized void schedule(long delayMillis, Function function) {
         if (function == null) {
             return;
         }

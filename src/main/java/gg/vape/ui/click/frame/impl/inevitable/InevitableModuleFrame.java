@@ -64,6 +64,9 @@ public final class InevitableModuleFrame extends ModuleCategoryFrame {
             return;
         }
         ClientSettings.inevitableStack.closePanelPopups(this);
+        for (ModuleComponent row : existing) {
+            for (GuiComponent editor : row.getValueComponents()) ClientSettings.inevitableStack.closeEditorTree(editor);
+        }
         if (ClientSettings.activeComponent != null
                 && ClientSettings.activeComponent.L$src$Lgg_vape_ui_click_frame_Frame_$1djx6sa() == this) {
             ClientSettings.activeComponent = null;
@@ -78,6 +81,9 @@ public final class InevitableModuleFrame extends ModuleCategoryFrame {
         this.l$src$V$1mibm4x();
     }
     @Override public int A$src$I$wwnvku() {
+        for (GuiComponent child : this.f()) {
+            if (child instanceof ModuleComponent) ((ModuleComponent)child).collapseValueComponents();
+        }
         int hiddenCount = super.A$src$I$wwnvku();
         if (this.q()) for (GuiComponent child : this.f()) {
             if (!(child instanceof FrameHeaderComponent)) child.setVisible(false);

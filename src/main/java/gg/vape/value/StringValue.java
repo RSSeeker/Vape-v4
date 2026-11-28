@@ -12,6 +12,9 @@ extends Value<String, StringValue> {
 
     public StringValue(Object owner, String name, String defaultValue) {
         super(owner, name, defaultValue);
+        // Values constructed directly (including script settings) must retain
+        // their name when a profile snapshot creates an editable proxy.
+        this.definitionName = name;
     }
 
     @Override

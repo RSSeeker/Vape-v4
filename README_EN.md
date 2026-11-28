@@ -1,13 +1,13 @@
-# Soulbound V1 — Product Recovery
+# InevitableClient V1 — Product Recovery
 
 > **Language:** English | [中文](README_ZH.md)
 >
-> Soulbound: [Releases](https://github.com/arsnexc/Vape-v421/releases) · [Upstream reference](https://github.com/RSSeeker/Vape-v4/releases)
+> InevitableClient: [Releases](https://github.com/arsnexc/Vape-v421/releases) · [Upstream reference](https://github.com/RSSeeker/Vape-v4/releases)
 >
 > Source code: [OpenVapeCN/OpenVape](https://github.com/OpenVapeCN/OpenVape)
 > (This project recovers, cleans up and localizes the public source from that repository.)
 
-Soulbound is an independent research/recovery rebrand of Vape 4.21's Java layer and Windows x64 native bridge. It defaults to English while retaining Chinese and legacy data compatibility.
+InevitableClient is an independent research/recovery rebrand of Vape 4.21's Java layer and Windows x64 native bridge. It defaults to English while retaining Chinese and legacy data compatibility.
 
 ## Disclaimer and Copyright
 
@@ -35,32 +35,32 @@ Verify the origin, signatures and hashes of downloaded programs before running t
 
 ## Data selection and versioning
 
-A fresh install uses `.soulbound` beside the launcher. If only the legacy `.vapeclient` folder exists, it stays in use; if both exist, `.soulbound` wins. Nothing is moved or deleted. The embedded service reuses `vape-service.json` when `soulbound-service.json` is absent; the texture cache similarly reuses `vapeTextures` when `texture-cache` is absent. Without a launcher-supplied `vape.directory`, the config store falls back to the working directory; the service and image cache retain their historical `user.home` fallback. Back up the selected folder before testing.
+Beside the launcher, an existing `.inevitable` folder takes precedence, followed by `.soulbound` and then `.vapeclient`; a fresh install uses `.inevitable`. Nothing is moved or deleted. The embedded service prefers `inevitable-service.json`, then `soulbound-service.json`, then `vape-service.json`; the texture cache reuses `vapeTextures` when `texture-cache` is absent. Without a launcher-supplied `vape.directory`, the config store falls back to the working directory; the service and image cache retain their historical `user.home` fallback. Back up the selected folder before testing.
 
-The examples below use V1 and `.soulbound`. The product version is set in `gradle.properties`; see the [root guide](README.md#versioning-and-releases) for versioned builds and exact-artifact publication. Internal identifiers, JNI names and profile `4.21` values remain compatibility contracts rather than being renamed.
+The examples below use V1 and `.inevitable`. The product version is set in `gradle.properties`; see the [root guide](README.md#versioning-and-releases) for versioned builds and exact-artifact publication. Internal identifiers, JNI names and profile `4.21` values remain compatibility contracts rather than being renamed.
 
 ## Main artifact
 
 | File | Description |
 | --- | --- |
-| `SoulboundV1.exe` | Single-file GUI loader (embeds the complete DLL, Java payload and icon) |
+| `InevitableClientV1.exe` | Single-file GUI loader (embeds the complete DLL, Java payload and icon) |
 
-**Optional external DLL**: GUI and console modes use `SoulboundNative.dll` next to the EXE only if it matches the EXE's embedded DLL byte-for-byte. Otherwise they extract the embedded copy; replacing the adjacent DLL is no longer a way to update the native layer independently.
+**Optional external DLL**: GUI and console modes use `InevitableClientNative.dll` next to the EXE only if it matches the EXE's embedded DLL byte-for-byte. Otherwise they extract the embedded copy; replacing the adjacent DLL is no longer a way to update the native layer independently.
 
-**Language and compatibility:** The loader reads `.soulbound\config.json` next
+**Language and compatibility:** The loader reads `.inevitable\config.json` next
 to the executable. An explicitly saved Chinese selection remains Chinese; choose
 **Settings → General → Language → English** in-game and restart the loader to
 change it. Configurations from older versions that omitted their default language
 now start in English. The console messages are English regardless of this setting.
 
 Run the rebuilt EXE on its own or next to the **matching rebuilt DLL**. A stale
-external `SoulboundNative.dll` is not injected. Matching the embedded resource
+external `InevitableClientNative.dll` is not injected. Matching the embedded resource
 is an integrity check, not evidence that the EXE or DLL is safe.
 
 **Usage**:
 
-- Double-click to run the GUI (window title "Soulbound V1"): pick a Minecraft process and inject directly, no login needed
-- Command-line injector: `SoulboundV1.exe -nogui [pid]` — without a pid it opens the process picker; with a pid it injects directly
+- Double-click to run the GUI (window title "InevitableClient V1"): pick a Minecraft process and inject directly, no login needed
+- Command-line injector: `InevitableClientV1.exe -nogui [pid]` — without a pid it opens the process picker; with a pid it injects directly
 - After injection, press RIGHT SHIFT (default) in-game to open the module GUI
 
 ## Features
@@ -70,8 +70,8 @@ is an integrity check, not evidence that the EXE or DLL is safe.
 - Integrated VapeLoader GUI (GDI+ self-drawn, English by default): process selection / injection progress / load complete
 - Removed the login page and cache prompt: it starts straight to process selection and injection, generating a token locally
 - **Matching DLL support**: an adjacent DLL is accepted only if it matches the embedded resource; otherwise the embedded DLL is extracted without overwriting existing recovery files
-- Window title "Soulbound V1", icon consistent with the product
-- All dropped files are kept inside the hidden `.soulbound` directory next to the exe (extracted DLL/JAR, logs, config, service data, texture cache)
+- Window title "InevitableClient V1", icon consistent with the product
+- All dropped files are kept inside the hidden `.inevitable` directory next to the exe (extracted DLL/JAR, logs, config, service data, texture cache)
 
 **Injection**
 
@@ -90,7 +90,7 @@ is an integrity check, not evidence that the EXE or DLL is safe.
 
 - Embeds **VapeService** (HTTP 8080 + Zeus TCP 8091 companion service), auto-started in the background in-game:
   - Account / settings / profiles / friends / party / location sharing etc. run locally
-  - Service data stored at `.soulbound\soulbound-service.json` next to the exe, separated from the local config (`.soulbound\config.json`) so they don't conflict
+  - Service data stored at `.inevitable\inevitable-service.json` next to the exe, separated from the local config (`.inevitable\config.json`) so they don't conflict
   - Port conflict auto-probes for a free port further up; silent fallback on startup failure, doesn't affect the game
   - Supports environment-variable configuration (see "Embedded service config" below)
 
@@ -111,9 +111,9 @@ is an integrity check, not evidence that the EXE or DLL is safe.
 - **26.2 graphics backend**: 26.2 introduces a Vulkan backend; Vape is based on OpenGL, so you must switch the graphics API to OpenGL to use it (see the compatibility notes below)
 - Added 1.21.0+/26.x render-pipeline adaptation (`blitToScreen` end-of-frame hook) so post-processing like Motion Blur works across versions
 - Enhanced runtime detection: distinguishes Vanilla / Forge / NeoForge / Fabric, avoiding old-Fabric misdetection (except 1.20.1-Fabric, see the compatibility table)
-- Local config persistence: module settings, profiles, friends, frame positions saved to `.soulbound\config.json`, autosave + exit fallback
-- Native and Java logs unified under `.soulbound\log\`, one log file per injection
-- Single-file injector: `SoulboundV1.exe` embeds the full DLL and Java payload
+- Local config persistence: module settings, profiles, friends, frame positions saved to `.inevitable\config.json`, autosave + exit fallback
+- Native and Java logs unified under `.inevitable\log\`, one log file per injection
+- Single-file injector: `InevitableClientV1.exe` embeds the full DLL and Java payload
 
 ### This is not Vape's official source, the original release package, or a vendor-signed artifact, and does not guarantee behavior identical to the original product.
 
@@ -129,10 +129,10 @@ These tools use only the chunks sent to the client; they cannot find unloaded ba
 
 ## Script extensions
 
-The client embeds Mozilla Rhino 1.7.15 (relocated to `gg.vape.shaded.org.mozilla`, interpreted, no bytecode generation) and loads custom module scripts from `.soulbound\scripts\`:
+The client embeds Mozilla Rhino 1.7.15 (relocated to `gg.vape.shaded.org.mozilla`, interpreted, no bytecode generation) and loads custom module scripts from `.inevitable\scripts\`:
 
 ```text
-.soulbound/
+.inevitable/
   scripts/
     example.json      module descriptor (required)
     example.js        script entry (defaults to the json name; override with main)
@@ -144,7 +144,7 @@ The client embeds Mozilla Rhino 1.7.15 (relocated to `gg.vape.shaded.org.mozilla
 - `example.json` + `example.js` are generated on first launch; the example template is rewritten when a newer version ships
 - Script capabilities: read/write modules and settings (including color and keybind), player and entity queries, screen drawing, callbacks `onEnable` / `onDisable` / `onTick` / `onRender2D` / `onKeyPress` / `onChat` / `onAttack` / `onMove` / `onWorldChange` / `onPacketSend` / `onPacketReceive`, `storage` persistence, `after()` timers and multi-file `load()`
 - The "Reload Scripts" module hot-reloads: recompiles existing scripts, registers newly added json files and disables modules whose json was removed
-- Load or runtime errors show an in-game notification and are written to `.soulbound\extension.log`
+- Load or runtime errors show an in-game notification and are written to `.inevitable\extension.log`
 
 Full developer documentation (json fields, every API, examples, version whitelists, limitations and security) lives in [`docs/scripting.md`](docs/scripting.md).
 
@@ -152,7 +152,7 @@ Full developer documentation (json fields, every API, examples, version whitelis
 
 ## Minecraft compatibility
 
-The table below describes the recovery project's intended coverage, not a live gameplay test of Soulbound V1. Known mapping and rendering issues remain.
+The table below describes the recovery project's intended coverage, not a live gameplay test of InevitableClient V1. Known mapping and rendering issues remain.
 
 | Minecraft | Vanilla | Forge | Fabric |
 | --- | :---: | :---: | :---: |
@@ -230,15 +230,15 @@ The DLL could not be opened or verified. An adjacent DLL is optional and must ma
 
 Vape 4.21 supports 1.7.10, 1.8.9, 1.12.2, 1.21.11 and 26.2 Vanilla, 1.21.10 Forge / NeoForge (all loaders on this version are experimental), plus 1.21.11 / 26.2 Fabric; other Fabric versions, and 1.21.10 Fabric, are outside the current support scope.
 
-This status means the injection failed: check that Minecraft is a supported version, restart the game and inject again. If the problem persists, inspect the per-injection `soulbound-native-*.log` and report the issue.
+This status means the injection failed: check that Minecraft is a supported version, restart the game and inject again. If the problem persists, inspect the per-injection `inevitable-native-*.log` and report the issue.
 
 ### 5. The loader shows "Finished Loading", but the in-game "Finished Loading" notification never appears
 
-This means the injection failed: check that Minecraft is a supported version, restart the game and inject again. If the problem persists, inspect the per-injection `soulbound-native-*.log` and report the issue.
+This means the injection failed: check that Minecraft is a supported version, restart the game and inject again. If the problem persists, inspect the per-injection `inevitable-native-*.log` and report the issue.
 
 ### 6. An injection error code appears, or field / method mappings fail or the client crashes
 
-Check that Minecraft is a supported version, restart the game and inject again. If the problem persists, inspect the per-injection `soulbound-native-*.log` and report the issue.
+Check that Minecraft is a supported version, restart the game and inject again. If the problem persists, inspect the per-injection `inevitable-native-*.log` and report the issue.
 
 ### 7. The ClickGUI opens but cannot be clicked, the cursor is misplaced or keys get stuck
 
@@ -246,7 +246,7 @@ Open an issue and describe in detail when the problem appears and how to reprodu
 
 ### 8. A Render module causes OpenGL 1283, a vanishing HUD, corrupted visuals or a crash
 
-Compatibility for Minecraft 1.16.5 and other unlisted 1.16+ versions is still poor. The upstream project listed these combinations; this Soulbound build has not been validated in live gameplay:
+Compatibility for Minecraft 1.16.5 and other unlisted 1.16+ versions is still poor. The upstream project listed these combinations; this InevitableClient build has not been validated in live gameplay:
 
 - 1.21.11 Forge: Forge 61.0.8
 - 1.21.11 Fabric: Fabric Loader 0.19.3
@@ -272,7 +272,7 @@ VapeService auto-starts in-game, listening on `127.0.0.1:8080` (HTTP) and `127.0
 | `VAPE_BIND_ADDRESS` | `127.0.0.1` | Bind address; set to `0.0.0.0` to allow LAN access |
 | `VAPE_HTTP_PORT` | `8080` | HTTP port |
 | `VAPE_ZEUS_PORT` | `8091` | Zeus TCP port |
-| `VAPE_DATA_FILE` | `<exe>/.soulbound/soulbound-service.json` | Service data file path |
+| `VAPE_DATA_FILE` | `<exe>/.inevitable/inevitable-service.json` | Service data file path |
 
 The client side already has `VAPE_ONLINE_BASE_URL` / `VAPE_ZEUS_ADDRESS` to override the service address, which combine with the variables above for LAN multi-end interop.
 
@@ -322,8 +322,8 @@ Main Java artifacts are in `build/libs/`. To generate IntelliJ IDEA project conf
 The complete test bundle outputs to `build/injection/` (the executable name follows the product version):
 
 ```text
-SoulboundV1.exe   GUI single-file loader (embeds the DLL and all resources)
-SoulboundNative.dll   optional matching external DLL
+InevitableClientV1.exe   GUI single-file loader (embeds the DLL and all resources)
+InevitableClientNative.dll   optional matching external DLL
 README.md / README_EN.md   native bundle documentation
 ```
 
@@ -333,24 +333,24 @@ The DLL embeds the Java injection JAR as an `RCDATA` resource, so a separate pay
 
 Once these changes are pushed to the working branch, open **Actions → Build and
 test → Run workflow**, select that branch and run it (enable Actions on the fork
-if needed). The successful run publishes `windows-x64-soulbound-bundle` as an
+if needed). The successful run publishes `windows-x64-inevitable-bundle` as an
 artifact for 14 days. It contains the rebuilt EXE, a matching optional DLL,
 `SHA256SUMS.txt` and a parity report; this is not the original release. A subsequent job scans those same files as data. Only a fully successful run can be used by the release workflow; a negative scan does not prove safety. The workflow also runs on pull requests and pushes to `arena/**`.
 
 ## Running in an isolated environment
 
-Start a supported Minecraft instance using a 64-bit JVM (including 1.21.11, 26.1.2, 26.2 Fabric), then run `SoulboundV1.exe` to open the GUI, select the Minecraft process, and inject (no login, no external DLL).
+Start a supported Minecraft instance using a 64-bit JVM (including 1.21.11, 26.1.2, 26.2 Fabric), then run `InevitableClientV1.exe` to open the GUI, select the Minecraft process, and inject (no login, no external DLL).
 
 You can also inject from the command line:
 
 ```powershell
 # Inject a specific process ID
-.\SoulboundV1.exe -nogui <pid>
+.\InevitableClientV1.exe -nogui <pid>
 # Without a pid: opens an auto-refreshing Java window picker (↑/↓ to select, Enter to inject, Esc to quit)
-.\SoulboundV1.exe -nogui
+.\InevitableClientV1.exe -nogui
 ```
 
-The GUI tries manual mapping first and falls back to `LoadLibraryW`; console mode uses `LoadLibraryW`. Once loaded the DLL waits for the JVM and Minecraft `Client thread`, then loads the embedded JAR through its context ClassLoader; on Fabric it adds the payload to the Knot ClassLoader via the Fabric Launcher API. The DLL then registers the native methods and calls `gg.vape.runtime.NativeBridge.start()`. Each injection log is at `.soulbound\log\soulbound-native-<pid>-<timestamp>.log` next to the injector EXE.
+The GUI tries manual mapping first and falls back to `LoadLibraryW`; console mode uses `LoadLibraryW`. Once loaded the DLL waits for the JVM and Minecraft `Client thread`, then loads the embedded JAR through its context ClassLoader; on Fabric it adds the payload to the Knot ClassLoader via the Fabric Launcher API. The DLL then registers the native methods and calls `gg.vape.runtime.NativeBridge.start()`. Each injection log is at `.inevitable\log\inevitable-native-<pid>-<timestamp>.log` next to the injector EXE.
 
 ## Common validation tasks
 

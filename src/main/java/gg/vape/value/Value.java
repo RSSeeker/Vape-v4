@@ -283,8 +283,9 @@ implements INamed {
                 string = string2;
             }
             if (this.encodeBase64 && string.startsWith("b64:")) {
-                string = string.split(":")[1];
-                string = Base64Util.decodeUtf8Base64(string);
+                // substring also handles the valid encoding of an empty string,
+                // "b64:"; split drops the trailing empty component.
+                string = Base64Util.decodeUtf8Base64(string.substring(4));
             }
             this.parse(string);
             this.notifyChangeListeners();

@@ -1,4 +1,4 @@
-# Soulbound V1 native test bridge
+# InevitableClient V1 native test bridge
 
 > **Language:** English | [中文](README.md)
 
@@ -53,10 +53,10 @@ implementation used controller command `0x269` over a persistent EXE socket.
 
 The Product design has two explicit launch modes:
 
-- Direct `SoulboundV1.exe -nogui` injection has no Loader bootstrap, so
+- Direct `InevitableClientV1.exe -nogui` injection has no Loader bootstrap, so
   native `gat()` returns the string `"0"`.
 - Loader startup obtains a long-lived token from the loopback Service by
-  username and exposes it to `SoulboundNative.dll` through the temporary
+  username and exposes it to `InevitableClientNative.dll` through the temporary
   loopback controller socket. The DLL requests it with command `0x269`, caches
   it for `gat()`, reports `trs(step)` with `0x25c`, and reports completion with
   `0x25e`. The Loader remains open through the Finished Loading page.
@@ -76,12 +76,12 @@ loopback. The full design is documented at
 
 ## Data and validation
 
-A fresh install uses `.soulbound` next to the launcher; a legacy-only `.vapeclient` is reused, and `.soulbound` wins if both exist. Nothing is moved or deleted. The paths below show the fresh-install case. Back up your selected folder before testing. The compatibility matrix is inherited from the recovery project and is not a claim of live Soulbound gameplay testing.
+An existing `.inevitable` folder next to the launcher takes precedence, followed by `.soulbound` and then `.vapeclient`; a fresh install uses `.inevitable`. Nothing is moved or deleted. The paths below show the fresh-install case. Back up your selected folder before testing. The compatibility matrix is inherited from the recovery project and is not a claim of live InevitableClient gameplay testing.
 
 ## Language
 
 The GUI and Java payload default to English. An explicit Chinese setting in
-`<exe>\.soulbound\config.json` is honored on the next launch; missing,
+`<exe>\.inevitable\config.json` is honored on the next launch; missing,
 unreadable or malformed settings default to English. The `-nogui` console is
 English. Both GUI and console modes reject an adjacent DLL unless it matches
 the executable's embedded DLL; an older external copy cannot replace it.
@@ -99,13 +99,13 @@ The default build randomizes product class names, like the supplied EXE:
 
 For native-only development, invoke CMake directly — these are the two steps the
 Gradle `configureNative` / `buildNative` tasks perform (`nativeJavaHome` is passed
-as `VAPE421_JAVA_HOME`, and `VAPE421_VERSION` comes from the `soulboundVersion` in
+as `VAPE421_JAVA_HOME`, and `VAPE421_VERSION` comes from the `inevitableVersion` in
 `gradle.properties`):
 
 ```powershell
 cmake -S native -B build/native -A x64 `
   -DVAPE421_JAVA_HOME="C:\Program Files\Java\jdk1.8.0_301" `
-  -DVAPE421_PRODUCT_JAR="build\libs\soulbound-1-injection.jar" `
+  -DVAPE421_PRODUCT_JAR="build\libs\inevitable-1-injection.jar" `
   -DVAPE421_VERSION=1
 cmake --build build/native --config Release
 ```
@@ -118,9 +118,9 @@ ctest --test-dir build/native -C Release --output-on-failure
 
 Outputs are written to `build/native/dist`:
 
-- `SoulboundNative.dll` — carries the recovered product JAR as an `RCDATA`
+- `InevitableClientNative.dll` — carries the recovered product JAR as an `RCDATA`
   resource
-- `SoulboundV1.exe` — single-file GUI loader (embeds the DLL above)
+- `InevitableClientV1.exe` — single-file GUI loader (embeds the DLL above)
 
 > There is no separate injector EXE: console injection is
 > the `-nogui` mode of the same exe (`injector.c` is compiled into it).
@@ -132,26 +132,26 @@ Those checks do not replace gameplay testing or guarantee identical behavior.
 
 ## Direct injection
 
-`SoulboundNative.dll` contains the recovered Java product as an `RCDATA`
+`InevitableClientNative.dll` contains the recovered Java product as an `RCDATA`
 resource. Start a supported Minecraft instance with a 64-bit JVM (including
 Forge-enabled Lunar Client and Badlion Client 1.8.9), then run the loader from
 the bundle directory:
 
 ```powershell
-SoulboundV1.exe
+InevitableClientV1.exe
 ```
 
-With no arguments this opens the GUI loader (window title "Soulbound V1"): it
+With no arguments this opens the GUI loader (window title "InevitableClient V1"): it
 auto-refreshes the visible Java windows, shows their window titles (for example
 `Minecraft` or `Lunar Client`), and injects into the process you pick.
-In GUI mode an adjacent `SoulboundNative.dll` is used only if it matches the
+In GUI mode an adjacent `InevitableClientNative.dll` is used only if it matches the
 embedded copy. Otherwise the embedded resource is extracted to an unused
 recovery filename; existing files are not recursively deleted or truncated.
 
 Console mode requires `-nogui` as the first argument:
 
 ```powershell
-SoulboundV1.exe -nogui <minecraft-pid>
+InevitableClientV1.exe -nogui <minecraft-pid>
 ```
 
 Without a pid it opens the auto-refreshing Java window picker (Up/Down to select,
@@ -176,7 +176,7 @@ It is then attached per runtime:
 It then registers the nine authoritative methods plus the Product `gat()`
 compatibility native, and calls `NativeBridge.start()` automatically. No second
 command or start flag is required. Inspect the per-injection log under
-`.soulbound\log\soulbound-native-<pid>-<timestamp>.log` next to the bundle for
+`.inevitable\log\inevitable-native-<pid>-<timestamp>.log` next to the bundle for
 the exact result.
 
 The injection payload is compiled with `--release 8`; its project classes use

@@ -121,10 +121,25 @@ implements ScriptSettingHost {
      * @return 脚本编译并执行成功为 true
      */
     public boolean prepareSettings() {
+        // load() is intentionally cached. A rescan must execute the top-level
+        // declarations again, otherwise clearing declaredSettings would make
+        // every existing setting appear stale without actually reloading code.
+        List<Value<?, ?>> previousVisible = new ArrayList<Value<?, ?>>(this.getValues());
+        List<Value<?, ?>> previousAll = new ArrayList<Value<?, ?>>(this.getAllValues());
+        java.util.Set<String> previousDeclarations = new java.util.LinkedHashSet<String>(this.declaredSettings);
         this.declaredSettings.clear();
-        boolean loaded = this.runtime.load();
+        boolean loaded = this.runtime.reload();
         if (loaded) {
             this.pruneStaleSettings();
+        } else {
+            // A failed script can have registered some settings before it threw.
+            // Do not let those partial declarations replace the last good list.
+            this.getValues().clear();
+            this.getValues().addAll(previousVisible);
+            this.getAllValues().clear();
+            this.getAllValues().addAll(previousAll);
+            this.declaredSettings.clear();
+            this.declaredSettings.addAll(previousDeclarations);
         }
         return loaded;
     }
@@ -143,6 +158,8 @@ implements ScriptSettingHost {
         if (stale.isEmpty()) {
             return;
         }
+        // Keep retired definitions in allValues so existing profile data is not
+        // discarded; createSetting restores the same object if it is declared again.
         values.removeAll(stale);
         for (Value<?, ?> value : stale) {
             Vape.debugLog("[Extension] dropped stale setting '" + value.getName() + "' from " + this.getName());
@@ -267,8 +284,9 @@ implements ScriptSettingHost {
      */
     public boolean reloadScript() {
         boolean loaded = this.prepareSettings();
-        if (loaded && this.isEnabled()) {
-            this.runtime.invoke("onEnable");
+        if (loaded) {
+            this.disablePending = false;
+            if (this.isEnabled()) this.runtime.invoke("onEnable");
         }
         return loaded;
     }
@@ -309,7 +327,12 @@ implements ScriptSettingHost {
                 this.reportSettingError("declares setting '" + name + "' with unknown kind '" + kind + "'");
             }
             if (result != null) {
-                this.declaredSettings.add(name);
+                if (existing != null && !this.getValues().contains(existing)) {
+                    this.getValues().add(existing);
+                }
+                // Lookup is case-insensitive, so retain the canonical name of
+                // an existing value when a script changes only its casing.
+                this.declaredSettings.add(existing == null ? name : existing.getName());
             }
             return result;
         }
@@ -413,8 +436,13 @@ implements ScriptSettingHost {
                     selected = modes[index];
                 }
             }
-            target = new ModeValue(this, name, name, selected == null ? modes[0] : selected, modes);
+            target = ModeValue.create(this, name, selected == null ? modes[0] : selected, modes);
             this.addValue(target);
+        }
+        // Older script declarations constructed ModeValue directly without
+        // attaching the options. Restore that link so saved modes can parse.
+        for (ModeSelection mode : target.getModes()) {
+            if (mode.getMode() != target) mode.attachToMode(target);
         }
         ModeValue value = target;
         return ScriptApi.newSettingHandle(context, scope, "mode", name,

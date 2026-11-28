@@ -437,6 +437,9 @@ extends InteractiveComponent {
     public void collapseValueComponents() {
         this.expanded = false;
         for (GuiComponent guiComponent : this.valueComponents) {
+            if (this.categoryFrame instanceof InevitableModuleFrame) {
+                ClientSettings.inevitableStack.closeEditorTree(guiComponent);
+            }
             if (this.categoryFrame.f().contains(guiComponent)) guiComponent.setVisible(false);
             guiComponent.setDisabledOverlayColor(ModuleComponent.J.r);
         }
@@ -531,7 +534,20 @@ extends InteractiveComponent {
         // instance into Search, Favorites, Central or the Inevitable panels.
         boolean canonicalCategory = this.categoryFrame.getClass() == ModuleCategoryFrame.class
                 && this.categoryFrame.G$src$Lgg_vape_module_Category_$qyt4o7() == this.module.getCategory();
-        if (value instanceof HotbarSlotRuleValue && !canonicalCategory) return this.sharedEditorShortcut();
+        if (value instanceof HotbarSlotRuleValue) {
+            if (!canonicalCategory) return this.sharedEditorShortcut();
+            GuiComponent editor = ((HotbarSlotRuleValue)value).getEditor();
+            if (editor != null && editor.getParentFrameComponent() != null
+                    && editor.getParentFrameComponent() != this.categoryFrame) {
+                // A full GUI rebuild can leave the data-bearing editor attached
+                // to an obsolete frame. Transfer it only after that frame has
+                // been unregistered; never steal it from a live editor.
+                gg.vape.ui.click.frame.Frame oldFrame = editor.L$src$Lgg_vape_ui_click_frame_Frame_$1djx6sa();
+                if (ClientSettings.getAllFrames().contains(oldFrame)) return this.sharedEditorShortcut();
+                editor.getParentFrameComponent().removeChild(editor);
+                editor.setParentFrameComponent(null);
+            }
+        }
         GuiComponent component = ValueComponentFactory.createMainValueComponent(value);
         if (component != null && component.getParentFrameComponent() != null
                 && component.getParentFrameComponent() != this.categoryFrame) {
@@ -551,11 +567,10 @@ extends InteractiveComponent {
             if (same) return;
         }
         if (inevitable && this.valuesBuilt) {
-            ClientSettings.inevitableStack.closePanelPopups(this.categoryFrame);
-            if (ClientSettings.activeComponent != null && ClientSettings.activeComponent.L$src$Lgg_vape_ui_click_frame_Frame_$1djx6sa() == this.categoryFrame) {
-                ClientSettings.activeComponent = null;
+            for (GuiComponent old : new ArrayList<GuiComponent>(this.valueComponents)) {
+                ClientSettings.inevitableStack.closeEditorTree(old);
+                this.categoryFrame.removeChild(old);
             }
-            for (GuiComponent old : new ArrayList<GuiComponent>(this.valueComponents)) this.categoryFrame.removeChild(old);
             this.valueComponents.clear();
         }
         this.builtValues.clear();

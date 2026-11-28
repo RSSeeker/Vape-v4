@@ -967,6 +967,7 @@ extends Mod {
     }
 
     public void onDisable() {
+        if (this.activeStack == inevitableStack) inevitableStack.closeTransients();
         super.onDisable();
         this.disableBlurShader();
         InvWalkSettingsState.setPressed((KeyBinding)Minecraft.gameSettings().y$src$Lgg_vape_wrapper_impl_KeyBinding_$1hvjjoh(), (boolean)false);
@@ -1155,8 +1156,9 @@ extends Mod {
             this.returnMainStack = previous;
         }
         if (frameStackManager == inevitableStack) this.forcedLegacySearch = false;
-        activeComponent = null;
+        if (previous == inevitableStack && frameStackManager != previous) inevitableStack.closeTransients();
         this.removeClosedPopups();
+        activeComponent = null;
         activeTooltips = null;
         FrameStackManager frameStackManager2 = this.activeStack;
         if (frameStackManager2 instanceof ClickGuiFrameManager) {

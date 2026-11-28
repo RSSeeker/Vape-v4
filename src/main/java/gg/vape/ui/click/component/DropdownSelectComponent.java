@@ -259,8 +259,22 @@ implements FocusableComponent {
     private void positionPopup() {
         PopupFrame popupFrame = this.popupFrame;
         if (popupFrame != null) {
-            popupFrame.K(this.G$src$D$1b2f02a() + this.getHorizontalInset());
-            popupFrame.S(this.n() + 17.0);
+            double x = this.G$src$D$1b2f02a() + this.getHorizontalInset();
+            double y = this.n() + 17.0;
+            if (gg.vape.ui.click.frame.impl.inevitable.InevitableFrameStack.isPanelOrPopup(
+                    this.L$src$Lgg_vape_ui_click_frame_Frame_$1djx6sa())) {
+                double scale = Vape.INSTANCE.getClientSettings().getGuiScaleFactor();
+                if (scale > 0.0) {
+                    double width = gg.vape.wrapper.impl.Minecraft.J() / (2.0 * scale);
+                    double height = gg.vape.wrapper.impl.Minecraft.h() / (2.0 * scale);
+                    x = Math.max(0.0, Math.min(x, Math.max(0.0, width - popupFrame.A())));
+                    double popupHeight = popupFrame.L();
+                    if (y + popupHeight > height && this.n() - popupHeight >= 0.0) y = this.n() - popupHeight;
+                    y = gg.vape.ui.click.frame.impl.inevitable.InevitableLayout.overlayY(y, popupHeight, height);
+                }
+            }
+            popupFrame.K(x);
+            popupFrame.S(y);
         }
     }
 

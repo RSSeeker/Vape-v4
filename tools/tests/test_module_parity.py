@@ -91,7 +91,9 @@ class JarComparisonTests(unittest.TestCase):
         enhancements = {"gg/vape/module/combat/Enhanced.java": "hash",
                         "gg/vape/module/render/SpawnerFinder.java": "hash",
                         "gg/vape/rotation/Helper.java": "hash"}
-        patches = [mock.patch.object(parity, "APPROVED_ENHANCEMENTS", enhancements),
+        patches = [mock.patch.object(parity, "APPROVED_SOURCES", {"gg/vape/module/none/ClientSettings.java": "hash"}),
+                   mock.patch.object(parity, "MODULE_EXCEPTIONS", {"gg/vape/module/none/ClientSettings.java"}),
+                   mock.patch.object(parity, "APPROVED_ENHANCEMENTS", enhancements),
                    mock.patch.object(parity, "ENHANCED_MODULE_SOURCES", {"gg/vape/module/combat/Enhanced.java", "gg/vape/module/render/SpawnerFinder.java"}),
                    mock.patch.object(parity, "JAVA_ADDED_CLASSES", {self.added}),
                    mock.patch.object(parity, "APPROVED_PRODUCT_RESOURCE_CHANGES", {})]
@@ -274,6 +276,7 @@ class SourceComparisonTests(unittest.TestCase):
         approved = {name: parity.sha256(data[name]) for name in (gui, support)}
         enhancements = {name: parity.sha256(data[name]) for name in (spawner, enhanced, added)}
         with mock.patch.object(parity, "APPROVED_SOURCES", approved), \
+                mock.patch.object(parity, "MODULE_EXCEPTIONS", {gui}), \
                 mock.patch.object(parity, "APPROVED_ENHANCEMENTS", enhancements), \
                 mock.patch.object(parity, "ENHANCED_MODULE_SOURCES", {spawner, enhanced}), \
                 mock.patch.object(parity, "JAVA_ADDITIONS", {added}):

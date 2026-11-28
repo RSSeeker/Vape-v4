@@ -14,12 +14,17 @@ import gg.vape.ui.click.frame.Frame;
 import gg.vape.utils.render.GuiRenderPrimitives;
 import gg.vape.value.StringMapValue;
 import java.awt.Color;
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class StringMapValueComponent
 extends GuiComponent {
     private boolean legacyFlag;
     private boolean refreshPending;
+    private List<Map.Entry<String, String>> renderedEntries;
     private final Frame entriesFrame;
     private final TextInputComponentBase keyInput;
     private final StringMapValue stringMapValue;
@@ -49,15 +54,24 @@ extends GuiComponent {
         return 50.0;
     }
 
-    private void refreshEntries() {
-        Map<String, String> entries = this.stringMapValue.getValue();
-        this.entriesFrame.t$src$V$zbu1jn();
-        for (String key : entries.keySet()) {
-            String value = entries.get(key);
-            StringMapEntryComponent stringMapEntryComponent = new StringMapEntryComponent(key, value);
-            stringMapEntryComponent.setRemoveClickListener(new StringMapEntryRemoveHandler(this, stringMapEntryComponent));
-            this.entriesFrame.addChildren(stringMapEntryComponent);
+    private List<Map.Entry<String, String>> snapshotEntries() {
+        List<Map.Entry<String, String>> snapshot = new ArrayList<Map.Entry<String, String>>();
+        for (Map.Entry<String, String> entry : this.stringMapValue.getValue().entrySet()) {
+            snapshot.add(new AbstractMap.SimpleImmutableEntry<String, String>(entry));
         }
+        return snapshot;
+    }
+
+    private void refreshEntries() {
+        this.renderedEntries = this.snapshotEntries();
+        this.entriesFrame.t$src$V$zbu1jn();
+        for (Map.Entry<String, String> entry : this.renderedEntries) {
+            StringMapEntryComponent row = new StringMapEntryComponent(entry.getKey(), entry.getValue());
+            row.setRemoveClickListener(new StringMapEntryRemoveHandler(this, row));
+            this.entriesFrame.addChildren(row);
+        }
+        this.refreshPending = false;
+        if (this.getParentFrameComponent() != null) this.getParentFrameComponent().l$src$V$1mibm4x();
     }
 
     @Override
@@ -79,6 +93,9 @@ extends GuiComponent {
 
     @Override
     public void H() {
+        // Profiles and other editors mutate the same map in place. Compare a
+        // snapshot, not the map identity, so this view follows those changes.
+        if (this.refreshPending || !this.snapshotEntries().equals(this.renderedEntries)) this.refreshEntries();
         GuiRenderPrimitives.d(this.G$src$D$1b2f02a() + 2.0, this.n() + 2.0, this.A() - 4.0, this.L() - 4.0, StringMapValueComponent.J.r);
         GuiRenderPrimitives.d(this.G$src$D$1b2f02a() + this.A() / 2.0, this.n() + 28.0, 5.0, 1.0f, StringMapValueComponent.J.l);
         this.titleLabel.K(this.G$src$D$1b2f02a() + 2.0);
@@ -109,20 +126,21 @@ extends GuiComponent {
         this.entriesFrame.l$src$Lgg_vape_ui_click_layout_ComponentLayout_$di1tij().M(false);
         this.entriesFrame.l$src$Lgg_vape_ui_click_layout_ComponentLayout_$di1tij().I(false);
         this.entriesFrame.l$src$V$1mibm4x();
-        if (this.refreshPending) {
-            this.refreshEntries();
-            this.refreshPending = false;
-        }
     }
 
     public StringMapValueComponent(StringMapValue stringMapValue) {
         this.stringMapValue = stringMapValue;
+        this.bindValue(stringMapValue);
         this.titleLabel = new SimpleTextLabelComponent(stringMapValue.getName());
         this.keyInput = new StringMapKeyInputComponent(this, stringMapValue.getKeyPlaceholder());
         this.valueInput = new StringMapValueInputComponent(this, stringMapValue.getValuePlaceholder());
         this.addButton = new TextButton("ADD", StringMapValueComponent.J.l);
         this.addButton.setClickListener(() -> {
-            stringMapValue.putEntry(this.keyInput.getText(), this.valueInput.getText());
+            String key = this.keyInput.getText(), value = this.valueInput.getText();
+            boolean changed = !stringMapValue.getValue().containsKey(key)
+                    || !Objects.equals(stringMapValue.getValue().get(key), value);
+            stringMapValue.putEntry(key, value);
+            if (changed) stringMapValue.notifyChanged();
             this.refreshEntries();
             this.keyInput.setText("");
             this.valueInput.setText("");

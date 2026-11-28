@@ -67,6 +67,18 @@ jobs:
           & python -B -X utf8 tools/tests/run_rotation_controller_tests.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Test Inevitable layout and render scope
+        shell: pwsh
+        run: |
+          $classes = Join-Path $env:RUNNER_TEMP 'inevitable-layout-tests'
+          New-Item -ItemType Directory -Force -Path $classes | Out-Null
+          & javac --release 8 -encoding UTF-8 -d $classes src/main/java/gg/vape/ui/click/frame/impl/inevitable/InevitableLayout.java src/main/java/gg/vape/ui/click/frame/impl/inevitable/InevitableCategory.java src/main/java/gg/vape/ui/click/frame/impl/inevitable/InevitableRenderScope.java tools/tests/InevitableLayoutTest.java
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & java -cp $classes InevitableLayoutTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & python -B -X utf8 tools/tests/run_inevitable_lifecycle_tests.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Test headless combat and Search lifecycles
         shell: pwsh
         run: |
@@ -101,6 +113,21 @@ jobs:
       - name: Build and verify the Java 8-compatible payload
         shell: pwsh
         run: .\gradlew.bat clean build verifyInjectionPayload -PtargetRelease=8 -PnoObfuscation --stacktrace
+
+      - name: Test script reload and profile values (headless)
+        shell: pwsh
+        run: |
+          $gradleHome = if ($env:GRADLE_USER_HOME) { $env:GRADLE_USER_HOME } else { Join-Path $HOME '.gradle' }
+          $rhinoRoot = Join-Path $gradleHome 'caches/modules-2/files-2.1/org.mozilla/rhino/1.7.15'
+          $rhino = @(Get-ChildItem -Path $rhinoRoot -Filter 'rhino-1.7.15.jar' -File -Recurse)
+          if ($rhino.Count -ne 1) { throw 'Expected the single Gradle-resolved Rhino 1.7.15 JAR.' }
+          & python -B -X utf8 tools/tests/run_script_reload_tests.py --rhino $rhino[0].FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $gsonRoot = Join-Path $gradleHome 'caches/modules-2/files-2.1/com.google.code.gson/gson/2.10.1'
+          $gson = @(Get-ChildItem -Path $gsonRoot -Filter 'gson-2.10.1.jar' -File -Recurse)
+          if ($gson.Count -ne 1) { throw 'Expected the single Gradle-resolved Gson 2.10.1 JAR.' }
+          & python -B -X utf8 tools/tests/run_value_profile_tests.py --gson $gson[0].FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # Preserve the release's randomized class-name packaging; the resulting
       # embedded JAR is separately compared with the un-obfuscated source build.

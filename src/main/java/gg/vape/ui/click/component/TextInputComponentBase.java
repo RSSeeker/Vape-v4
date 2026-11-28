@@ -182,7 +182,7 @@ implements FocusableComponent {
             }
             return;
         }
-        if (this.maxLength == -1 ? this.getTextFontRenderer().N(this.getText()) > this.getAvailableTextWidth() * 2.0 : this.getText().length() >= this.maxLength) {
+        if (this.maxLength == -1 ? this.measureLiteralText(this.getTextFontRenderer(), this.getText()) > this.getAvailableTextWidth() * 2.0 : this.getText().length() >= this.maxLength) {
             return;
         }
         if (typedCharacter != '\u0000' && ((currentText = this.getText()).length() > 0 || this.cursorPosition == 0)) {
@@ -209,7 +209,7 @@ implements FocusableComponent {
             return;
         }
         double caretWidth = this.getFontRenderer(1.2).N("|");
-        double textBeforeCursorWidth = this.getTextFontRenderer().N(this.getText().substring(0, this.cursorPosition));
+        double textBeforeCursorWidth = this.measureLiteralText(this.getTextFontRenderer(), this.getText().substring(0, this.cursorPosition));
         this.cursorPastRightEdge = textBeforeCursorWidth + this.textScrollOffset >= this.getAvailableTextWidth();
         boolean cursorAtOrBeforeLeftEdge = this.cursorPastLeftEdge = textBeforeCursorWidth + this.textScrollOffset <= 0.0;
         if (this.cursorPastLeftEdge) {
@@ -324,8 +324,6 @@ implements FocusableComponent {
             if (displayedText == null) {
                 displayedText = "";
             }
-            double cursorTextWidth = textRenderer.N(displayedText.substring(0, this.cursorPosition));
-            SmoothFontRenderer caretRenderer = this.getFontRenderer(1.2);
             this.renderInputDecorations();
             if (this.textOverflowing) {
                 RenderUtils.m(this.getInputX() + (double)this.getRightInset() - this.getFontRenderer(1.2).N("|"), this.n() + 2.5, this.getAvailableTextWidth() + this.getFontRenderer(1.2).N("|") + 2.0, this.L() - 5.0);
@@ -594,13 +592,24 @@ implements FocusableComponent {
     public void I() {
     }
 
-    private SmoothFontRenderer getTextFontRenderer() {
+    protected SmoothFontRenderer getTextFontRenderer() {
         double uiScale = Vape.INSTANCE.getClientSettings().getGuiScaleFactor();
         if (this.cachedFontRenderer == null || this.cachedUiScale != uiScale) {
             this.cachedFontRenderer = this.alternateFontEnabled ? this.getAlternateFontRenderer(this.fontScale) : this.getFontRenderer((double)this.fontScale);
             this.cachedUiScale = uiScale;
         }
         return this.cachedFontRenderer;
+    }
+
+    /** Measure user input without interpreting it as a localization key. */
+    private double measureLiteralText(SmoothFontRenderer renderer, String text) {
+        boolean previous = FontOption.isTranslationDisabled();
+        FontOption.setTranslationDisabled(true);
+        try {
+            return renderer.N(text);
+        } finally {
+            FontOption.setTranslationDisabled(previous);
+        }
     }
 
     public void setText(String text) {
@@ -618,7 +627,7 @@ implements FocusableComponent {
         int lengthDelta = text.length() - this.text.length();
         this.cursorPosition += lengthDelta;
         this.cursorPosition = MathUtil.clamp(this.cursorPosition, 0, text.length());
-        boolean exceedsInputWidth = this.textOverflowing = this.getFontRenderer(0.9).N(text) > this.getAvailableTextWidth();
+        this.textOverflowing = this.measureLiteralText(this.getTextFontRenderer(), text) > this.getAvailableTextWidth();
         if (!this.textOverflowing) {
             this.cursorPastRightEdge = false;
             this.cursorPastLeftEdge = false;

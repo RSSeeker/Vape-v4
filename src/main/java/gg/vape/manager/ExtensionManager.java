@@ -23,12 +23,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
@@ -60,7 +60,7 @@ public final class ExtensionManager {
     private static final AtomicInteger GENERATED_CLASS_COUNTER = new AtomicInteger();
     private static final List<ScriptModule> LOADED_MODULES = new ArrayList<ScriptModule>();
     /** json 文件规范路径 → 已注册模块，用于「重新加载脚本」时区分新增/删除。 */
-    private static final Map<String, ScriptModule> MODULES_BY_JSON = new HashMap<String, ScriptModule>();
+    private static final Map<String, ScriptModule> MODULES_BY_JSON = new ConcurrentHashMap<String, ScriptModule>();
     private static boolean reloadModuleRegistered;
 
     private ExtensionManager() {
@@ -71,7 +71,7 @@ public final class ExtensionManager {
      *
      * @return 成功注册的模块数量
      */
-    public static int loadFromDisk(ModManager modManager) {
+    public static synchronized int loadFromDisk(ModManager modManager) {
         File directory = scriptsDirectory();
         log("scanning " + directory.getAbsolutePath());
         Set<String> usedNames = new HashSet<String>();
@@ -112,7 +112,7 @@ public final class ExtensionManager {
      *
      * @return 重新编译 + 新注册的脚本数量
      */
-    public static int reloadAll() {
+    public static synchronized int reloadAll() {
         ModManager modManager = Vape.INSTANCE == null ? null : Vape.INSTANCE.getModManager();
         if (modManager == null) {
             log("reload skipped: module manager is not ready");
@@ -215,7 +215,10 @@ public final class ExtensionManager {
     private static void refreshGuiLayout() {
         try {
             if (gg.vape.module.none.ClientSettings.INSTANCE != null) {
-                gg.vape.module.none.ClientSettings.UI_EXECUTOR.execute(() -> {
+                // Reload can be triggered by a click on this very module row.
+                // Defer rebuilding until the next render drain, even when the
+                // caller is already on the UI owner thread.
+                gg.vape.module.none.ClientSettings.UI_EXECUTOR.executeLater(() -> {
                     if (gg.vape.module.none.ClientSettings.inevitableStack != null) {
                         gg.vape.module.none.ClientSettings.inevitableStack.syncModules();
                     }

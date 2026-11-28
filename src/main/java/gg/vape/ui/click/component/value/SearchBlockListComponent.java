@@ -12,6 +12,7 @@ import gg.vape.ui.click.component.value.SearchBlockListOpenClickListener;
 import gg.vape.ui.click.component.value.SearchBlockRemoveClickListener;
 import gg.vape.ui.click.component.value.ValueComponentMode;
 import gg.vape.ui.click.frame.Frame;
+import gg.vape.ui.click.frame.FrameStackManager;
 import gg.vape.ui.click.frame.impl.main.ClickGuiMainFrame;
 import gg.vape.ui.click.frame.impl.main.ClickGuiModulesSidecarPanel;
 import gg.vape.ui.click.frame.impl.main.ClickGuiOverlayPlacement;
@@ -30,6 +31,7 @@ extends AbstractListValueComponent {
     private String title;
     SearchManager searchManager = Vape.INSTANCE.getSearch();
     private SearchBlockListDropdownLayer dropdownLayer;
+    private FrameStackManager dropdownStack;
 
     @Override
     public double C() {
@@ -52,7 +54,22 @@ extends AbstractListValueComponent {
         }
         this.setExpanded(!this.isExpanded());
         if (this.isExpanded()) {
+            if (this.dropdownLayer == null) {
+                this.dropdownLayer = new SearchBlockListDropdownLayer(this);
+            }
+            this.dropdownStack = ClientSettings.INSTANCE.getActiveStack();
+            this.dropdownStack.q(this.dropdownLayer);
+            this.dropdownLayer.updatePosition();
             this.dropdownLayer.refreshContents();
+        }
+    }
+
+    @Override
+    public void setExpanded(boolean expanded) {
+        super.setExpanded(expanded);
+        if (!expanded && this.dropdownLayer != null && this.dropdownStack != null) {
+            this.dropdownStack.m(this.dropdownLayer);
+            this.dropdownStack = null;
         }
     }
 
@@ -151,7 +168,7 @@ extends AbstractListValueComponent {
 
     private void renderDropdown() {
         this.onDisable();
-        this.dropdownLayer.updatePosition();
+        if (this.dropdownLayer != null) this.dropdownLayer.updatePosition();
         SmoothFontRenderer titleFont = this.getFontRenderer(0.9);
         SmoothFontRenderer summaryFont = this.getFontRenderer(0.75);
         Color panelColor = SearchBlockListComponent.J.i;
@@ -212,10 +229,6 @@ extends AbstractListValueComponent {
         this.mode = valueComponentMode;
         this.title = "Search blocks";
         this.addClickListener(new SearchBlockListOpenClickListener(this));
-        if (valueComponentMode != ValueComponentMode.STANDALONE) {
-            this.dropdownLayer = new SearchBlockListDropdownLayer(this);
-            ClientSettings.INSTANCE.getActiveStack().q(this.dropdownLayer);
-        }
     }
 
     public ValueComponentMode getMode() {

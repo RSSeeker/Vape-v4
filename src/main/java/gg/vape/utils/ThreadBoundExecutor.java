@@ -63,6 +63,12 @@ implements Executor {
         return controlFlowMarker;
     }
 
+    /** Queue even on the owner thread, for work that must not mutate a tree
+     * while an input event is still being dispatched. */
+    public synchronized void executeLater(@NotNull Runnable runnable) {
+        this.pendingTasks.offer(runnable);
+    }
+
     @Override
     public synchronized void execute(@NotNull Runnable runnable) {
         boolean onOwnerThread = this.ownerThread != null && Thread.currentThread().equals(this.ownerThread);

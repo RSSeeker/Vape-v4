@@ -6,7 +6,6 @@ import gg.vape.utils.Base64Util;
 import gg.vape.value.Value;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Set;
 
 public class StringMapValue
 extends Value<Map<String, String>, StringMapValue> {
@@ -49,21 +48,27 @@ extends Value<Map<String, String>, StringMapValue> {
 
     @Override
     public boolean loadJson(JsonObject jsonObject) {
-        if (!jsonObject.has("data")) {
+        JsonElement data = jsonObject.get("data");
+        if (data == null || !data.isJsonObject()) return false;
+        // Decode into a temporary map first: a malformed entry must not erase
+        // or partially overwrite a previously loaded profile value.
+        Map<String, String> decoded = new LinkedHashMap<String, String>();
+        try {
+            for (Map.Entry<String, JsonElement> entry : data.getAsJsonObject().entrySet()) {
+                String key = entry.getKey();
+                String value = entry.getValue().getAsString();
+                if (key.startsWith("b64:")) {
+                    if (!value.startsWith("b64:")) return false;
+                    key = Base64Util.decodeUtf8Base64(key.substring(4));
+                    value = Base64Util.decodeUtf8Base64(value.substring(4));
+                }
+                decoded.put(key, value);
+            }
+        } catch (IllegalArgumentException | IllegalStateException | UnsupportedOperationException exception) {
             return false;
         }
-        JsonObject encodedEntries = (JsonObject)jsonObject.get("data");
-        Set<Map.Entry<String, JsonElement>> entries = encodedEntries.entrySet();
         this.getValue().clear();
-        for (Map.Entry<String, JsonElement> entry : entries) {
-            String key = entry.getKey();
-            String value = entry.getValue().getAsString();
-            if (key.startsWith("b64:")) {
-                key = Base64Util.decodeUtf8Base64(key.split(":")[1]);
-                value = Base64Util.decodeUtf8Base64(value.split(":")[1]);
-            }
-            this.putEntry(key, value);
-        }
+        this.getValue().putAll(decoded);
         return true;
     }
 
@@ -99,7 +104,14 @@ extends Value<Map<String, String>, StringMapValue> {
 
     public StringMapValue(Object owner, String name, String keyPlaceholder, String valuePlaceholder) {
         super(owner, name, new LinkedHashMap());
-        this.setValue(new LinkedHashMap());
+        // Keep the mutable current map separate from its default without
+        // scheduling a configuration save just for constructing an editor.
+        this.setPersistenceSuppressed(true);
+        try {
+            this.setValue(new LinkedHashMap());
+        } finally {
+            this.setPersistenceSuppressed(false);
+        }
         this.name = name;
         this.keyPlaceholder = keyPlaceholder;
         this.valuePlaceholder = valuePlaceholder;

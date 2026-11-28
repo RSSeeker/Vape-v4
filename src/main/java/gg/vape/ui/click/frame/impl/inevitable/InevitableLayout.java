@@ -39,4 +39,17 @@ public final class InevitableLayout {
     public static double clampY(double y, double viewportHeight) {
         return Math.max(0.0, Math.min(y, Math.max(0.0, viewportHeight - 22.0)));
     }
+
+    /** Prefer the right of a panel, flip left at the viewport edge, then clamp. */
+    public static double overlayX(double ownerX, double ownerWidth, double overlayWidth, double viewportWidth) {
+        double right = ownerX + ownerWidth + 1.0;
+        if (right + overlayWidth <= viewportWidth) return Math.max(0.0, right);
+        double left = ownerX - overlayWidth - 1.0;
+        if (left >= 0.0) return left;
+        return Math.max(0.0, Math.min(right, Math.max(0.0, viewportWidth - overlayWidth)));
+    }
+
+    public static double overlayY(double preferredY, double overlayHeight, double viewportHeight) {
+        return Math.max(0.0, Math.min(preferredY, Math.max(0.0, viewportHeight - overlayHeight)));
+    }
 }

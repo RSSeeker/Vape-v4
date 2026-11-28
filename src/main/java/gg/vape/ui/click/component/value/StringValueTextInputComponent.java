@@ -26,9 +26,19 @@ extends TextInputComponentBase {
         return 25.0;
     }
 
+    /** This value editor draws its input in H(), not in the base input pass. */
+    @Override
+    public void renderText() {
+    }
+
     @Override
     public double getAvailableTextWidth() {
         return this.getComponentWidth() - 20.0;
+    }
+
+    @Override
+    protected SmoothFontRenderer getTextFontRenderer() {
+        return this.getFontRenderer(0.9);
     }
 
     @Override
@@ -126,6 +136,7 @@ extends TextInputComponentBase {
         super("");
         this.stringValue = stringValue;
         this.bindValue(stringValue);
+        this.setBackgroundVisible(false);
         this.getActionButton().setVisible(false);
     }
 

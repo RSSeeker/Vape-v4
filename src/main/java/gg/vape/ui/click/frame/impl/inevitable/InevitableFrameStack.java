@@ -1,6 +1,13 @@
 package gg.vape.ui.click.frame.impl.inevitable;
 
 import gg.vape.Vape;
+import gg.vape.module.none.ClientSettings;
+import gg.vape.ui.click.component.DropdownSelectComponent;
+import gg.vape.ui.click.component.GuiComponent;
+import gg.vape.ui.click.component.PopupMenuButtonComponent;
+import gg.vape.ui.click.component.module.ModuleComponent;
+import gg.vape.ui.click.component.value.AbstractListValueComponent;
+import gg.vape.ui.click.component.value.FloatingValueDropdownLayer;
 import gg.vape.ui.click.frame.Frame;
 import gg.vape.ui.click.frame.FrameStackManager;
 import gg.vape.ui.click.frame.PopupFrame;
@@ -38,7 +45,17 @@ public final class InevitableFrameStack extends FrameStackManager {
         return frame instanceof InevitableModuleFrame || frame instanceof InevitablePanelFrame;
     }
     public static boolean isPanelOrPopup(Frame frame) {
-        return frame instanceof PopupFrame ? isPanel(((PopupFrame)frame).X$src$Lgg_vape_ui_click_frame_Frame_$1aw5qf9()) : isPanel(frame);
+        if (frame instanceof PopupFrame) {
+            Frame owner = ((PopupFrame)frame).X$src$Lgg_vape_ui_click_frame_Frame_$1aw5qf9();
+            return owner != frame && isPanelOrPopup(owner);
+        }
+        if (frame instanceof FloatingValueDropdownLayer) {
+            GuiComponent source = ((FloatingValueDropdownLayer<?>)frame).getSourceComponent();
+            if (source == null || source.getParentFrameComponent() == null) return false;
+            Frame owner = source.L$src$Lgg_vape_ui_click_frame_Frame_$1djx6sa();
+            return owner != frame && isPanelOrPopup(owner);
+        }
+        return isPanel(frame);
     }
     public static boolean isUnpositionedPanel(Frame frame) {
         return frame instanceof InevitableModuleFrame && !((InevitableModuleFrame)frame).hasLayout()
@@ -47,14 +64,71 @@ public final class InevitableFrameStack extends FrameStackManager {
     public void syncModules() {
         for (Frame frame : this.panels) if (frame instanceof InevitableModuleFrame) ((InevitableModuleFrame)frame).syncModules();
     }
-    /** Remove owned popups from this stack, even when a different stack is active. */
+    /** Remove a popup and its descendants from their owner and this stack. */
+    private void closePopup(PopupFrame popup) {
+        this.closePanelPopups(popup);
+        this.clearFocusInTree(popup);
+        GuiComponent source = popup.V$src$Lgg_vape_ui_click_component_GuiComponent_$jpbobc();
+        if (source instanceof DropdownSelectComponent
+                && ((DropdownSelectComponent<?>)source).getPopupFrame() == popup) {
+            ((DropdownSelectComponent<?>)source).closePopup();
+        } else if (source instanceof PopupMenuButtonComponent
+                && ((PopupMenuButtonComponent)source).getPopupFrame() == popup) {
+            ((PopupMenuButtonComponent)source).closePopup();
+        }
+        // The legacy close helpers target the active stack. The Inevitable
+        // stack can instead be inactive during a script-driven refresh.
+        this.m(popup);
+        popup.Q$src$Lgg_vape_ui_click_frame_Frame_$1y8ivjg()
+                .s$src$Ljava_util_ArrayList_$1a2240q().remove(popup);
+    }
+
     public void closePanelPopups(Frame owner) {
         for (PopupFrame popup : new ArrayList<PopupFrame>(owner.s$src$Ljava_util_ArrayList_$1a2240q())) {
-            this.closePanelPopups(popup);
-            this.m(popup);
-            owner.s$src$Ljava_util_ArrayList_$1a2240q().remove(popup);
+            this.closePopup(popup);
         }
     }
+
+    private void clearFocusInTree(GuiComponent component) {
+        if (ClientSettings.activeComponent == component) ClientSettings.activeComponent = null;
+        for (GuiComponent child : new ArrayList<GuiComponent>(component.f())) this.clearFocusInTree(child);
+    }
+
+    /** Close only the detached/hidden editor subtree, including floating lists. */
+    public void closeEditorTree(GuiComponent component) {
+        for (Frame frame : new ArrayList<Frame>(this.Y())) {
+            if (frame instanceof FloatingValueDropdownLayer
+                    && ((FloatingValueDropdownLayer<?>)frame).getSourceComponent() == component) {
+                this.closePanelPopups(frame);
+                this.clearFocusInTree(frame);
+                this.m(frame);
+            }
+        }
+        if (component instanceof DropdownSelectComponent) {
+            PopupFrame popup = ((DropdownSelectComponent<?>)component).getPopupFrame();
+            if (popup != null) this.closePopup(popup);
+        } else if (component instanceof PopupMenuButtonComponent) {
+            PopupFrame popup = ((PopupMenuButtonComponent)component).getPopupFrame();
+            if (popup != null) this.closePopup(popup);
+        }
+        if (component instanceof AbstractListValueComponent) {
+            ((AbstractListValueComponent)component).setExpanded(false);
+        }
+        if (ClientSettings.activeComponent == component) ClientSettings.activeComponent = null;
+        for (GuiComponent child : new ArrayList<GuiComponent>(component.f())) this.closeEditorTree(child);
+    }
+
+    /** Close transient editors on navigation, without collapsing module rows. */
+    public void closeTransients() {
+        for (Frame panel : this.panels) {
+            this.closePanelPopups(panel);
+            for (GuiComponent child : new ArrayList<GuiComponent>(panel.f())) {
+                if (!(child instanceof ModuleComponent)) continue;
+                for (GuiComponent editor : ((ModuleComponent)child).getValueComponents()) this.closeEditorTree(editor);
+            }
+        }
+    }
+
     @Override public void A() {
         int width = Minecraft.J(), height = Minecraft.h();
         double scale = Vape.INSTANCE.getClientSettings().getGuiScaleFactor();

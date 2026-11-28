@@ -19,7 +19,6 @@ import gg.vape.value.ModeValue;
 import gg.vape.value.NumberValue;
 import gg.vape.value.OptionalLimitEntry;
 import gg.vape.value.RandomValue;
-import gg.vape.value.SnapshotValueAccessor;
 import gg.vape.value.StringMapValue;
 import gg.vape.value.StringValue;
 import gg.vape.value.Value;
@@ -92,12 +91,7 @@ public class ValueComponentFactory {
     }
 
     public static Value createSnapshotProxyValue(ValueSnapshot valueSnapshot) {
-        Value sourceValue = valueSnapshot.getSourceValue();
-        Value proxyValue = sourceValue.copyValueDefinition();
-        proxyValue.setDefaultValue(sourceValue.getDefaultValue());
-        proxyValue.setValue(valueSnapshot.getValue());
-        proxyValue.setAccessor(new SnapshotValueAccessor(valueSnapshot, proxyValue));
-        return proxyValue;
+        return valueSnapshot.createProxyValue();
     }
 
     public static Object getComparableListEntryText(Object entry) {

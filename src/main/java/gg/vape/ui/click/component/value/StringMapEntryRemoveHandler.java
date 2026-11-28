@@ -11,7 +11,10 @@ implements GuiClickListener {
 
     @Override
     public void onPrimaryClick() {
-        StringMapValueComponent.getStringMapValueCompat(this.owner).removeEntry(this.entry.getKeyText());
+        gg.vape.value.StringMapValue value = StringMapValueComponent.getStringMapValueCompat(this.owner);
+        boolean changed = value.getValue().containsKey(this.entry.getKeyText());
+        value.removeEntry(this.entry.getKeyText());
+        if (changed) value.notifyChanged();
         StringMapValueComponent.refreshEntriesCompat(this.owner);
     }
 

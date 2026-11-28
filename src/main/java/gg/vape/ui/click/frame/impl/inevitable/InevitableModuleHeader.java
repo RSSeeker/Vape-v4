@@ -15,6 +15,11 @@ public final class InevitableModuleHeader extends ModuleCategoryFrameHeader {
         for (GuiComponent child : this.f()) child.setVisible(false);
     }
     @Override public double C() { return 22.0; }
+    @Override public boolean D(int x, int y) {
+        // The inherited header has hidden legacy buttons whose stale bounds
+        // must not prevent dragging the new, control-free header.
+        return this.getBounds().J(x, y);
+    }
     @Override public void H() {
         InevitablePanelStyle.header(this.panel.group().title(), this.panel.group().icon(),
                 this.G$src$D$1b2f02a(), this.n(), this.A(), this.L());
@@ -24,7 +29,7 @@ public final class InevitableModuleHeader extends ModuleCategoryFrameHeader {
             if (child instanceof FrameHeaderComponent) continue;
             if (child instanceof ModuleComponent) {
                 ModuleComponent row = (ModuleComponent)child;
-                row.setExpanded(false);
+                row.collapseValueComponents();
                 child.setVisible(!this.panel.q() && (ClientSettings.moduleSearchActive || row.getModule().isVisible()));
             } else child.setVisible(false);
         }

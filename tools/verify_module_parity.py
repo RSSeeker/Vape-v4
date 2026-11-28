@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit the English build against the pinned v4.21.58 source and EXE.
+"""Audit the InevitableClient build against the pinned v4.21.58 source and EXE.
 
 No executable is run: the two PE resources (EXE -> DLL -> JAR) are read as
 bytes. This check verifies inventories and compiled class/resource equality;
@@ -21,65 +21,66 @@ import zipfile
 ORIGINAL_SHA256 = "9b77e8ae1bddb6296e5d773d19ecada341fe93ac8ef39559bddcca7a4b945482"
 BASE_COMMIT = "36aa9fb4890b2845de3452f008a334d0d08b774f"
 
-# Reviewed Soulbound presentation and compatibility changes.
+# Reviewed InevitableClient presentation and compatibility changes.
 # Pin their complete contents so an unrelated change cannot hide inside an
 # approved file. Deliberate future changes require a fresh parity review.
 APPROVED_SOURCES = {
-    'gg/vape/Vape.java': '3e77c5f28dcc261dc9c5c7cb08b25bc8b5bb2321f0d7a225525699eb76905f05',
-    'gg/vape/config/ClientSettings.java': 'bee68422892ef001250a86f8850db82e52e8acd8a6a7ec9812422db62642b9b4',
-    'gg/vape/config/LocalConfigStore.java': 'ac9e0cf033478b788655455b4a4369a12b5778c6d6389638a10b26c96246d66e',
+    'gg/vape/Vape.java': '9d00b23178a8b5f85be19be6d85a3e8d0bc4e2dd76ad91de423fbca499c14ccf',
+    'gg/vape/config/ClientSettings.java': '952394203b5bbf400c33696608cd7028e6ec6c148af174b02a9e430d95ead701',
+    'gg/vape/config/LocalConfigStore.java': '1bf624424bd1e85dc093e01510d8b2e92dce1717eacd69344f2f14448444135e',
     'gg/vape/config/PublicProfileSettings.java': 'ad84092706c242e2ec7f02a7a8855a35f11cb25f95cf1e584c317e051e430b3b',
-    'gg/vape/deeplearn/DeepLearningEngine.java': 'aa44a1de27dc639faf4c6e29613a0a8c9e69be963a6399af367bc743463507d4',
-    'gg/vape/deeplearn/ModelManager.java': 'e24f35696602125ab6e3105e98b26a1cccbc14ed34b29ee6c8ea3ed02b4a39ac',
-    'gg/vape/deeplearn/models/MlpModel.java': '9a0aa6a189f33bbad2d742a2e9d53da58e5a0af812b226476f11e3c158f80bf6',
+    'gg/vape/deeplearn/DeepLearningEngine.java': '1f64241b3890d23bc2af56745ca70d551f6a3da906173bd7c520e0172ca20309',
+    'gg/vape/deeplearn/ModelManager.java': 'c560128cf229a70d79b094948653e6e8f554162729d63ea46b52297e071f997e',
+    'gg/vape/deeplearn/models/MlpModel.java': '8cd6d37060266e275a3e0713991d0efbde06223439aeb71b54c5c88a5b9d2474',
     'gg/vape/event/impl/EventRenderWorldPassExecutorDrain.java': '64f504db1a0f4d4d366edeae82e05c08de59ef1d29802e1a0cb92d380b3f2991',
-    'gg/vape/friend/ui/FriendRequestsPanel.java': '2741855e50f8d6efc8cc1b419d2a7613e86f80e5354bef46a3a3117d8d2f69d7',
-    'gg/vape/friend/ui/OnlineFriendsFrame.java': '040cbcff7e7deea5509a008767af59ff16230501893c04b76e2fd19fd60a47a2',
-    'gg/vape/friend/ui/PartyMemberEntryComponent.java': '059d6af750c1fbffa3a8deb6cd4ed210c812d3d3eceb7a5c7feceb648f9d3691',
+    'gg/vape/friend/ui/FriendRequestsPanel.java': '5c7cb4f6cc946c8784b890e039962fa3d1477834435ae08b2c171d89c198eed9',
+    'gg/vape/friend/ui/OnlineFriendsFrame.java': '5ab0b2357e2b3770c8e23fd92b2593d97073ddd15f73556cee29ba86a1a86de7',
+    'gg/vape/friend/ui/PartyMemberEntryComponent.java': 'a377edfc155ff2a9ffa9d446276b10f27b117f9dd08e8fdddbfac36e079eb8bd',
     'gg/vape/manager/client/GlobalSettingsController.java': '8ab4935e5b7953c4b6f447532c723c3e422d46443409ba1d5055ad29dce949d5',
-    'gg/vape/manager/client/OnlineConnectionManager.java': 'e650a98d4557f9015513504cf66c8616d6f6ec46221869e6bd78d29a75fd58bc',
-    'gg/vape/manager/client/OnlineSettings.java': '9a229c88997251da6fe98d6ace81fc0e7c4291c2f68ad8323fd51c1b771d3b13',
-    'gg/vape/mapping/JavassistMappingTask.java': '4d844a830966f5b5b8975e33438a6856b54b204dec1c9e78a7b147df24641e74',
-    'gg/vape/module/none/ClientSettings.java': '92dc37e0c17b116fbc754ae51223aa2c7c81cc292d69d8bd5ab801d8bd7fa893',
-    'gg/vape/notification/NotificationSoundPlayer.java': 'c4e7599566ec5c761b88514ed55318a2ae16f07ca9e51a83f830ceed290aa99e',
+    'gg/vape/manager/client/OnlineConnectionManager.java': 'eb181032d0a35d5c20fd44fae86ec71ca34f195def0150dec39d14fea5144cc4',
+    'gg/vape/manager/client/OnlineSettings.java': 'af6318641bfe2af5cb97304f25e24ceb58d9b6c589ada61f1d0184ecba07ad68',
+    'gg/vape/mapping/JavassistMappingTask.java': 'dc86afb17202af0dd75004739f6e77391fff9e69247ae0bdacdff8104bae1d06',
+    'gg/vape/notification/NotificationSoundPlayer.java': '7da78b2b84033e44828797e091eb1a27e90d9d9c3648b9b5d61c24326d73e09c',
     'gg/vape/runtime/NativeBridge.java': 'ca5f8024b13b55a1143090742859dc7605d94962f8eae74fb78c35939c0b23de',
-    'gg/vape/service/VapeServiceApplication.java': '5fc18c60a7c9a41e5fdcc8573fefaa794c59e22a90b0e2d5c7cc8dc948106b1b',
-    'gg/vape/service/VapeServiceLauncher.java': '04698294bcbc0dbcc2652065f631612be077dc83a33ec28d0fe1a57bc31fe228',
-    'gg/vape/service/http/LegacyHttpServer.java': 'e9adde861499250586df6cb0aa792a1acf9b9ebc39fc8d1c5ea95eb357b4d701',
-    'gg/vape/sync/SyncThread.java': '7b35b67410dc53cee647c63209ce7238e1b2997926f5ed8da5ca4b7c5a5e96ee',
-    'gg/vape/tutorial/TutorialWelcomePanel.java': '30830b3c226d057d7b67130828e417be90e4996c7f0331d95ed9cb1861ed207a',
-    'gg/vape/tutorial/page/HudTutorialPage.java': 'cd9738a9375bb8b0eb95c14d7104a54534714c53b88ea55788ce1f21352edecb',
-    'gg/vape/tutorial/page/ModulesTutorialPage.java': '37a74b9553ef02097cd2d532e452b6f9450a83100a9ccf7154e766303472e3e1',
-    'gg/vape/ui/click/frame/impl/ClientSettingsComponentFactory.java': '49d33ccc857bbbeda5c87d26cbd06aede0bfdd93ef08d7ec26bbde0413d10f3e',
-    'gg/vape/ui/click/frame/impl/ClientSettingsFrame.java': '923236c0a25927b9c3e1d3b037a4ad34ae7e575a19cc9ec6b6eee5bd3979f8a0',
+    'gg/vape/service/VapeServiceApplication.java': 'd8e7531cbe4e83cb6ecf48b00825bbaf1cc403a1d920f4e95e8f218beff5ab39',
+    'gg/vape/service/VapeServiceLauncher.java': 'cca9469cbdf6a1cadd8a3e736785f57d4c683361f9326189d2e8415dd15aec3b',
+    'gg/vape/service/http/LegacyHttpServer.java': '1888aeab73f252923b49d95c169f7602a56ace142e825702ab605b7c737d3e12',
+    'gg/vape/sync/SyncThread.java': '7b1aaaafa1d9ff778706abdda85b90222c969d9ca12d213685b0bb3f0c370db1',
+    'gg/vape/tutorial/TutorialWelcomePanel.java': 'f5c318bbba116ce700393b82b3c1a5dae75e8132a01fa7d07d8d7688cac124e3',
+    'gg/vape/tutorial/page/HudTutorialPage.java': '63aa7878b6d12af68447822d6d80e320c7ac40c30df18f0a747c29779d343310',
+    'gg/vape/tutorial/page/ModulesTutorialPage.java': 'd1b698ef4c848f5ebdb2d7d7bf899ceda131b1679bf712cbdfed4fef5da46aa8',
+    'gg/vape/ui/click/frame/impl/ClientSettingsComponentFactory.java': '069d09b5fddd345a0cbe787388fd3be8627c8c96b369d1a2960f06dab4913dba',
+    'gg/vape/ui/click/frame/impl/ClientSettingsFrame.java': '9f981a9d5329720e72610d403001af2f85048aa42a42a3d76fc84c81efb13e10',
     'gg/vape/ui/click/frame/impl/ClientSettingsSearchFrameHeader.java': 'f408a22ab098bd8f0c7563fba2754934cd5b6bf7f9a20398188be80ef8b8a4fc',
-    'gg/vape/ui/click/frame/impl/main/ClickGuiFriendsFriendCardFactory.java': 'd255b0517737282afd4c8117a761a16d05e2532d22d1047060246467e222d0fb',
-    'gg/vape/ui/click/frame/impl/main/ClickGuiFriendsPage.java': '7326a8e5db489ccdff3501cf0d271e6acecf92a56dc4fae24b67d61073224c19',
-    'gg/vape/ui/click/frame/impl/main/ClickGuiFriendsThemeConfigFactory.java': 'e3ff595d09aa11ea08fc8b0e6b713db6d41e9d5d72b21b75d749754f9b19e5a8',
+    'gg/vape/ui/click/frame/impl/main/ClickGuiFriendsFriendCardFactory.java': '43ab6c2d76fe11f26409d68fd05efb3f68dfbe9bcb6e1c14d985da503228d2f3',
+    'gg/vape/ui/click/frame/impl/main/ClickGuiFriendsPage.java': '25c0a52583ae608f55459ef0ad1af392326e46d976cea9cc2bc90bc1c96985d0',
+    'gg/vape/ui/click/frame/impl/main/ClickGuiFriendsThemeConfigFactory.java': '4ba31a446211ecf0bcd58611e736651ef3936ba5331a7339fd88f039863cdd49',
     'gg/vape/ui/click/frame/impl/main/ClickGuiMainFrameHeaderActionComponent.java': 'bd03b966196cc15b1afd7df6a5c8ba2239a8916fc7f0d9676d0dbcb7bf70003c',
-    'gg/vape/ui/click/frame/impl/main/ClickGuiOverlaySpecFactoryA.java': '1a6749770e02f3ea4069179e9a4ad3c4c6458bcb1d7fefbea5c7e5306fa58cf0',
-    'gg/vape/ui/click/frame/impl/online/OnlineAccountLinkCodePageComponent.java': '16d71536891cb633ba2102d75127a7ba13a1ab81d71a10d2d104590ca4a0597f',
-    'gg/vape/ui/click/frame/impl/online/OnlineAccountUnavailablePageComponent.java': '2d3d6db6467cb0ed0fab7d5e90462ee95932b4bf796a3dcc4800e0131872471a',
+    'gg/vape/ui/click/frame/impl/main/ClickGuiOverlaySpecFactoryA.java': '7dab75785fc4539832561f43c06bc96b35c4952ebf8500d06cca21818c217323',
+    'gg/vape/ui/click/frame/impl/online/OnlineAccountLinkCodePageComponent.java': 'fe5b59474931ed35a509fec59138da591947e96cfa55df186d0d9b6ac6453fb6',
+    'gg/vape/ui/click/frame/impl/online/OnlineAccountUnavailablePageComponent.java': 'e9a4017b5f0d7d53f9583804fe937c20bfcbbf77ddcb3ae8841e9568f9ad4c68',
     'gg/vape/ui/click/frame/impl/online/OnlineConnectionRetryPageComponent.java': 'c6972148235f2731fe093abfaf8edf685c64bee18f4c4bf335ad9da77815b548',
-    'gg/vape/ui/click/frame/impl/online/OnlineConnectionSettingsFrame.java': '2d22448183ea03980cd4ac2c0ec3914156b393448892ad3436976c908c4c4587',
-    'gg/vape/ui/theme/ThemeColors.java': 'ce78da1e6f6acaa210d7c7ded4c83e6acc255be489737060ead8c534dd728254',
+    'gg/vape/ui/click/frame/impl/online/OnlineConnectionSettingsFrame.java': '95bd3bb4068dd8abba09c6e711f46f283fa3be26902aabfded12967586cedb57',
+    'gg/vape/ui/theme/ThemeColors.java': '55fa65915668a91d913f185387f5828c7682ab610268c1aee3fc166baaecb97a',
     'gg/vape/utils/network/AnticheatProfile.java': '1954e7755d9e936b2264b93a22836eeadf7c678f584510ba292e2c72d626bd8d',
     'gg/vape/utils/network/OutboundPacketPipeline.java': '1b991f5cd372546b2412b71cca30f8985834fa35fddd71e902ff04d0074be5b7',
     'gg/vape/utils/render/OpenGlDeviceInfo.java': 'abeb2fc96b3d007dad7405d79d17722213f7574fde98dc52a6e705eea04fdcfe',
-    'gg/vape/utils/render/RemoteImageHttpDownloader.java': 'ce96f2650d5c398133ce2840f7d7a53a3d67789195fde02d06f817c8bc187890',
+    'gg/vape/utils/render/RemoteImageHttpDownloader.java': '2b702fa731df3ee54a02ee35238b643522e6986c620e250757d2ffc39ab83c62',
     'gg/vape/utils/render/RenderBatchManager.java': '645b1e34c96cf27758314f80cde946fa855e67c5f04abcfac94bdce02432be3b',
 }
 
 # Reviewed behavioral improvements, module branding edits, and additions.
 # Complete content hashes remain mandatory.
 APPROVED_ENHANCEMENTS = {
-    'gg/vape/brand/SoulboundBrand.java': '46b0084f91db697bbdebc136f531f6a3027a26a349555e11aeb9c98ae48ad920',
-    'gg/vape/brand/SoulboundPaths.java': '0839147a28ebb876b7eaca3b9ec3d4c75198b7886935eaff63a14f6ac2af9450',
+    'gg/vape/brand/InevitableBrand.java': '874d0d95b51970ba647609192bf4db7c84ed177974717555e4970919cce8fe44',
+    'gg/vape/brand/InevitablePaths.java': '23f2abc77ff81fd11c72a592a874c32151457451daf0a9cc3f1a0bbc38d9434b',
+    'gg/vape/config/ConfigJsonUtils.java': '24839b7ae26a7061fe9c9251a1ef95544ae9989e2abbd2e6b8a75c1185379362',
     'gg/vape/input/AttackKeyController.java': '38d5baeefc4cb441fde2c9823628f53ae031a3f46b01a179db1caf1fb2f31d8c',
+    'gg/vape/manager/ExtensionManager.java': '5857e34e02e964c81b9b7bb73a12a98dedeacf4613c50fdeb42b53edef06b5e2',
     'gg/vape/module/combat/AimAssist.java': '2a81e9bdfecf9a363cf4414ea138b658e203e234fd216c9ec016cd5a0d22ee35',
     'gg/vape/module/combat/AutoMace.java': 'f8b0956f993952eb7fd93ae6a52a9e52905c8a370e76d19ec7ccb3d75c45319f',
     'gg/vape/module/combat/HitSwap.java': 'c760686e00f000379f849964ad5fa718d776bfd55f4732c787692a4a32c5e922',
-    'gg/vape/module/combat/SilentAura.java': '1dba329826258d86e43e30cf0d0498c3e9a6cfe56f491446451bbb5d187a91c2',
+    'gg/vape/module/combat/SilentAura.java': '9bf061d1b83bb82ab47cef324a7c891072fecd348a5fefb3251f994516843662',
     'gg/vape/module/combat/Triggerbot.java': '6be6b8b2590fdf29a2a3a8eb08fd2d5fbc8f819abee3e0c1601ab244e87240c7',
     'gg/vape/module/combat/aimassist/AimAssistKissSubModule.java': '31ff65af290fb0af673f23383a362eb9e71321dfd30be131456560565062247c',
     'gg/vape/module/combat/aimassist/AimAssistRotationSubModule.java': 'a9b4a0bb9392facc5029d165d9f8936981012609079aa52f4c57570c7e6f1686',
@@ -88,11 +89,13 @@ APPROVED_ENHANCEMENTS = {
     'gg/vape/module/combat/automace/AutoMaceAttackGate.java': '6384c92e5d2339f8122c917dc7e563df42614f398c4a10aabfe0ef983af8161c',
     'gg/vape/module/combat/automace/AutoMaceRotationController.java': '875eb671fd24c13467ac5a12f9d15eb5e53e9bf4a4d95eae1c021b5488fed1fc',
     'gg/vape/module/extension/ReloadScriptsModule.java': '77673c39df5d24ca32e9369d7e99b3ef926ea27528f52de19622b4f3fda57133',
-    'gg/vape/module/none/TextGuiSettings.java': '571c88f99b19915b39fff4b28d865622aba6042ae2dc40a9dddc354236433b96',
+    'gg/vape/module/extension/ScriptModule.java': 'd425360c738a98d698cf463948fb46a8fe0e60e42d300064e5bd2d9ebb50dde5',
+    'gg/vape/module/none/ClientSettings.java': 'd247e4f4e500667a6234586f9b8f3767a22e0b185f2ba4dd1eb2c68773d328d5',
+    'gg/vape/module/none/TextGuiSettings.java': '8c33785f12c438de2ac8d8da7a17450172b8ea0b8706d304e2f36c54e0d4b50a',
     'gg/vape/module/render/Search.java': '05378e2f59303c2bb7407bc7a436b31e3f64fc05dfc800f868cb317508769df5',
     'gg/vape/module/render/SpawnerFinder.java': '073f19b1c83e9cd5afe1e1340279cbc6eb098a5d3c190540c9348138084c4dd0',
     'gg/vape/module/render/StorageESP.java': '2ca853d26f932c541969262e2dc648d2972de19e5b80a93d719d2b9cea5133e5',
-    'gg/vape/module/render/hud/MotionBlur.java': 'af76ec0f265aeb8729c76ecad776dc5a32afa3ef4bf7d2ae1b72c7b4a1413fe3',
+    'gg/vape/module/render/hud/MotionBlur.java': 'ff76fa0206fbf96ba88e7c5269d82de548d32c43185617403bc3413c33ef4271',
     'gg/vape/module/render/search/SearchBlockChunkScanner.java': '30bc10d3baa17c3dc17ffee4d958f933871b35a9fa29b716b641d54e62eee505',
     'gg/vape/module/render/spawnerfinder/SpawnerNameMatcher.java': '0ae96558d2a699b5773eb4708cc5ca79549ecb3dd862e696ea3404c6ec2187c2',
     'gg/vape/module/render/storage/StorageClusterFilter.java': '84b1d5f6befb2427b711634f98363d244e737b66e9a07dfbb7277d72ced5408b',
@@ -100,28 +103,80 @@ APPROVED_ENHANCEMENTS = {
     'gg/vape/rotation/MouseRotationController.java': '7b90c8a8a3b279ceb06a9b12989fbf0c6e6256ae8074c041e5939f962d887923',
     'gg/vape/rotation/RotationManager.java': '8d8f48842d2c93945b313a8136f504a0c8634c75aa4271d01bc0098e992eeff9',
     'gg/vape/rotation/RotationMath.java': 'ecec256ddc8bbd941725fc807f6a60e89d658dae4166433cdf893c0cd602b18b',
+    'gg/vape/script/ScriptRuntimeHost.java': '07d9fc1717e61695ed20c063b5eb589e12b3e12f2aea828301ccca395ad6ed5f',
+    'gg/vape/ui/click/animation/ThemeColorAnimation.java': 'd804c3d1337275dc209c0f31f3c5396d2af147db7730b42f348db721c80813dd',
+    'gg/vape/ui/click/component/DropdownSelectComponent.java': '544dbbd0c4b7413fce8f3ec31083ab856a17301371a0ddd07d17a3236df69500',
+    'gg/vape/ui/click/component/GuiComponent.java': 'fdb7b075c7a63d0a928da49d4b960aaa9cd7a40f9a78a7bca61da3417ae11144',
+    'gg/vape/ui/click/component/PopupMenuButtonComponent.java': '629ff94c779e2a7cf5c0333b9f1fc64000decee595ea2dc974eb357a45397a37',
+    'gg/vape/ui/click/component/SelectableTextRowComponent.java': 'e862973ef581a1ade40b19b37c825b03050ff69ce0f424ae08e527605faaf9cb',
+    'gg/vape/ui/click/component/TextInputComponentBase.java': '9287c882486be519377011aeaf634798d152009f5a4ce70f2f1ace46bcd5c56d',
+    'gg/vape/ui/click/component/module/ModuleComponent.java': '01eed0131e3824e398542c40786f039bf7c19cac81dd611fab2fc6de00276bb9',
+    'gg/vape/ui/click/component/value/FloatingValueDropdownLayer.java': '677c59287ed640ccd4e65edafd2a326c60d949e863cee1a641f332ad98446037',
+    'gg/vape/ui/click/component/value/ListValueComponent.java': '03190e938cc6abfaff31aacdda34e4a3a100931c0eb4ab9f94ba6ae7eac82b88',
+    'gg/vape/ui/click/component/value/SearchBlockListComponent.java': 'f357f3271bef66f04dd5bb8283d130d26f099f92904515bc8a4af17a5426fab3',
+    'gg/vape/ui/click/component/value/StringMapEntryComponent.java': '79b49b711b5d06c4c6fc6fc1c5734a99d5db1133ef2f4b52e9552c30549375f5',
+    'gg/vape/ui/click/component/value/StringMapEntryRemoveHandler.java': 'a0d7835d9181c067f9a9e1b185e9e10a5e7ef65abda17f180a05a72694c2b045',
+    'gg/vape/ui/click/component/value/StringMapValueComponent.java': 'af10e2c57445279fea246ce7ba8b990e6ec7b202e2d6feec5af36bdcc1fcccc1',
+    'gg/vape/ui/click/component/value/StringValueTextInputComponent.java': '783fcb0acb3b584e79e12f9f8abdb6a361d084f7e5624625646209261ac3189d',
+    'gg/vape/ui/click/component/value/ValueComponentFactory.java': 'e3664f813d88c53eb0222d9549909b76534811cd6075c6187791fa8f12e704e6',
+    'gg/vape/ui/click/frame/FrameComponent.java': '4ca7abbdee05fa4c04174ec380fb8edca1cf935053d7bf811724fa21766f8e97',
+    'gg/vape/ui/click/frame/FrameHeaderMainLayerClickHandler.java': '8edb5eb311878db1f2705118189dfb7b5ad26cb542d84cf122debe2a54fe897d',
+    'gg/vape/ui/click/frame/impl/ModuleSearchFrame.java': '917564e24223a7dfe42e8de936dc4b8ea4e8dee4c4622deab7916e7944605fe0',
+    'gg/vape/ui/click/frame/impl/ModuleSearchFrameHeader.java': 'a9e9f2e200971ceaea32f67f572af3759100bbbb5e7746e6301e47bd715d8d27',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableActionRow.java': '7965aedd36c516fbf50e09c7f82d1bfb304c51214b80123a32725d2ed28daf22',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableCategory.java': '0847892ac3237e4af043f19224f7a36aa1a43eefbc5328d3cffd31e4fe683b3c',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableFrameStack.java': 'f3a9936916f3c910b4b393c4e18a0b7dbce0a198bd3d0f85658a12d490feb5a7',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableLayout.java': 'ebcba85260d55bc94b4968d23f84339ae0089215defb3240b0b6bc212c5e2114',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableModuleFrame.java': 'e52ead991f0d086992b699014d23ba021173f7a0aa3f38cc85c822f96887e08b',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableModuleHeader.java': 'c3e778de6fc800df648651da5d6bb201a5ada67efc631d5dc218a80c86968aea',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitablePanelFrame.java': 'b6965a31884e2e395044a3cb99ff41bacd201e266c385cf70754d4b843294a41',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitablePanelHeader.java': 'cbf9ba1ce712ba2cd3fc7aac5f56ecc55347013c335e8146420ec4ecbdd0c45b',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitablePanelStyle.java': 'a7057c78082ee8cd4a0eca1aaf323b223fb0be5589c59c4f821b0f0277b2194c',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableRenderScope.java': '57b23cbd78148781ac4af9891fde02947cce1bfff74c5f1087e80ebba4f029cb',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableReturnFrame.java': '8b7038283031eeca629843740a79fac9394b26ef9c2764c55c41b1a04f5dabcf',
+    'gg/vape/ui/click/frame/impl/profile/PublicProfilesFrame.java': 'cf837d7369adda3a3720b2bc5db33e1a05012a9990f7606254a68ff2f503a9a6',
+    'gg/vape/ui/click/layout/ComponentLayout.java': '279a706d64df5a0a9e94a8361fb64b14eea747816fd16d91923c07e1711cef1d',
+    'gg/vape/ui/font/FontOption.java': 'd323a3306e2596a0612b38bd3db4e8716e5178603f98a2dc57f20daeb02eb941',
     'gg/vape/ui/unmap/SearchBlock.java': '93c5689ea772c35a587217e4f98fe4fb6803093bd66f2c8d4201a2a68df234f9',
-    'gg/vape/utils/processors/SearchProcessor.java': '6874733825ed8a3af489af03c1a9a4a8ed18d970c6cadca92ec449dc5e80725f',
+    'gg/vape/unmap/ColorUtil.java': '061bfe8423bba663685689fa9b56b1f757da1cc6aefaeb237ae1f9d792cb1d7c',
+    'gg/vape/utils/ThreadBoundExecutor.java': 'a2274edf80aba5c51dd8eefb61e19b6850c7aea221f0e6ea18535dfe287fac60',
+    'gg/vape/utils/processors/SearchProcessor.java': '5c56e04d99638c1b792e4ae11a68d07bc06a8851b01bff87b7a08bc18f62d0ab',
     'gg/vape/utils/processors/SearchResultIndex.java': '36034fa4b16747487a6e39773bef017cb483d165ed824149c7fc511e6d1df0c2',
     'gg/vape/utils/processors/SearchScanCursor.java': '2681d1941baa725b2601cfb49296e72c4d26797fa10c428e87ae99750fa4a13b',
     'gg/vape/utils/render/RenderUtil.java': 'bc01b189ca3b5210148a225635678a4315d1fde246addae826642d7d0b003ce5',
     'gg/vape/utils/render/WorldOverlayGlState.java': '6cda41432aec210105e9046ff95a004e174936ff93b88823c7a28eac8d8995c4',
+    'gg/vape/value/EntityTargetFilterValue.java': 'f322decbb1dc38bc60c9ff8a6eb89c6a5c34aa3758929a98f92eebf54990a37c',
+    'gg/vape/value/StringMapValue.java': 'b2bb851b8e46afaa592cea0f0b8cb8037c2295ed1a2fedcb61b79f0f5881e69c',
+    'gg/vape/value/StringValue.java': 'c3d4db1c47cdd946ec3c72989a647bd875f6ab931bc157931738730be3d601cb',
+    'gg/vape/value/Value.java': '54ea25b0ba6a03778466ab3eb28ce1d64f9e3e7171f179be56c0ad1fbf74709a',
+    'gg/vape/value/ValueSnapshot.java': '2579d064b0d77b9c59b528db537f908eaedd2930c3bbac77ba06d3e8aac04ea5',
 }
 JAVA_ADDITIONS = {
-    'gg/vape/brand/SoulboundBrand.java',
-    'gg/vape/brand/SoulboundPaths.java',
+    'gg/vape/brand/InevitableBrand.java',
+    'gg/vape/brand/InevitablePaths.java',
     'gg/vape/module/combat/automace/AimSelectionRules.java',
     'gg/vape/module/combat/automace/AutoMaceAttackGate.java',
     'gg/vape/module/render/spawnerfinder/SpawnerNameMatcher.java',
     'gg/vape/module/render/storage/StorageClusterFilter.java',
     'gg/vape/rotation/RotationMath.java',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableActionRow.java',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableCategory.java',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableFrameStack.java',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableLayout.java',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableModuleFrame.java',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableModuleHeader.java',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitablePanelFrame.java',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitablePanelHeader.java',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitablePanelStyle.java',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableRenderScope.java',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableReturnFrame.java',
     'gg/vape/utils/processors/SearchResultIndex.java',
     'gg/vape/utils/processors/SearchScanCursor.java',
     'gg/vape/utils/render/WorldOverlayGlState.java',
 }
 JAVA_ADDED_CLASSES = {
-    'gg/vape/brand/SoulboundBrand.class',
-    'gg/vape/brand/SoulboundPaths.class',
+    'gg/vape/brand/InevitableBrand.class',
+    'gg/vape/brand/InevitablePaths.class',
     'gg/vape/module/combat/AutoMace$AimSelection.class',
     'gg/vape/module/combat/automace/AimSelectionRules.class',
     'gg/vape/module/combat/automace/AutoMaceAttackGate.class',
@@ -137,6 +192,20 @@ JAVA_ADDED_CLASSES = {
     'gg/vape/rotation/RotationMath$StepQuantizer.class',
     'gg/vape/rotation/RotationMath$TargetPredictor.class',
     'gg/vape/rotation/RotationMath.class',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableActionRow$1.class',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableActionRow.class',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableCategory.class',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableFrameStack.class',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableLayout.class',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableModuleFrame.class',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableModuleHeader.class',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitablePanelFrame$Kind.class',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitablePanelFrame.class',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitablePanelHeader.class',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitablePanelStyle.class',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableRenderScope$1.class',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableRenderScope.class',
+    'gg/vape/ui/click/frame/impl/inevitable/InevitableReturnFrame.class',
     'gg/vape/utils/processors/SearchResultIndex$1.class',
     'gg/vape/utils/processors/SearchResultIndex$Entry.class',
     'gg/vape/utils/processors/SearchResultIndex$Position.class',
@@ -148,40 +217,38 @@ ENHANCED_MODULE_SOURCES = {
     name for name in APPROVED_ENHANCEMENTS
     if name.startswith("gg/vape/module/") and name not in JAVA_ADDITIONS
 }
-MODULE_EXCEPTIONS = {
-    "gg/vape/module/none/ClientSettings.java",
-}
+MODULE_EXCEPTIONS = set()
 
 # All other native files, including the reflective-loader implementation and
 # bridge, must match the baseline. Reviewed translations and loader integrity
 # changes are pinned by content; binary assets are compared byte-for-byte.
 APPROVED_NATIVE = {
-    'native/CMakeLists.txt': '224ce5d055b623ed50292583f7917b117d656b59870cdf409ade8e36448f131b',
-    'native/brand_version.h.in': '27ce29c6ecbc889b517ee4279d730d0622394f87aa687eddef3afb8c444f4d16',
-    'native/client_data_path.h': 'fe55c37ca5d19822447a9e9109c4f3882aad6d8498c824a9d5f8e46dfdaa4df4',
-    'native/dllmain.c': 'a16b7b6a31ffd4450d98c8ca78a6379672d753744a1b388c8ab79ad84914e2c3',
-    'native/injector_icon.rc': '650dafc60a90c7385561267c7024a505574c3f593a2ef1baef7d2933d5904a7c',
-    'native/injector.c': '8f000797c4e9624a53e897a8cee8010b018af329363e124697d027ba1abc5277',
-    'native/loader_gui/assets/logo.png': '1039296a4a77fb23c50d534020b0b87d4573b389732a286d6b19bc64c6e5cad2',
-    'native/loader_gui/controller_model.cpp': 'd067357f5b30a4f50e465309ca4873b8ccc542e9f1c4ab0cf143fe5d5970c8df',
+    'native/CMakeLists.txt': 'b3e38605fc72bde08b3919c1fc200b2ee77d57c8d1fb72e1f0a49449895f5545',
+    'native/brand_version.h.in': '3eebd1f90ec98b677b50128897c475faaad44b258dcc8e05f35952f76a2912c2',
+    'native/client_data_path.h': '25aa95db3da49eb37eeb97ec33e26131d7e2fad7810ef8258051e1f66b2f79be',
+    'native/dllmain.c': 'ab09419af2aa502121724b26705850575e2bcf44d76162e560e65050c65aecad',
+    'native/inevitable.ico': '9e5f617081b410ae3d54354ad9881a71379a26fbdcaf8c7d32eec6fa82c38887',
+    'native/injector.c': '5d70b219a8cca5bcc9939e6f58847228400222f8f7cdead99c943a221eb95256',
+    'native/injector_icon.rc': '982fd9b2ed1a3183940ce59da18fa8c2dd3a43a10ede11820917568c5aa8b314',
+    'native/loader_gui/assets/logo.png': 'e39462748839a9556e55ad6a9bd8814e5974c95bbdd1b756034287e494e2aeba',
+    'native/loader_gui/controller_model.cpp': 'e7c5548173472ed7f760154886e4ebd0708c2f878ac3a78fb6054c30672037f1',
     'native/loader_gui/controller_model.h': '3beafc76870575c7776836987eca4b2aeded6769e2674aae8281ef58aee004f5',
-    'native/loader_gui/controller_ui.cpp': 'f88c4e3d454c733562aaea70bd71d39d5cde73fc0cab846c709669922d2309e2',
-    'native/loader_gui/embedded_dll_materializer.cpp': '51eb65cf18cfbd16bdeb1b3ba826b43c56f41d9d1053037498e0545e15f08b95',
+    'native/loader_gui/controller_ui.cpp': 'e4a20083e087cf7eb7f8b77d8b0d6bfc50960ed20829f05cc3054e528d6a2637',
+    'native/loader_gui/embedded_dll_materializer.cpp': 'c470d3497cd4dd38c2e5f688c2e8eebefdc7773131eee6b42f31d6487c2705c7',
     'native/loader_gui/embedded_dll_materializer.h': '61b6dbe7d36f68e7e4b454f984cd08ba3a369226ea650b21027f97e328f30d9e',
     'native/loader_gui/embedded_resource_integrity.h': 'f05b3c7e458e647768b15cade70e6ffb7e8cc03a582df6b046cd236e3ae80385',
-    'native/loader_gui/icon.rc': '66badb4c8b29157ba69aeee17b07a3e5d39097ad1808868aeb2bd60b6f87c36e',
-    'native/loader_gui/injection_coordinator.cpp': '55f5d1c838b94f63b6a490c3298dbe5ae12ca60c60190d42502f36ab9a083727',
+    'native/loader_gui/icon.rc': 'f83fed0bf2fd439873b2436181060726667bba384b48d0144a7ffcccc574ccec',
+    'native/loader_gui/injection_coordinator.cpp': '84730e2706766f716648072eb8e5153e9c0af7e851edfe5c877af6483f120494',
     'native/loader_gui/loader_language.cpp': '2ab4680092e008f9f547e9960a0f0c738c9dda7631f0a812b51617322c9e823a',
     'native/loader_gui/loader_language.h': '06ec241e8626d994baeba1a5b54f723baa8fc7f27bb13b46ca5c0b0e73d8b2f7',
-    'native/loader_gui/loader_strings.cpp': '9fd414ad43389c891a4197d201567975bf5749941e0029aeb47b9cdab36e9179',
+    'native/loader_gui/loader_strings.cpp': '561990bb49071069fafdcab1b910b7f86627efb55def7f08f06403965d8383ae',
     'native/loader_gui/loader_strings.h': '252956b897d714475779f7d246b47f526e3804f7b4d4706c154918954b7d1892',
     'native/loader_gui/locked_resource_file.h': '962de2b110e7b4350fef1caff4194d78eefff4fe3243c6c8c3a362575bd30583',
     'native/loader_gui/main.cpp': 'c0e53f00ea8ceadc1672a068c833cc7253a1efb302b53225e054621b6cfa9b86',
     'native/safe_file_materialization.c': 'db608a9b7fec00024ddf7d322e8842fab059bec5a28f3b18186dd1047c8f3bc0',
     'native/safe_file_materialization.h': 'bb9a84dda8d1a25afaae878ce1b2e605e13983d3c3297ae4d9cc3f5ea18bed7b',
-    'native/soulbound.ico': '596337017d4513c0d51fedbc8eb8269a18b349fe564753b910a08432c6fc4ce5',
-    'native/tests/client_data_path_test.c': '754be7351eb06ada365bb004a8d46139c1ba965569d4eabf8d7d67eef92f177c',
-    'native/tests/embedded_dll_materializer_test.cpp': '70b94d81c8d19fdb90e4de50201d6cc7145f9dbd7d80df7746be1c0dd385bee7',
+    'native/tests/client_data_path_test.c': '23eba784649fd618f88c949180031c9dabd12135d24f478c4fd77a1b38596e40',
+    'native/tests/embedded_dll_materializer_test.cpp': '007015ad9066f5004ce351c01ba676d7e936c82f41037e5a10c933ec780c3dfa',
     'native/tests/embedded_resource_integrity_test.cpp': '614d4692e7cb85b1c4a712b88a3e9b0401627caa15e2e76b93c2ef04498bc2b8',
     'native/tests/loader_language_test.cpp': 'b21e9c690c90d9618ad0bc8b936b91fe6b67ef40cf40e7c8c22419fa4859d741',
     'native/tests/loader_strings_test.cpp': '0d60fd78fda307e493b703997203d92633194fa9d4d246f45481690cce048de0',
@@ -192,6 +259,7 @@ APPROVED_NATIVE = {
 NATIVE_ADDITIONS = {
     'native/brand_version.h.in',
     'native/client_data_path.h',
+    'native/inevitable.ico',
     'native/loader_gui/embedded_dll_materializer.cpp',
     'native/loader_gui/embedded_dll_materializer.h',
     'native/loader_gui/embedded_resource_integrity.h',
@@ -200,7 +268,6 @@ NATIVE_ADDITIONS = {
     'native/loader_gui/locked_resource_file.h',
     'native/safe_file_materialization.c',
     'native/safe_file_materialization.h',
-    'native/soulbound.ico',
     'native/tests/client_data_path_test.c',
     'native/tests/embedded_dll_materializer_test.cpp',
     'native/tests/embedded_resource_integrity_test.cpp',
@@ -210,18 +277,18 @@ NATIVE_ADDITIONS = {
     'native/tests/safe_file_materialization_test.cpp',
 }
 APPROVED_RESOURCES = {
-    'src/main/resources/META-INF/soulbound-version.properties': '454c66d5e8b60d2c3be5e7b98d403a183f9927e4c00b78b21c0f0287adb3e2a0',
-    'src/main/resources/resources/chinese.properties.txt': 'd384c1af085267bfe4da6d4044af93a3954163daf2bc011e5e31a7436c20932f',
-    'src/main/resources/resources/english.properties.txt': 'a1f6b051ca3fb56365983d0a640caad81bb7a0fc5b43854d1cf58ec616cbe40e',
-    'src/main/resources/resources/french.properties.txt': '7abddd8c3ffc485bd7dc1bf54d639b02648904040ebcb24161bfb98d38e6a59a',
-    'src/main/resources/resources/textures/v4.png': 'e09d5ca3bc6fda431955156b9de2cb4469b52c0419c9663f4f9a724e68b356da',
-    'src/main/resources/resources/textures/vapelogo.png': '100ad605a9cb9686cef38154c4b204dfc0bf811a5bd0f72b8e5205b172e1ac44',
+    'src/main/resources/META-INF/inevitable-version.properties': '0b18bfe6233ecc75ee56c427950754509cb0827c2b810b893b08c75c5dd26eac',
+    'src/main/resources/resources/chinese.properties.txt': '6944cf232204cbcf0be9c437082b9f54d0b1cfd264b3f7c9b9df3c980f58ade4',
+    'src/main/resources/resources/english.properties.txt': '6cc2d3e49e241a0c3370d7d945a9a7f17f01a53a5b8668259e7150895f767ea3',
+    'src/main/resources/resources/french.properties.txt': 'cc0fbdb77513a4e4323d8be002840dbbfb6fce4772592c7f337ea19174c20a71',
+    'src/main/resources/resources/textures/v4.png': '5e612cd45fd657b4ebfadd752ea9219b4e9cd32456cff3707c06878a7846c4f9',
+    'src/main/resources/resources/textures/vapelogo.png': '6121c4c831eb27fe572b8791f9192de6e54e7075f17bd9a59eff85ee6badbde8',
 }
 NATIVE_DELETIONS = {
     'native/vape-v4.21.ico': 'cd857a1b00744675357b7fc4d889e7a0845920d2fae0111ece9b475e193df3a2',
 }
 RESOURCE_ADDITIONS = {
-    'src/main/resources/META-INF/soulbound-version.properties',
+    'src/main/resources/META-INF/inevitable-version.properties',
 }
 TEXT_SUFFIXES = {
     ".c", ".cpp", ".h", ".cmake", ".in", ".rc", ".manifest", ".txt",
@@ -441,8 +508,8 @@ def approved_class(name):
 
 
 APPROVED_PRODUCT_RESOURCE_CHANGES = {
-    'resources/textures/v4.png': 'e09d5ca3bc6fda431955156b9de2cb4469b52c0419c9663f4f9a724e68b356da',
-    'resources/textures/vapelogo.png': '100ad605a9cb9686cef38154c4b204dfc0bf811a5bd0f72b8e5205b172e1ac44',
+    'resources/textures/v4.png': '5e612cd45fd657b4ebfadd752ea9219b4e9cd32456cff3707c06878a7846c4f9',
+    'resources/textures/vapelogo.png': '6121c4c831eb27fe572b8791f9192de6e54e7075f17bd9a59eff85ee6badbde8',
 }
 
 
@@ -595,17 +662,17 @@ def main():
     stats = audit_jars(args.baseline_jar.read_bytes(), current_jar, release_jar)
 
     lines = [
-        "Soulbound build: module parity audit against the recovered 4.21.58 baseline",
+        "InevitableClient build: module parity audit against the recovered 4.21.58 baseline",
         "",
         "Baseline source commit: " + BASE_COMMIT,
         "Original release EXE SHA-256 verified: " + ORIGINAL_SHA256,
-        "English EXE SHA-256: " + sha256(current_exe),
-        "English DLL SHA-256: " + sha256(embedded_dll),
-        "English source-build Java payload SHA-256: " + sha256(current_jar),
-        "English embedded Java payload SHA-256: " + sha256(embedded_jar),
+        "InevitableClient EXE SHA-256: " + sha256(current_exe),
+        "InevitableClient DLL SHA-256: " + sha256(embedded_dll),
+        "InevitableClient source-build Java payload SHA-256: " + sha256(current_jar),
+        "InevitableClient embedded Java payload SHA-256: " + sha256(embedded_jar),
         f"Java baseline sources: {source_count}; module sources: {module_source_count}; reviewed changes/additions: {changed_sources}.",
         f"Module sources: {len(MODULE_EXCEPTIONS)} reviewed localization edits and {len(ENHANCED_MODULE_SOURCES)} reviewed behavioral changes, plus pinned additions; all others match baseline.",
-        "The reversible localization edit and other reviewed changes are pinned by source hashes.",
+        "Reviewed source changes are pinned by complete source hashes.",
         "Behavioral improvements intentionally differ from the baseline; they require runtime testing.",
         f"Native files: {native_count} baseline files; {native_changes} reviewed localization/integrity/build/test changes or additions.",
         f"Resource files: {resource_count} baseline files; {resource_changes} reviewed translation, artwork or version changes.",
@@ -613,15 +680,15 @@ def main():
         "Differing baseline module classes (reviewed localization and behavioral changes):",
         *("  " + name for name in stats["module_changes"]),
         f"Owned class inventory: {stats['own_classes']} baseline files plus {len(JAVA_ADDED_CLASSES)} reviewed additions; no unreviewed class differences.",
-        f"Non-language product resources ({stats['resources']} files) unchanged.",
-        f"Embedded payload has the same {embedded_resource_count} non-class resources as the English source build.",
+        f"Non-language product resources ({stats['resources']} files) match except for pinned artwork changes.",
+        f"Embedded payload has the same {embedded_resource_count} non-class resources as the InevitableClient source build.",
         "Native loading changes are pinned above; the EXE and optional DLL embed the expected JAR. This audit does not establish safety.",
     ]
     if stats["release_layout"] is None:
         official_matches = stats["module_classes"] - len(stats["release_differences"])
         lines += [
             f"Original release vs same-source baseline: {official_matches}/{stats['module_classes']} module class files byte-identical.",
-            f"Original release vs English build: {stats['release_english_matches']}/{stats['module_classes']} module class files byte-identical.",
+            f"Original release vs InevitableClient build: {stats['release_english_matches']}/{stats['module_classes']} module class files byte-identical.",
         ]
         if stats["release_differences"]:
             lines += ["Original-release differences (possibly compiler/build differences; not runtime-tested):"]
@@ -649,7 +716,7 @@ def main():
     emit_notice("Module source review", f"{module_source_count} module source files checked; {len(MODULE_EXCEPTIONS)} localization edits and {len(ENHANCED_MODULE_SOURCES)} reviewed behavioral changes, plus pinned additions.")
     emit_notice("Module class comparison", f"{stats['matching_module_classes']}/{stats['module_classes']} module class files byte-identical in same-toolchain builds; reviewed enhancements intentionally differ.")
     if stats["release_layout"] is None:
-        emit_notice("Original release comparison", f"Original EXE hash verified; {official_matches}/{stats['module_classes']} module class files match the baseline build, and {stats['release_english_matches']}/{stats['module_classes']} match the English build byte-for-byte.")
+        emit_notice("Original release comparison", f"Original EXE hash verified; {official_matches}/{stats['module_classes']} module class files match the baseline build, and {stats['release_english_matches']}/{stats['module_classes']} match the InevitableClient build byte-for-byte.")
     else:
         layout = stats["release_layout"]
         message = (f"Original EXE hash verified; path-based comparison requires class-name normalization: "
