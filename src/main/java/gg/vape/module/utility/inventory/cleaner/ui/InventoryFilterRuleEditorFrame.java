@@ -40,10 +40,15 @@ import java.util.Iterator;
 public class InventoryFilterRuleEditorFrame
 extends Frame {
     private int lastScreenWidth = -1;
+    private boolean detachedPreview;
     private InventoryFilterRulePresetChange pendingChange;
     private ScrollableFrameComponent conditionsScroll;
     private final ScrollableFrameComponent contentScroll = new ScrollableFrameComponent(400.0, 230.0);
     private final PaddedComponent rootComponent;
+
+    public void setDetachedPreview(boolean detachedPreview) {
+        this.detachedPreview = detachedPreview;
+    }
 
     private void closePopup() {
         InventoryCleanerPopupFrame.returnToProfileEditor();
@@ -60,7 +65,8 @@ extends Frame {
         if (inventoryFilterRuleEditorPanel != null) {
             InventoryFilterRule inventoryFilterRule = inventoryFilterRuleEditorPanel.getRule();
             InventoryFilterPreset inventoryFilterPreset = inventoryFilterRule.resolvePreset();
-            if (inventoryFilterPreset != null && inventoryFilterPreset.getName().trim().isEmpty()) {
+            if (inventoryFilterPreset != null && inventoryFilterPreset.getName().trim().isEmpty()
+                    && !(this.detachedPreview && inventoryFilterPreset instanceof SharedInventoryFilterPreset)) {
                 inventoryFilterPreset.assignDefaultName(inventoryFilterRule instanceof ItemInventoryFilterRule);
             }
             ClientSettings.removePopup(popupFrame);
@@ -197,7 +203,7 @@ extends Frame {
         panelComponent3.setShowDisabledOverlay(false);
         panelComponent3.C$src$V$nadrmg();
         panelComponent3.h(new SpacerComponent(0.0, 6.0), "wrap");
-        if (!newlyAddedRule && currentPreset instanceof SharedInventoryFilterPreset) {
+        if (!this.detachedPreview && !newlyAddedRule && currentPreset instanceof SharedInventoryFilterPreset) {
             guiComponent3 = new TextLabel("Delete Preset", 0.75, true);
             ((TextLabel)guiComponent3).setTextColor(InventoryFilterRuleEditorFrame.J.d);
             ((TextLabel)guiComponent3).setUseAlternateFont(true);
@@ -220,18 +226,27 @@ extends Frame {
         boolean createSharedPreset = !editingSharedPreset;
         Runnable updateRule = () -> this.detachPreset(editedPreset, rule);
         Runnable updateSharedPreset = () -> this.applySharedPreset(createSharedPreset, editedPreset, rule, currentPreset);
-        ArrayList<GuiComponent> menuOptions = new ArrayList<GuiComponent>();
-        if (editingSharedPreset) {
-            menuOptions.add(new TextLabel("CREATE RULE", 0.75, false).setCentered(true).setTextColor(Color.WHITE).setUseAlternateFont(true).addClickListener(() -> this.confirmCreateRule(updateRule)));
+        if (this.detachedPreview) {
+            // Editing a shared preset in a preview creates a local rule when
+            // applied; it never updates or deletes the global preset.
+            TextButton button = new TextButton(newlyAddedRule ? "CREATE RULE" : "UPDATE RULE", 0.75,
+                    InventoryFilterRuleEditorFrame.J.B, InventoryFilterRuleEditorFrame.J.O);
+            button.setClickListener(() -> this.confirmUpdate(false, updateSharedPreset, newlyAddedRule, updateRule));
+            interactiveComponent = button;
         } else {
-            menuOptions.add(new TextLabel("CREATE PRESET", 0.75, false).setCentered(true).setTextColor(Color.WHITE).setUseAlternateFont(true).addClickListener(() -> this.confirmCreatePreset(updateSharedPreset)));
+            ArrayList<GuiComponent> menuOptions = new ArrayList<GuiComponent>();
+            if (editingSharedPreset) {
+                menuOptions.add(new TextLabel("CREATE RULE", 0.75, false).setCentered(true).setTextColor(Color.WHITE).setUseAlternateFont(true).addClickListener(() -> this.confirmCreateRule(updateRule)));
+            } else {
+                menuOptions.add(new TextLabel("CREATE PRESET", 0.75, false).setCentered(true).setTextColor(Color.WHITE).setUseAlternateFont(true).addClickListener(() -> this.confirmCreatePreset(updateSharedPreset)));
+            }
+            PopupMenuButtonComponent button = new PopupMenuButtonComponent(editingSharedPreset ? "UPDATE PRESET" : (newlyAddedRule ? "CREATE RULE" : "UPDATE RULE"), menuOptions, InventoryFilterRuleEditorFrame.J.B, InventoryFilterRuleEditorFrame.J.O, null, 1.0f, 1.0f);
+            button.setOpenUpward(true);
+            button.setClickListener(() -> this.confirmUpdate(editingSharedPreset, updateSharedPreset, newlyAddedRule, updateRule));
+            interactiveComponent = button;
         }
-        interactiveComponent = new PopupMenuButtonComponent(editingSharedPreset ? "UPDATE PRESET" : (newlyAddedRule ? "CREATE RULE" : "UPDATE RULE"), menuOptions, InventoryFilterRuleEditorFrame.J.B, InventoryFilterRuleEditorFrame.J.O, null, 1.0f, 1.0f);
-        ((PopupMenuButtonComponent)interactiveComponent).setOpenUpward(true);
         interactiveComponent.o(58.0);
-        interactiveComponent.Y(16.0);
         interactiveComponent.Y(panelComponent3.L());
-        interactiveComponent.setClickListener(() -> this.confirmUpdate(editingSharedPreset, updateSharedPreset, newlyAddedRule, updateRule));
         ((FrameComponent)guiComponent3).h(new PaddedComponent(1.0, 0.0, interactiveComponent), new Object[0]);
         if (savedScrollOffset != null) {
             this.conditionsScroll.W(savedScrollOffset);
@@ -259,6 +274,7 @@ extends Frame {
     }
 
     private void deletePresetConfirmed(InventoryFilterPreset inventoryFilterPreset, InventoryFilterRule inventoryFilterRule) {
+        if (this.detachedPreview) return;
         Vape.INSTANCE.getInventoryFilterPresetRegistry().clearReferencesTo((SharedInventoryFilterPreset)inventoryFilterPreset);
         if (inventoryFilterRule instanceof SlotInventoryFilterRule) {
             Vape.INSTANCE.getInventoryFilterPresetRegistry().getSlotRulePresets().remove((SharedInventoryFilterPreset)inventoryFilterPreset);
@@ -289,6 +305,10 @@ extends Frame {
     }
 
     private void applySharedPreset(boolean createSharedPreset, InventoryFilterPreset editedPreset, InventoryFilterRule rule, InventoryFilterPreset currentPreset) {
+        if (this.detachedPreview) {
+            this.detachPreset(editedPreset, rule);
+            return;
+        }
         SharedInventoryFilterPreset newSharedPreset = createSharedPreset ? new SharedInventoryFilterPreset(editedPreset) : (SharedInventoryFilterPreset)editedPreset;
         boolean slotRule = rule instanceof SlotInventoryFilterRule;
         rule.setPreset(newSharedPreset);

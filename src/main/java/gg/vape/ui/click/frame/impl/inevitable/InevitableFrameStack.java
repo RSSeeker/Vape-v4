@@ -6,6 +6,7 @@ import gg.vape.ui.click.component.DropdownSelectComponent;
 import gg.vape.ui.click.component.GuiComponent;
 import gg.vape.ui.click.component.PopupMenuButtonComponent;
 import gg.vape.ui.click.component.module.ModuleComponent;
+import gg.vape.ui.click.component.input.BindableInputComponent;
 import gg.vape.ui.click.component.value.AbstractListValueComponent;
 import gg.vape.ui.click.component.value.FloatingValueDropdownLayer;
 import gg.vape.ui.click.frame.Frame;
@@ -90,12 +91,16 @@ public final class InevitableFrameStack extends FrameStackManager {
     }
 
     private void clearFocusInTree(GuiComponent component) {
+        if (component instanceof BindableInputComponent) ((BindableInputComponent)component).getCaptureTask().cancelCapture();
         if (ClientSettings.activeComponent == component) ClientSettings.activeComponent = null;
         for (GuiComponent child : new ArrayList<GuiComponent>(component.f())) this.clearFocusInTree(child);
     }
 
     /** Close only the detached/hidden editor subtree, including floating lists. */
     public void closeEditorTree(GuiComponent component) {
+        if (component instanceof BindableInputComponent) {
+            ((BindableInputComponent)component).getCaptureTask().cancelCapture();
+        }
         for (Frame frame : new ArrayList<Frame>(this.Y())) {
             if (frame instanceof FloatingValueDropdownLayer
                     && ((FloatingValueDropdownLayer<?>)frame).getSourceComponent() == component) {
@@ -121,6 +126,7 @@ public final class InevitableFrameStack extends FrameStackManager {
     /** Close transient editors on navigation, without collapsing module rows. */
     public void closeTransients() {
         for (Frame panel : this.panels) {
+            BindableInputComponent.cancelCapturesInTree(panel);
             this.closePanelPopups(panel);
             for (GuiComponent child : new ArrayList<GuiComponent>(panel.f())) {
                 if (!(child instanceof ModuleComponent)) continue;

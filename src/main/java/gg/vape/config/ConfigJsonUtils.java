@@ -42,6 +42,33 @@ public class ConfigJsonUtils {
         return value != null ? value : false;
     }
 
+    /** Module names in older profiles may differ only in letter case. */
+    @Nullable
+    public static Boolean getBooleanIgnoreCase(JsonObject object, String key) {
+        if (object == null || key == null) return null;
+        JsonElement element = object.get(key);
+        if (element == null) {
+            for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
+                if (entry.getKey().equalsIgnoreCase(key)) {
+                    element = entry.getValue();
+                    break;
+                }
+            }
+        }
+        if (element == null || !element.isJsonPrimitive()) return null;
+        try {
+            return element.getAsBoolean();
+        } catch (RuntimeException invalid) {
+            return null;
+        }
+    }
+
+    /** True when a module's serialized key list is its implicit default. */
+    public static boolean isDefaultBinding(JsonArray inputs, int defaultKey) {
+        if (defaultKey == 0) return inputs.size() == 0;
+        return inputs.size() == 1 && inputs.get(0).getAsInt() == defaultKey;
+    }
+
     static {
         ConfigJsonUtils.setSharedGuiComponents(new GuiComponent[5]);
         BASE64_PREFIX = "b64:";

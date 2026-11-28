@@ -466,6 +466,7 @@ public class Vape {
         this.initClientListeners();
         this.showLoadCompleteNotification();
         this.syncThread.clearPendingSave();
+        if (this.profilesManager.hasPendingSync()) this.syncThread.markDirty();
         this.getFontSelector().N((FontOption)Vape.INSTANCE.getPublicProfileSettings().language.getValue());
         this.syncThread.start();
         this.traceStep(28);
@@ -568,11 +569,7 @@ public class Vape {
     }
 
     public void saveAndStop() {
-        Profile activeProfile;
-        this.syncThread.markDirty();
-        if (this.profilesManager != null && (activeProfile = this.profilesManager.getActiveProfileOrNull()) != null) {
-            activeProfile.setDirty(true);
-        }
+        this.syncThread.markSettingsDirty();
     }
 
     public void exportFramesConfig(String filePath) {

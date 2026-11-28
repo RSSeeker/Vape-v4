@@ -54,7 +54,14 @@ extends Value<List<C>, T> {
 
     public ListValue(Object owner, String id, String displayName, List<C> entries) {
         super(owner, id, ImmutableList.copyOf(entries));
-        this.setDirectValue(new ListValueMutableBackingList<C>(this, entries));
+        // Constructing a detached definition for a profile preview must not
+        // schedule a save of the running client's configuration.
+        this.setPersistenceSuppressed(true);
+        try {
+            this.setDirectValue(new ListValueMutableBackingList<C>(this, entries));
+        } finally {
+            this.setPersistenceSuppressed(false);
+        }
         this.displayName = displayName;
     }
 

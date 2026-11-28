@@ -72,8 +72,7 @@ implements EventListener {
             return;
         }
         this.mainFrame.closeActiveOverlay();
-        Profile profile = Vape.INSTANCE.getProfilesManager().getActiveProfile();
-        profile.captureCurrentState();
+        Profile profile = Vape.INSTANCE.getProfilesManager().captureActiveProfile();
         this.previousActiveProfile = profile;
         this.draftProfile = new Profile(profile.getName(), "4.21");
         this.draftProfile.loadJson(profile.toJson(true));

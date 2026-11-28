@@ -12,9 +12,6 @@ implements GuiClickListener {
 
     @Override
     public void onPrimaryClick() {
-        if (this.group.equals(HotbarSlotRuleEditorComponent.getSelectedGroupInternal(this.editor)) && HotbarSlotRuleEditorComponent.getGroupsInternal(this.editor).size() > 0) {
-            this.editor.selectGroup(HotbarSlotRuleEditorComponent.getGroupsInternal(this.editor).get(0));
-        }
         this.editor.removeGroup(this.group);
         this.editor.rebuildChildren();
     }

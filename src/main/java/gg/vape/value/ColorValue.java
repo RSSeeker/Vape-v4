@@ -192,13 +192,17 @@ extends Value<Object[], ColorValue> {
     }
 
     public void applyConfiguredColorTransform() {
+        boolean previous = this.isPersistenceSuppressed();
         this.setPersistenceSuppressed(true);
-        if (this.colorTransformEnabled && this.isRainbowEnabled()) {
-            double hue = (Double)this.hueValue.getValue();
-            this.setColor(ColorUtil.createReadableHsbColor(this.getHueRatio(), this.getBrightnessRatio(), this.getSaturationRatio()));
-            this.hueValue.setValue(hue);
+        try {
+            if (this.colorTransformEnabled && this.isRainbowEnabled()) {
+                double hue = (Double)this.hueValue.getValue();
+                this.setColor(ColorUtil.createReadableHsbColor(this.getHueRatio(), this.getBrightnessRatio(), this.getSaturationRatio()));
+                this.hueValue.setValue(hue);
+            }
+        } finally {
+            this.setPersistenceSuppressed(previous);
         }
-        this.setPersistenceSuppressed(false);
     }
 
     @Override
@@ -276,13 +280,17 @@ extends Value<Object[], ColorValue> {
     }
 
     public void advanceRainbowHue() {
+        boolean previous = this.isPersistenceSuppressed();
         this.setPersistenceSuppressed(true);
-        double hue = (Double)this.getHueValue().getValue() + (Double)ClientSettings.INSTANCE.rainbowSpeed.getValue();
-        if (hue > this.getHueValue().getMaximum() || hue < this.getHueValue().getMinimum()) {
-            hue = this.getHueValue().getMinimum();
+        try {
+            double hue = (Double)this.getHueValue().getValue() + (Double)ClientSettings.INSTANCE.rainbowSpeed.getValue();
+            if (hue > this.getHueValue().getMaximum() || hue < this.getHueValue().getMinimum()) {
+                hue = this.getHueValue().getMinimum();
+            }
+            this.hueValue.setValue(hue);
+        } finally {
+            this.setPersistenceSuppressed(previous);
         }
-        this.hueValue.setValue(hue);
-        this.setPersistenceSuppressed(false);
     }
 
     public void setRainbowEnabled(boolean enabled) {

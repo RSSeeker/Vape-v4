@@ -77,7 +77,7 @@ extends ConditionalValue<ModeSelection, ModeValue> {
     }
 
     public ModeValue copyDefinition() {
-        return new ModeValue(null, this.getId(), this.getName(), (ModeSelection)this.getValue(), this.getModes());
+        return new ModeValue(null, this.getId(), this.getName(), this.getDefaultValue(), this.getModes());
     }
 
     @Override
@@ -161,15 +161,27 @@ extends ConditionalValue<ModeSelection, ModeValue> {
 
     @Override
     public void parse(String serializedMode) {
-        ModeValue owningModeValue = ((ModeSelection)this.getValue()).getMode();
-        if (owningModeValue == null) {
-            return;
+        // The definition's options are authoritative. Looking them up through
+        // a global registry tied to the currently selected option leaked
+        // short-lived embedded modes and could resolve a different owner.
+        for (ModeSelection mode : this.modes) {
+            if (mode.getSerializedName().equalsIgnoreCase(serializedMode)) {
+                this.setValue(mode);
+                return;
+            }
         }
-        ModeSelection parsedMode = ModeSelection.findBySerializedName(owningModeValue, serializedMode);
-        if (parsedMode == null) {
-            return;
+    }
+
+    /** Transfer mode-dependent visibility to snapshot proxies, retaining the
+     * original immutable options without reassigning their live ownership. */
+    public void copyModeDependenciesTo(ModeValue target, Map<Value<?, ?>, Value<?, ?>> proxies) {
+        for (Map.Entry<Value<?, ?>, ArrayList<ModeSelection>> entry : this.activeModesByDependentValue.entrySet()) {
+            Value<?, ?> dependent = proxies.get(entry.getKey());
+            if (dependent == null) continue;
+            for (ModeSelection selection : entry.getValue()) {
+                if (selection instanceof ModeOption) target.addActiveMode(dependent, (ModeOption)selection);
+            }
         }
-        this.setValue(parsedMode);
     }
 
     public void addModeDependentValues(ModeOption modeOption, Value ... values) {

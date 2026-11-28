@@ -78,6 +78,20 @@ extends RandomValue {
         return randomClickDelayValue;
     }
 
+    @Override
+    public RandomClickDelayValue copyDefinition() {
+        double[] defaults = this.getDefaultValue();
+        RandomClickDelayValue copy = new RandomClickDelayValue(null, this.getName(), new double[]{defaults[0], defaults[1]},
+                this.getAllowedMinimum(), this.getAllowedMaximum(), this.getFormatPattern(), this.getSuffix().trim());
+        this.copyRangeConfigurationTo(copy);
+        return copy;
+    }
+
+    @Override
+    public RandomClickDelayValue copyValueDefinition() {
+        return this.copyDefinition();
+    }
+
     public void resetClickTimer() {
         this.clickTimer.reset();
     }

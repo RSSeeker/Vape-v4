@@ -45,6 +45,25 @@ extends GuiComponent {
         Runnable refresh = this::populate;
         this.content.removeMarkedChildren();
         this.content.h(new SpacerComponent(0.0, 1.0), new Object[0]);
+        if (this.profileValue.hasUnsupportedData()) {
+            // Avoid editing a partially decoded inventory and silently
+            // replacing the unsupported payload. Reset is deliberately explicit.
+            this.content.h(new SimpleTextLabelComponent("Unsupported inventory data", 0.7), "wrap");
+            if (this.profileValue.isResettable()) {
+                GlyphIconComponent reset = new GlyphIconComponent("reset_circle", 7.0, 7.0,
+                        this.A() - 10.0, 15.0, InventoryCleanerProfileValueComponent.J.B,
+                        InventoryCleanerProfileValueComponent.J.O, InventoryCleanerProfileValueComponent.J.l);
+                reset.setCenterHorizontally(true);
+                reset.setCenterVertically(true);
+                reset.w("Reset unsupported inventory data to edit");
+                reset.addClickListener(() -> { this.profileValue.reset(); this.populate(); });
+                this.content.h(reset, new Object[0]);
+            }
+            this.content.H(true);
+            FrameComponent parent = this.getParentFrameComponent();
+            if (parent != null) parent.H(true);
+            return;
+        }
         SimpleTextLabelComponent simpleTextLabelComponent = new SimpleTextLabelComponent("INVENTORY PRESETS", 0.75);
         simpleTextLabelComponent.setBold(true);
         simpleTextLabelComponent.o(this.A());
@@ -127,7 +146,7 @@ extends GuiComponent {
             Vape.INSTANCE.getNotificationManager().show("Inventory Manager", "You've reached the limit of 10 inventories.", NotificationType.WARNING, 5000L, true);
             return;
         }
-        InventoryCleanerProfile inventoryCleanerProfile = new InventoryCleanerProfile();
+        InventoryCleanerProfile inventoryCleanerProfile = this.profileValue.createProfile();
         if (this.profileValue.getProfiles().isEmpty()) {
             this.profileValue.setValue(inventoryCleanerProfile);
         }

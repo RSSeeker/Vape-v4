@@ -38,10 +38,11 @@ implements Comparable<Profile> {
     private boolean draft;
     @Nullable
     private ProfileRemoteMetadata remoteMetadata;
-    private long updatedAt;
+    private volatile long updatedAt;
     private boolean visible = true;
     private String name;
     private boolean dirty;
+    private long dirtyRevision;
     @Nullable
     private PublicProfile publicProfile;
     private String originalUuid;
@@ -53,20 +54,52 @@ implements Comparable<Profile> {
     }
 
     public void captureCurrentState() {
-        this.clientVersion = "4.21";
-        this.updateTimestamp();
-        this.data = this.serializeCurrentData(false);
-        this.publishedData = this.serializeCurrentData(true);
-        this.captureEnabledModuleStates();
-        this.data.add("enabled", (JsonElement)this.enabledModuleStates);
-        this.publishedData.add("enabled", (JsonElement)this.enabledModuleStates);
-        this.captureLegitEnabledModuleStates();
-        this.data.add("legit_enabled", (JsonElement)this.legitEnabledModuleStates);
-        this.publishedData.add("legit_enabled", (JsonElement)this.legitEnabledModuleStates);
+        // Always take the manager lock before the profile lock. This keeps a
+        // capture from observing a profile switch or active-profile reload
+        // halfway through and establishes one lock order for both operations.
+        Object manager = Vape.INSTANCE.getProfilesManager();
+        synchronized (manager == null ? this : manager) {
+            synchronized (this) {
+                this.captureCurrentStateLocked();
+            }
+        }
     }
 
-    public void setDirty(boolean dirty) {
+    private void captureCurrentStateLocked() {
+        this.clientVersion = "4.21";
+        this.updateTimestamp();
+        JsonObject previousData = this.data;
+        JsonObject previousPublished = this.publishedData;
+        JsonObject captured = this.serializeCurrentData(false);
+        JsonObject capturedPublished = this.serializeCurrentData(true);
+        this.captureEnabledModuleStates();
+        this.captureLegitEnabledModuleStates();
+        captured.add("enabled", ConfigJsonUtils.deepCopy(this.enabledModuleStates));
+        capturedPublished.add("enabled", ConfigJsonUtils.deepCopy(this.enabledModuleStates));
+        captured.add("legit_enabled", ConfigJsonUtils.deepCopy(this.legitEnabledModuleStates));
+        capturedPublished.add("legit_enabled", ConfigJsonUtils.deepCopy(this.legitEnabledModuleStates));
+        ProfileDataRetention.preserveUnknown(previousData, captured, Vape.INSTANCE.getModManager().getTopLevelModules(),
+                Vape.INSTANCE.getModManager().getAllModules(), Vape.INSTANCE.getValueManager().getValues());
+        ProfileDataRetention.preserveUnknown(previousPublished, capturedPublished, Vape.INSTANCE.getModManager().getTopLevelModules(),
+                Vape.INSTANCE.getModManager().getAllModules(), Vape.INSTANCE.getValueManager().getValues());
+        this.data = captured;
+        this.publishedData = capturedPublished;
+        this.enabledModuleStates = captured.getAsJsonObject("enabled");
+        this.legitEnabledModuleStates = captured.getAsJsonObject("legit_enabled");
+    }
+
+    public synchronized void setDirty(boolean dirty) {
         this.dirty = dirty;
+        if (dirty) ++this.dirtyRevision;
+    }
+
+    public synchronized long getDirtyRevision() {
+        return this.dirtyRevision;
+    }
+
+    /** An older network response must not clear a newer edit. */
+    public synchronized void clearDirtyIfUnchanged(long revision) {
+        if (this.dirtyRevision == revision) this.dirty = false;
     }
 
     public JsonObject serializeCurrentData(boolean forPublication) {
@@ -80,11 +113,10 @@ implements Comparable<Profile> {
         return serializedData;
     }
 
-    public JsonObject copyPublishedData() {
-        JsonObject publishedDataCopy = (JsonObject)ApiHttpClient.GSON.fromJson((JsonElement)this.publishedData, JsonObject.class);
-        if (publishedDataCopy != null) {
-            publishedDataCopy.remove("sortOrder");
-        }
+    public synchronized JsonObject copyPublishedData() {
+        if (this.publishedData == null) return null;
+        JsonObject publishedDataCopy = ConfigJsonUtils.deepCopy(this.publishedData);
+        publishedDataCopy.remove("sortOrder");
         return publishedDataCopy;
     }
 
@@ -113,11 +145,11 @@ implements Comparable<Profile> {
         return this.clientVersion;
     }
 
-    public JsonObject getPublishedData() {
+    public synchronized JsonObject getPublishedData() {
         return this.publishedData;
     }
 
-    public JsonObject toJson(boolean useRemoteFormat) {
+    public synchronized JsonObject toJson(boolean useRemoteFormat) {
         JsonObject object = new JsonObject();
         object.addProperty("uuid", this.localId.toString());
         if (this.onlineId != null) {
@@ -128,9 +160,10 @@ implements Comparable<Profile> {
         }
         object.addProperty("name", this.name.length() > 48 ? this.name.substring(0, 47) : this.name);
         object.addProperty(useRemoteFormat ? "vapeVersion" : "version", this.clientVersion);
-        this.data.add("keybinds", (JsonElement)this.serializeBoundInputs());
-        this.data.addProperty("sortOrder", (Number)this.getCurrentSortIndex());
-        object.add("data", (JsonElement)this.data);
+        JsonObject serializedData = this.data == null ? new JsonObject() : ConfigJsonUtils.deepCopy(this.data);
+        serializedData.add("keybinds", (JsonElement)this.serializeBoundInputs());
+        serializedData.addProperty("sortOrder", (Number)this.getCurrentSortIndex());
+        object.add("data", (JsonElement)serializedData);
         object.addProperty("is_public", Boolean.valueOf(this.publicProfileFlag));
         object.addProperty("updated", (Number)this.updatedAt);
         if (this.originalUuid != null) {
@@ -161,8 +194,8 @@ implements Comparable<Profile> {
         this.updatedAt = System.currentTimeMillis();
     }
 
-    public void setPublishedData(JsonObject publishedData) {
-        this.publishedData = publishedData;
+    public synchronized void setPublishedData(JsonObject publishedData) {
+        this.publishedData = publishedData == null ? null : ConfigJsonUtils.deepCopy(publishedData);
     }
 
     @Override
@@ -182,7 +215,7 @@ implements Comparable<Profile> {
         this.publicProfile = publicProfile;
     }
 
-    public boolean isDirty() {
+    public synchronized boolean isDirty() {
         return this.dirty;
     }
 
@@ -238,9 +271,9 @@ implements Comparable<Profile> {
         }
     }
 
-    public void updateData(JsonObject data) {
+    public synchronized void updateData(JsonObject data) {
         this.updateTimestamp();
-        this.parseData(data);
+        this.parseData(ConfigJsonUtils.deepCopy(data));
     }
 
     public String getFormattedUpdateDate() {
@@ -258,9 +291,9 @@ implements Comparable<Profile> {
         return this.sortOrder;
     }
 
-    public void setName(String name) {
+    public synchronized void setName(String name) {
         this.name = name;
-        this.dirty = true;
+        this.setDirty(true);
     }
 
     @Override
@@ -400,11 +433,16 @@ implements Comparable<Profile> {
 
     @Nullable
     public ProfileSnapshot createSnapshot(boolean usePublishedData) {
-        JsonObject snapshotData = usePublishedData && this.publishedData != null ? this.getPublishedData() : this.getData();
-        if (snapshotData.get("modules") != null && !snapshotData.get("modules").isJsonNull()) {
-            return new ProfileSnapshot(this, snapshotData.get("modules").getAsJsonArray());
+        Object manager = Vape.INSTANCE.getProfilesManager();
+        synchronized (manager == null ? this : manager) {
+            JsonObject snapshotData;
+            synchronized (this) {
+                JsonObject source = usePublishedData && this.publishedData != null ? this.publishedData : this.data;
+                snapshotData = source == null ? null : ConfigJsonUtils.deepCopy(source);
+            }
+            JsonArray modules = snapshotData == null ? null : ConfigJsonUtils.getJsonArray(snapshotData, "modules");
+            return modules == null ? null : new ProfileSnapshot(this, modules, snapshotData);
         }
-        return null;
     }
 
     public boolean isSaveQueued() {
@@ -415,7 +453,7 @@ implements Comparable<Profile> {
         this.sortOrder = sortOrder;
     }
 
-    public JsonObject getData() {
+    public synchronized JsonObject getData() {
         return this.data;
     }
 
@@ -434,7 +472,7 @@ implements Comparable<Profile> {
         if ((parsedName = ConfigJsonUtils.getString(object, "name")) != null) {
             this.name = parsedName;
             if (this.name.startsWith("b64:")) {
-                this.name = Base64Util.decodeUtf8Base64(this.name.split(":")[1]);
+                this.name = Base64Util.decodeUtf8Base64(this.name.substring(4));
             }
         } else {
             this.name = "Unknown";
@@ -442,7 +480,7 @@ implements Comparable<Profile> {
         if ((profileId = ConfigJsonUtils.getString(object, "profileId")) != null) {
             this.onlineId = UUID.fromString(profileId);
         } else {
-            this.dirty = true;
+            this.setDirty(true);
         }
         String version = ConfigJsonUtils.getString(object, "version");
         if (version != null) {

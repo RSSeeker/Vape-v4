@@ -222,9 +222,22 @@ extends ListValue<ItemLimitData, LimitValue> {
 
     @Override
     public boolean isDefault() {
-        List<ItemLimitData> list = this.getValue();
-        List<ItemLimitData> list2 = this.getDefaultValue();
-        return list.size() == list2.size() && list.equals(list2);
+        List<ItemLimitData> current = this.getValue(), defaults = this.getDefaultValue();
+        if (current.size() != defaults.size()) return false;
+        for (int i = 0; i < current.size(); ++i) {
+            if (!current.get(i).toJson().equals(defaults.get(i).toJson())) return false;
+        }
+        return true;
+    }
+
+    private static List<ItemLimitData> copyEntries(List<ItemLimitData> entries) {
+        List<ItemLimitData> copies = new ArrayList<ItemLimitData>();
+        for (ItemLimitData entry : entries) {
+            ItemLimitData copy = new ItemLimitData(entry.getName(), entry.getTotalStacks()).withMetadata(entry.getMetadata());
+            copy.setEnabled(entry.isEnabled());
+            copies.add(copy);
+        }
+        return copies;
     }
 
     @Override
@@ -234,7 +247,7 @@ extends ListValue<ItemLimitData, LimitValue> {
 
     @Override
     public void reset() {
-        super.setValue(new ArrayList<ItemLimitData>(this.getDefaultValue()));
+        if (this.isResettable()) super.setValue(copyEntries(this.getDefaultValue()));
     }
 
     static {
@@ -258,6 +271,9 @@ extends ListValue<ItemLimitData, LimitValue> {
 
     private LimitValue(Object owner, String id, String name, Color accentColor, int defaultTotalStacks, List<ItemLimitData> entries) {
         super(owner, id, name, entries);
+        // Live entries can be toggled and edited; the default list must not
+        // share those mutable objects.
+        this.setDefaultValue(copyEntries(entries));
         this.accentColor = accentColor;
         this.defaultTotalStacks = defaultTotalStacks;
     }

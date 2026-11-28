@@ -32,13 +32,12 @@ implements GuiMouseListener {
         if (this.profile.equals(this.profileValue.getValue())) {
             InventoryCleanerPopupFrame inventoryCleanerPopupFrame = ClientSettings.getFrame(InventoryCleanerPopupFrame.class);
             inventoryCleanerPopupFrame.editProfile(this.profileValue, this.profile, () -> InventoryCleanerProfileRowClickHandler.runCloseCallback(this.onClose));
+            FrameStackManager origin = ClientSettings.INSTANCE.getActiveStack();
+            inventoryCleanerPopupFrame.setParentStack(origin);
             InventoryCleanerPopupFrame.returnToProfileEditor();
-            if (ClientSettings.INSTANCE.getActiveStack() instanceof ClickGuiFrameManager) {
-                ClickGuiFrameManager clickGuiFrameManager = (ClickGuiFrameManager)ClientSettings.INSTANCE.getActiveStack();
-                inventoryCleanerPopupFrame.setParentStack(clickGuiFrameManager);
-                clickGuiFrameManager.setSidecarFrame(inventoryCleanerPopupFrame);
-            } else {
-                inventoryCleanerPopupFrame.setParentStack(null);
+            if (!(origin instanceof ClickGuiFrameManager)) {
+                // The caller can be a detached profile editor, not just the
+                // classic module list. Return to that exact stack on close.
                 ClientSettings.INSTANCE.switchFrameStack(ClientSettings.inventoryCleanerStack);
             }
         } else {

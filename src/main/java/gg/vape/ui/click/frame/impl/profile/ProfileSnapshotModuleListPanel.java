@@ -104,6 +104,7 @@ extends PanelComponent {
     }
 
     public void selectInitialModule() {
+        if (this.moduleRows.isEmpty()) return;
         InteractiveComponent interactiveComponent = null;
         for (ProfileSnapshotModuleRowComponent moduleRow : this.moduleRows) {
             if (!moduleRow.V$src$Z$1xhop3l()) continue;

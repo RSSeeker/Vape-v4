@@ -201,7 +201,9 @@ extends PanelComponent {
                 createPresetButton.setClickListener(() -> this.sharePreset(inventoryFilterPreset));
                 presetOptions.add(interactiveComponent);
                 presetOptions.add(deleteLocalRuleButton);
-                presetOptions.add(createPresetButton);
+                // Preview edits are committed with the profile. Creating a
+                // shared preset here would mutate the live global registry.
+                if (!this.profile.isDetachedPreview()) presetOptions.add(createPresetButton);
             }
             PopupMenuButtonComponent presetPopup = new PopupMenuButtonComponent(inventoryFilterPreset.getName(), presetOptions, InventoryFilterRuleEditorPanel.J.Q, InventoryFilterRuleEditorPanel.J.Q, null, 0.0f, 0.0f);
             presetPopup.o(88.0);
@@ -395,6 +397,7 @@ extends PanelComponent {
     }
 
     private void sharePreset(InventoryFilterPreset inventoryFilterPreset) {
+        if (this.profile.isDetachedPreview()) return;
         SharedInventoryFilterPreset sharedInventoryFilterPreset = inventoryFilterPreset.shareForRule(this.rule);
         this.rule.setPreset(sharedInventoryFilterPreset);
         this.renderContent();

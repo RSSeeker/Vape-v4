@@ -125,12 +125,10 @@ public abstract class Bendable {
 
     public void loadBoundInputs(JsonArray jsonArray, boolean convertLegacyCodes) {
         List<Integer> loadedInputs = ConfigJsonUtils.parseInputCodes(jsonArray, convertLegacyCodes);
-        if (!loadedInputs.isEmpty()) {
-            this.getBoundInputs().clear();
-            for (int inputCode : loadedInputs) {
-                this.getBoundInputs().add(inputCode);
-            }
-        }
+        // An explicitly empty array clears an existing bind. Only an absent
+        // array means that the caller should retain or restore a default.
+        this.getBoundInputs().clear();
+        this.getBoundInputs().addAll(loadedInputs);
     }
 
     public List<Integer> getBoundInputs() {

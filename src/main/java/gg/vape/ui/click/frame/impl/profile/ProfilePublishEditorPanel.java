@@ -214,6 +214,7 @@ extends PublicProfileOverlayPanelBase {
     }
 
     private void changeSourceProfile(Profile profile) {
+        Vape.INSTANCE.getProfilesManager().captureIfActive(profile);
         ProfileSnapshot profileSnapshot = profile.createSnapshot(true);
         if (profileSnapshot == null) {
             OnlineFriendUiHelper.showNotification(NotificationType.WARNING, "Failed to change derived from.");
@@ -227,7 +228,9 @@ extends PublicProfileOverlayPanelBase {
     public ProfilePublishEditorPanel(PublicProfilesFrame publicProfilesFrame, Profile profile) {
         super(publicProfilesFrame);
         this.sourceProfile = profile;
+        Vape.INSTANCE.getProfilesManager().captureIfActive(profile);
         this.snapshot = this.sourceProfile.createSnapshot(true);
+        if (this.snapshot == null) this.snapshot = new ProfileSnapshot(profile, new com.google.gson.JsonArray());
         this.e();
     }
 
@@ -264,9 +267,13 @@ extends PublicProfileOverlayPanelBase {
             this.tagSelector.addToken(new PublicProfileFilterTokenComponent((String)object));
             this.tagSelector.getInput().setText("");
         }
-        if ((object = this.sourceProfile.copyPublishedData()) == null) {
-            Vape.INSTANCE.getProfilesManager().captureProfileState(this.sourceProfile);
+        if (this.snapshot == null) {
+            PublicProfileManager.showWarning("This profile has no settings to publish.");
+            return null;
         }
+        // Serialize the displayed snapshot using the public codec, even when
+        // the source is inactive and has no cached published representation.
+        object = this.snapshot.toPublicationData();
         return ApiServices.getInstance().getPublicProfileApi().createProfile(PublicProfileJsonPayloadBuilder.build(string, "4.21", string2, arrayList, !bl, bl3, bl2, this.sourceProfile.getOnlineId(), (com.google.gson.JsonObject)object)).whenCompleteAsync(this::handlePublishComplete, (Executor)ClientSettings.UI_EXECUTOR).exceptionally(ProfilePublishEditorPanel::ignoreHandledPublishFailure);
     }
 

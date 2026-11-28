@@ -59,6 +59,16 @@ extends ListValue<OptionalLimitEntry, OptionalLimitValue> {
     }
 
     @Override
+    public boolean isDefault() {
+        List<OptionalLimitEntry> current = this.getValue(), defaults = this.getDefaultValue();
+        if (current.size() != defaults.size()) return false;
+        for (int i = 0; i < current.size(); ++i) {
+            if (!current.get(i).toJson().equals(defaults.get(i).toJson())) return false;
+        }
+        return true;
+    }
+
+    @Override
     public JsonObject toJson(boolean bl) {
         JsonObject jsonObject = this.toJson();
         JsonArray jsonArray = new JsonArray();
@@ -101,16 +111,21 @@ extends ListValue<OptionalLimitEntry, OptionalLimitValue> {
         return super.loadJson(jsonObject);
     }
 
+    private static List<OptionalLimitEntry> copyEntries(List<OptionalLimitEntry> entries) {
+        List<OptionalLimitEntry> copies = new ArrayList<OptionalLimitEntry>();
+        for (OptionalLimitEntry entry : entries) {
+            OptionalLimitEntry copy = new OptionalLimitEntry(entry.getValue());
+            copy.setEnabled(entry.isEnabled());
+            copies.add(copy);
+        }
+        return copies;
+    }
+
     public void replaceEntries(List<OptionalLimitEntry> entries) {
-        ArrayList<OptionalLimitEntry> replacementEntries = new ArrayList<OptionalLimitEntry>(entries);
-        ArrayList<OptionalLimitEntry> existingEntries = new ArrayList<OptionalLimitEntry>(this.getValue());
+        // Copy before clearing: callers may pass the list that is being edited.
+        List<OptionalLimitEntry> replacements = copyEntries(entries);
         this.getValue().clear();
-        for (OptionalLimitEntry entry : existingEntries) {
-            this.removeEntry(entry);
-        }
-        for (OptionalLimitEntry entry : replacementEntries) {
-            this.addEntry(entry.getValue());
-        }
+        this.getValue().addAll(replacements);
     }
 
     public boolean matches(String value, boolean defaultWhenEmpty) {
@@ -134,7 +149,7 @@ extends ListValue<OptionalLimitEntry, OptionalLimitValue> {
         for (String value : values) {
             optionalLimitValue.addEntry(value);
         }
-        optionalLimitValue.setDefaultValue(new ArrayList<OptionalLimitEntry>(optionalLimitValue.getValue()));
+        optionalLimitValue.setDefaultValue(copyEntries(optionalLimitValue.getValue()));
         return (OptionalLimitValue)optionalLimitValue.setDescription(description);
     }
 

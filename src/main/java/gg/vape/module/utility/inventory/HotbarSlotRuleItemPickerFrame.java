@@ -22,6 +22,8 @@ public class HotbarSlotRuleItemPickerFrame
 extends Frame {
     @Nullable
     private FrameStackManager parentStackManager;
+    @Nullable
+    private Frame parentSidecar;
     private HotbarSlotRuleGroupComponent groupComponent;
     private List<HotbarSlotRule> rules;
     private HotbarSlotRuleSelectedSlotPreviewComponent previewComponent = new HotbarSlotRuleSelectedSlotPreviewComponent(this);
@@ -93,6 +95,9 @@ extends Frame {
 
     public void setParentStackManager(@Nullable FrameStackManager frameStackManager) {
         this.parentStackManager = frameStackManager;
+        Frame sidecar = frameStackManager instanceof ClickGuiFrameManager
+                ? ((ClickGuiFrameManager)frameStackManager).getSidecarFrame() : null;
+        this.parentSidecar = sidecar == this ? null : sidecar;
     }
 
     public HotbarSlotRuleGroupComponent getGroupComponent() {
@@ -138,11 +143,13 @@ extends Frame {
             if (frameStackManager instanceof ClickGuiFrameManager) {
                 ClickGuiFrameManager clickGuiFrameManager = (ClickGuiFrameManager)frameStackManager;
                 clickGuiFrameManager.m(this.itemListFrame);
-                clickGuiFrameManager.closeSidecar();
+                if (this.parentSidecar != null) clickGuiFrameManager.setSidecarFrame(this.parentSidecar);
+                else clickGuiFrameManager.closeSidecar();
             } else {
                 ClientSettings.INSTANCE.switchFrameStack(frameStackManager);
             }
             this.parentStackManager = null;
+            this.parentSidecar = null;
         } else {
             ClientSettings.INSTANCE.switchFrameStack(ClientSettings.mainStack);
         }

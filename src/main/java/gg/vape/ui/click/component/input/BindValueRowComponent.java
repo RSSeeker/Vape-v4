@@ -29,6 +29,8 @@ extends GuiComponent {
 
     public BindValueRowComponent(BindValue bindValue) {
         this(bindValue.getName(), (Bendable)bindValue.getValue());
+        this.bindValue(bindValue);
+        this.bindInput.setSaveChanges(!bindValue.isPersistenceSuppressed());
     }
 
     @Override

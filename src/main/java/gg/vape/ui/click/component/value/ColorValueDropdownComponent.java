@@ -29,6 +29,8 @@ extends GuiComponent {
     public ColorValueDropdownComponent(ModeValue modeValue) {
         this.modeValue = modeValue;
         this.teamColorValue = ColorValue.create(null, "Team Color", new Color(189, 0, 1));
+        // This color belongs to the slider, not to the live configuration.
+        this.teamColorValue.setPersistenceSuppressed(true);
         this.bindValue(modeValue);
         Color[] palette = new Color[]{new Color(189, 0, 1), new Color(253, 63, 63), new Color(215, 162, 50), new Color(254, 254, 62), new Color(0, 191, 4), new Color(64, 253, 62), new Color(65, 255, 254), new Color(0, 190, 189), new Color(1, 1, 187), new Color(61, 64, 255), new Color(254, 63, 255), new Color(190, 0, 190), new Color(255, 255, 255), new Color(190, 190, 190), new Color(63, 63, 63), new Color(17, 17, 17)};
         this.colorSlider = new ColorValueDropdownHueSliderComponent(this, "Team color", this.teamColorValue, palette);
@@ -58,29 +60,23 @@ extends GuiComponent {
     }
 
     private void synchronizeSliderSelection() {
-        if (this.previousSelection == null) {
-            this.previousSelection = (ModeSelection)this.modeValue.getValue();
-            return;
-        }
         ModeSelection currentSelection = (ModeSelection)this.modeValue.getValue();
-        if (!this.previousSelection.equals(currentSelection)) {
+        if (this.previousSelection == null || !this.previousSelection.equals(currentSelection)) {
             this.colorSlider.selectPaletteIndex(this.modeValue.getSelectedIndex());
+            this.colorSlider.synchronizeSelectionFromValue();
+            this.previousSelection = currentSelection;
         }
     }
 
     @Override
     public void u() {
-        this.modeValue.setPersistenceSuppressed(true);
-        this.colorSlider.getColorValue().setPersistenceSuppressed(true);
-        this.teamColorValue.setPersistenceSuppressed(true);
         this.synchronizeSliderSelection();
         if (this.modeValue.getSelectedIndex() != this.colorSlider.getSelectedIndex()) {
+            // A user selection should save for a live value, but a detached
+            // snapshot remains suppressed throughout the editor's lifetime.
             this.modeValue.setSelectedIndex(this.colorSlider.getSelectedIndex());
         }
         this.previousSelection = (ModeSelection)this.modeValue.getValue();
-        this.teamColorValue.setPersistenceSuppressed(false);
-        this.colorSlider.getColorValue().setPersistenceSuppressed(false);
-        this.modeValue.setPersistenceSuppressed(false);
     }
 
 

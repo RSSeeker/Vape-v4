@@ -78,6 +78,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & python -B -X utf8 tools/tests/run_inevitable_lifecycle_tests.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & python -B -X utf8 tools/tests/run_bind_capture_tests.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Test headless combat and Search lifecycles
         shell: pwsh
@@ -127,6 +129,10 @@ jobs:
           $gson = @(Get-ChildItem -Path $gsonRoot -Filter 'gson-2.10.1.jar' -File -Recurse)
           if ($gson.Count -ne 1) { throw 'Expected the single Gradle-resolved Gson 2.10.1 JAR.' }
           & python -B -X utf8 tools/tests/run_value_profile_tests.py --gson $gson[0].FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & python -B -X utf8 tools/tests/run_profile_integration_tests.py --gson $gson[0].FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & python -B -X utf8 tools/tests/run_sync_integration_tests.py --gson $gson[0].FullName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # Preserve the release's randomized class-name packaging; the resulting

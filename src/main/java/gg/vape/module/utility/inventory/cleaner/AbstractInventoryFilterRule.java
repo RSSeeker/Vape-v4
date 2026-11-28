@@ -23,6 +23,7 @@ implements InventoryFilterRule {
     @Nullable
     private InventoryItemCategory priorityOverride;
     private final ItemFilterSelection itemSelection;
+    private JsonObject preservedData = new JsonObject();
     @Nullable
     private UUID sharedPresetId;
 
@@ -81,11 +82,13 @@ implements InventoryFilterRule {
     }
 
     public AbstractInventoryFilterRule(JsonObject jsonObject) {
+        this.preservedData = ConfigJsonUtils.deepCopy(jsonObject);
         this.itemSelection = new ItemFilterSelection(jsonObject.get("itemFilter"));
         if (jsonObject.has("customRule")) {
             JsonElement jsonElement = jsonObject.get("customRule");
             if (jsonElement.isJsonPrimitive()) {
                 this.sharedPresetId = ConfigJsonUtils.getUuid(jsonObject, "customRule");
+                if (this.sharedPresetId == null) throw new IllegalArgumentException("Invalid shared preset ID");
             } else {
                 this.inlinePreset = new InventoryFilterPreset(jsonObject.getAsJsonObject("customRule"));
             }
@@ -100,7 +103,10 @@ implements InventoryFilterRule {
     }
 
     public JsonObject toJson(boolean embedSharedPreset) {
-        JsonObject jsonObject = new JsonObject();
+        JsonObject jsonObject = ConfigJsonUtils.deepCopy(this.preservedData);
+        jsonObject.remove("itemFilter");
+        jsonObject.remove("customRule");
+        jsonObject.remove("priority");
         jsonObject.add("itemFilter", this.itemSelection.toJson());
         InventoryFilterPreset preset = this.inlinePreset;
         if (embedSharedPreset || preset != null) {
@@ -109,6 +115,10 @@ implements InventoryFilterRule {
             }
             if (preset != null) {
                 jsonObject.add("customRule", (JsonElement)preset.toJson());
+            } else if (this.sharedPresetId != null) {
+                // If a shared preset is unavailable, preserve the reference
+                // instead of silently publishing a rule with no condition.
+                jsonObject.addProperty("customRule", this.sharedPresetId.toString());
             }
         } else if (this.sharedPresetId != null) {
             jsonObject.addProperty("customRule", this.sharedPresetId.toString());

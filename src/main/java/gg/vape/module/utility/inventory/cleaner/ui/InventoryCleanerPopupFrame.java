@@ -54,6 +54,8 @@ extends Frame {
     private InventoryFilterRuleListPanel ruleListPanel;
     @Nullable
     private FrameStackManager parentStack;
+    @Nullable
+    private Frame parentSidecar;
     private final ScrollableFrameComponent scrollFrame = new ScrollableFrameComponent(358.0, 171.0);
 
     public void editProfile(InventoryCleanerProfileValue inventoryCleanerProfileValue, InventoryCleanerProfile inventoryCleanerProfile, Runnable runnable) {
@@ -118,7 +120,7 @@ extends Frame {
         deleteButton.setTextColor(InventoryCleanerPopupFrame.J.d);
         deleteButton.Y(12.0);
         deleteButton.o(65.0);
-        deleteButton.addClickListener(() -> this.promptDeleteProfile(inventoryCleanerProfileValue, inventoryCleanerProfile, runnable));
+        deleteButton.addClickListener(() -> this.promptDeleteProfile(inventoryCleanerProfileValue, inventoryCleanerProfile));
         panelComponent2.h(new PaddedComponent(6.0, 0.0, 170.0, 0.0, deleteButton), new Object[0]);
         this.H(true);
     }
@@ -136,6 +138,9 @@ extends Frame {
 
     public void setParentStack(@Nullable FrameStackManager frameStackManager) {
         this.parentStack = frameStackManager;
+        Frame sidecar = frameStackManager instanceof ClickGuiFrameManager
+                ? ((ClickGuiFrameManager)frameStackManager).getSidecarFrame() : null;
+        this.parentSidecar = sidecar == this ? null : sidecar;
     }
 
     private void handleItemSelection(InventoryFilterRule inventoryFilterRule, InventoryCleanerProfile inventoryCleanerProfile, Runnable runnable, GuiComponent guiComponent, ItemPickerSelection itemPickerSelection) {
@@ -192,6 +197,7 @@ extends Frame {
     public static void openRuleEditor(InventoryFilterRule rule, InventoryFilterPreset currentPreset, InventoryFilterPreset editedPreset, boolean newlyAddedRule) {
         InventoryCleanerPopupFrame profileEditor = ClientSettings.getFrame(InventoryCleanerPopupFrame.class);
         InventoryFilterRuleEditorFrame ruleEditor = ClientSettings.getFrame(InventoryFilterRuleEditorFrame.class);
+        ruleEditor.setDetachedPreview(profileEditor.editContext != null && profileEditor.editContext.profile.isDetachedPreview());
         ruleEditor.showRuleEditor(rule, currentPreset, editedPreset, newlyAddedRule, ruleEditor.V$src$Z$1xhop3l());
         if (profileEditor.u$src$Lgg_vape_ui_click_frame_FrameStackManager_$12v9ioe() instanceof ClickGuiFrameManager) {
             ClickGuiFrameManager clickGuiFrameManager = (ClickGuiFrameManager)profileEditor.u$src$Lgg_vape_ui_click_frame_FrameStackManager_$12v9ioe();
@@ -252,10 +258,8 @@ extends Frame {
         popup.q(this, popup);
     }
 
-    private void deleteProfile(InventoryCleanerProfileValue inventoryCleanerProfileValue, InventoryCleanerProfile inventoryCleanerProfile, Runnable runnable, PopupFrame popupFrame) {
-        inventoryCleanerProfileValue.setValue(null);
+    private void deleteProfile(InventoryCleanerProfileValue inventoryCleanerProfileValue, InventoryCleanerProfile inventoryCleanerProfile, PopupFrame popupFrame) {
         inventoryCleanerProfileValue.removeProfile(inventoryCleanerProfile);
-        runnable.run();
         ClientSettings.removePopup(popupFrame);
         this.close();
     }
@@ -303,16 +307,22 @@ extends Frame {
         FrameStackManager frameStackManager;
         InventoryCleanerProfile inventoryCleanerProfile = this.editContext.profile;
         if (inventoryCleanerProfile.getName().trim().isEmpty()) {
-            inventoryCleanerProfile.assignDefaultName();
+            inventoryCleanerProfile.assignDefaultName(this.editContext.profileValue.getProfiles());
         }
+        // Rule and name edits mutate the profile in place. Persist live edits,
+        // while a detached profile value suppresses saving until Apply.
+        this.editContext.profileValue.notifyChanged();
+        this.editContext.onClose.run();
         if ((frameStackManager = this.parentStack) != null) {
             if (frameStackManager instanceof ClickGuiFrameManager) {
                 ClickGuiFrameManager clickGuiFrameManager = (ClickGuiFrameManager)frameStackManager;
-                clickGuiFrameManager.closeSidecar();
+                if (this.parentSidecar != null) clickGuiFrameManager.setSidecarFrame(this.parentSidecar);
+                else clickGuiFrameManager.closeSidecar();
             } else {
                 ClientSettings.INSTANCE.switchFrameStack(frameStackManager);
             }
             this.parentStack = null;
+            this.parentSidecar = null;
         } else {
             ClientSettings.INSTANCE.switchFrameStack(ClientSettings.mainStack);
         }
@@ -344,12 +354,12 @@ extends Frame {
         anchoredPopupFrame.q(this, anchoredPopupFrame);
     }
 
-    private void promptDeleteProfile(InventoryCleanerProfileValue inventoryCleanerProfileValue, InventoryCleanerProfile inventoryCleanerProfile, Runnable runnable) {
+    private void promptDeleteProfile(InventoryCleanerProfileValue inventoryCleanerProfileValue, InventoryCleanerProfile inventoryCleanerProfile) {
         ConfirmationDialogComponent confirmationDialogComponent = new ConfirmationDialogComponent("Are you sure you want to delete this inventory?", "REMOVE", "newtrash");
         DimmedCenteredPopupFrame dimmedCenteredPopupFrame = ClientSettings.createPopup(this.L$src$Lgg_vape_ui_click_frame_Frame_$1djx6sa(), confirmationDialogComponent, DimmedCenteredPopupFrame.class);
         dimmedCenteredPopupFrame.r(false);
         dimmedCenteredPopupFrame.addMouseListener(new InventoryCleanerPopupOutsideClickFilter(this, dimmedCenteredPopupFrame));
-        confirmationDialogComponent.getConfirmButton().addClickListener(() -> this.deleteProfile(inventoryCleanerProfileValue, inventoryCleanerProfile, runnable, dimmedCenteredPopupFrame));
+        confirmationDialogComponent.getConfirmButton().addClickListener(() -> this.deleteProfile(inventoryCleanerProfileValue, inventoryCleanerProfile, dimmedCenteredPopupFrame));
         confirmationDialogComponent.getCloseButton().addClickListener(() -> InventoryCleanerPopupFrame.closePopup(dimmedCenteredPopupFrame));
     }
 

@@ -158,7 +158,13 @@ extends Value<Double, NumberValue> {
     }
 
     public NumberValue copyDefinition() {
-        return new NumberValue(null, this.getName(), (Double)this.getValue(), this.minimum, this.maximum, this.formatPattern, this.unitSuffix);
+        NumberValue copy = new NumberValue(null, this.getName(), this.getValue(), this.minimum, this.maximum,
+                this.formatPattern, this.unitSuffix.trim());
+        copy.increment = this.increment;
+        copy.absoluteClampLimit = this.absoluteClampLimit;
+        copy.displayFormat.setMaximumFractionDigits(this.displayFormat.getMaximumFractionDigits());
+        copy.displayFormat.setMinimumFractionDigits(this.displayFormat.getMinimumFractionDigits());
+        return copy;
     }
 
     @Override

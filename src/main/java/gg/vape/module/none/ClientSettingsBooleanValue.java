@@ -7,4 +7,11 @@ extends BooleanValue {
     public ClientSettingsBooleanValue(Object owner, String name, boolean defaultValue) {
         super(owner, name, defaultValue);
     }
+
+    @Override
+    public ClientSettingsBooleanValue copyValueDefinition() {
+        ClientSettingsBooleanValue copy = new ClientSettingsBooleanValue(null, this.getId(), this.getDefaultValue());
+        copy.setDescription(this.getDescription());
+        return copy;
+    }
 }

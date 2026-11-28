@@ -1,6 +1,5 @@
 package gg.vape.ui.click.component.input;
 
-import gg.vape.Vape;
 import gg.vape.input.BindCaptureTask;
 import gg.vape.ui.click.component.input.BindableInputComponent;
 import gg.vape.unmap.Bendable;
@@ -15,7 +14,12 @@ extends BindCaptureTask {
     }
 
     public void saveSettings() {
-        Vape.INSTANCE.saveAndStop();
+        this.owner.saveBindChanges();
+    }
+
+    @Override
+    protected void onCaptureComplete(Bendable target) {
+        this.owner.saveBindChanges(target);
     }
 
     @Override

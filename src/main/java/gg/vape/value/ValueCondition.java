@@ -61,6 +61,17 @@ public class ValueCondition {
         return combined;
     }
 
+    /** Rebind predicates to detached profile values without touching live ones. */
+    ValueCondition rebind(Map<Value<?, ?>, Value<?, ?>> proxies) {
+        ValueCondition copy = new ValueCondition();
+        for (Map.Entry<ConditionalValue, Predicate<Object>> entry : this.predicatesByValue.entrySet()) {
+            Value<?, ?> proxy = proxies.get(entry.getKey());
+            ConditionalValue condition = proxy instanceof ConditionalValue ? (ConditionalValue)proxy : entry.getKey();
+            copy.predicatesByValue.put(condition, entry.getValue());
+        }
+        return copy;
+    }
+
     public ValueCondition require(ConditionalValue conditionalValue, Predicate<Object> predicate) {
         this.predicatesByValue.put(conditionalValue, predicate);
         return this;

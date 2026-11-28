@@ -21,7 +21,9 @@ implements GuiClickListener {
     @Override
     public void onPrimaryClick() {
         HotbarSlotRule hotbarSlotRule = HotbarSlotRule.fromItemStack(this.items.get(this.itemIndex));
-        HotbarSlotRuleItemListFrame.getPickerFrame(this.itemListFrame).getGroupComponent().getRules().set(HotbarSlotRuleItemListFrame.getPickerFrame(this.itemListFrame).getSelectedSlot(), hotbarSlotRule);
+        HotbarSlotRuleItemPickerFrame picker = HotbarSlotRuleItemListFrame.getPickerFrame(this.itemListFrame);
+        picker.getGroupComponent().getRules().set(picker.getSelectedSlot(), hotbarSlotRule);
+        picker.getGroupComponent().notifyRulesChanged();
     }
 }
 

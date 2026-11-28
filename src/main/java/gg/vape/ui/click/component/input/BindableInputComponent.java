@@ -1,8 +1,11 @@
 package gg.vape.ui.click.component.input;
 
+import gg.vape.Vape;
+import gg.vape.config.Profile;
 import gg.vape.input.BindActivationMode;
 import gg.vape.input.BindCaptureTask;
 import gg.vape.input.KeyboardInput;
+import gg.vape.ui.click.component.GuiComponent;
 import gg.vape.ui.click.component.ToolTips;
 import gg.vape.ui.click.component.TruncatedTextComponent;
 import gg.vape.ui.click.component.gui.InteractiveComponent;
@@ -13,6 +16,7 @@ import gg.vape.unmap.ColorUtil;
 import gg.vape.utils.render.GuiRenderPrimitives;
 import gg.vape.utils.render.ImageRenderer;
 import java.awt.Color;
+import java.util.ArrayList;
 import org.jetbrains.annotations.Nullable;
 
 public class BindableInputComponent
@@ -22,6 +26,7 @@ extends InteractiveComponent {
     private boolean highlighted;
     private Color accentColor;
     private Bendable bendable;
+    private boolean saveChanges = true;
     private final BindCaptureTask captureTask;
     @Nullable
     private Boolean activeOverride = null;
@@ -38,13 +43,38 @@ extends InteractiveComponent {
     }
 
     public void setBendable(Bendable bendable) {
-        this.bendable = bendable;
         this.captureTask.setBendable(bendable);
-        this.bindLabel.setText(bendable.getBindText());
+        this.bendable = bendable;
+        this.bindLabel.setText(bendable == null ? "" : bendable.getBindText());
+    }
+
+    /** Stop captures in controls that are being hidden or detached. */
+    public static void cancelCapturesInTree(GuiComponent component) {
+        if (component instanceof BindableInputComponent) {
+            ((BindableInputComponent)component).getCaptureTask().cancelCapture();
+        }
+        for (GuiComponent child : new ArrayList<GuiComponent>(component.f())) cancelCapturesInTree(child);
     }
 
     public BindCaptureTask getCaptureTask() {
         return this.captureTask;
+    }
+
+    /** Detached profile editors commit when their profile is applied. */
+    public void setSaveChanges(boolean saveChanges) {
+        this.saveChanges = saveChanges;
+    }
+
+    void saveBindChanges() {
+        this.saveBindChanges(this.bendable);
+    }
+
+    void saveBindChanges(Bendable target) {
+        if (!this.saveChanges) return;
+        // A profile bind can belong to an inactive profile, while the generic
+        // save notification marks only the currently active one dirty.
+        if (target instanceof Profile) ((Profile)target).setDirty(true);
+        Vape.INSTANCE.saveAndStop();
     }
 
     public BindableInputComponent(Bendable bendable) {

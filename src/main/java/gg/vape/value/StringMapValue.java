@@ -83,7 +83,8 @@ extends Value<Map<String, String>, StringMapValue> {
     @Override
     public void reset() {
         if (this.isResettable()) {
-            this.setValue(new LinkedHashMap());
+            Map<String, String> defaults = this.getDefaultValue();
+            this.setValue(defaults == null ? new LinkedHashMap<String, String>() : new LinkedHashMap<String, String>(defaults));
         }
     }
 

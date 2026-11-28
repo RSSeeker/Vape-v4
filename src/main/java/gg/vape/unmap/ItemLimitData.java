@@ -47,7 +47,7 @@ implements ToggleableListEntry {
         if (jsonObject.get("item-id") != null) {
             this.name = jsonObject.get("item-id").getAsString();
             if (this.name.startsWith("b64:")) {
-                this.name = Base64Util.decodeUtf8Base64(this.name.split(":")[1]);
+                this.name = Base64Util.decodeUtf8Base64(this.name.substring(4));
             }
             this.parseMetadataSuffix();
         }

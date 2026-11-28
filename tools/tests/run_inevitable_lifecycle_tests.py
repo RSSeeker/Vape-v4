@@ -22,6 +22,7 @@ STUBS = {
     "gg/vape/ui/click/component/DropdownSelectComponent.java": """package gg.vape.ui.click.component; import gg.vape.ui.click.frame.PopupFrame; import gg.vape.module.none.ClientSettings; public class DropdownSelectComponent<T> extends GuiComponent { public PopupFrame popup; public PopupFrame getPopupFrame(){return popup;} public void closePopup(){PopupFrame p=popup;popup=null;if(ClientSettings.activeComponent==this)ClientSettings.activeComponent=null;ClientSettings.removePopup(p);} }""",
     "gg/vape/ui/click/component/PopupMenuButtonComponent.java": """package gg.vape.ui.click.component; import gg.vape.ui.click.frame.PopupFrame; import gg.vape.module.none.ClientSettings; public class PopupMenuButtonComponent extends GuiComponent { public PopupFrame popup; public PopupFrame getPopupFrame(){return popup;} public void closePopup(){PopupFrame p=popup;popup=null;if(ClientSettings.activeComponent==this)ClientSettings.activeComponent=null;ClientSettings.removePopup(p);} }""",
     "gg/vape/ui/click/component/module/ModuleComponent.java": """package gg.vape.ui.click.component.module; import java.util.*; import gg.vape.ui.click.component.GuiComponent; public class ModuleComponent extends GuiComponent { private final List<GuiComponent> values=new ArrayList<GuiComponent>(); public List<GuiComponent> getValueComponents(){return values;} }""",
+    "gg/vape/ui/click/component/input/BindableInputComponent.java": """package gg.vape.ui.click.component.input; import java.util.*; import gg.vape.ui.click.component.GuiComponent; public class BindableInputComponent extends GuiComponent { public final Task task=new Task(); public Task getCaptureTask(){return task;} public static void cancelCapturesInTree(GuiComponent c){if(c instanceof BindableInputComponent)((BindableInputComponent)c).task.cancelCapture();for(GuiComponent child:new ArrayList<GuiComponent>(c.f()))cancelCapturesInTree(child);} public static class Task {public boolean capturing=true;public int cancellations;public void cancelCapture(){if(capturing){capturing=false;cancellations++;}}} }""",
     "gg/vape/ui/click/component/value/AbstractListValueComponent.java": """package gg.vape.ui.click.component.value; import gg.vape.ui.click.component.GuiComponent; public class AbstractListValueComponent extends GuiComponent { public boolean expanded; public void setExpanded(boolean b){expanded=b;} }""",
     "gg/vape/ui/click/component/value/FloatingValueDropdownLayer.java": """package gg.vape.ui.click.component.value; import gg.vape.ui.click.frame.Frame; public class FloatingValueDropdownLayer<T extends AbstractListValueComponent> extends Frame { private final T source; public FloatingValueDropdownLayer(T source){this.source=source;} public T getSourceComponent(){return source;} }""",
     "gg/vape/ui/click/frame/impl/inevitable/InevitableModuleFrame.java": """package gg.vape.ui.click.frame.impl.inevitable; import gg.vape.ui.click.frame.Frame; public class InevitableModuleFrame extends Frame { private boolean layout; public boolean hasLayout(){return layout;} public void clearLayout(){layout=false;} public void markLayoutAssigned(){layout=true;} public void syncModules(){} }""",
@@ -32,6 +33,7 @@ TEST = r"""
 import gg.vape.module.none.ClientSettings;
 import gg.vape.ui.click.component.*;
 import gg.vape.ui.click.component.module.ModuleComponent;
+import gg.vape.ui.click.component.input.BindableInputComponent;
 import gg.vape.ui.click.component.value.*;
 import gg.vape.ui.click.frame.*;
 import gg.vape.ui.click.frame.impl.inevitable.*;
@@ -46,7 +48,9 @@ public final class InevitableLifecycleTest {
         stack.addPanel(first); stack.addPanel(second);
         ClientSettings.activeStack=stack;
         ModuleComponent row=new ModuleComponent(); first.add(row);
+        BindableInputComponent rowBind=new BindableInputComponent(); row.add(rowBind);
         GuiComponent editor=new GuiComponent(); first.add(editor); row.getValueComponents().add(editor);
+        BindableInputComponent editorBind=new BindableInputComponent(); editor.add(editorBind);
         AbstractListValueComponent list=new AbstractListValueComponent(); editor.add(list); list.setExpanded(true);
         FloatingValueDropdownLayer<AbstractListValueComponent> sidecar=new FloatingValueDropdownLayer<>(list); stack.q(sidecar);
         GuiComponent focused=new GuiComponent(); sidecar.add(focused); ClientSettings.activeComponent=focused;
@@ -62,6 +66,8 @@ public final class InevitableLifecycleTest {
         check(InevitableFrameStack.isPanelOrPopup(sidePopup),"popup on sidecar belongs to panel");
         check(InevitableFrameStack.isPanelOrPopup(nestedPopup),"nested popup belongs to panel");
         stack.closeEditorTree(editor);
+        check(!editorBind.task.capturing && editorBind.task.cancellations==1 && rowBind.task.capturing,
+                "collapsing an editor cancels only its own bind captures");
         check(!list.expanded,"collapsing tree collapses list");
         check(!stack.Y().contains(sidecar) && !stack.Y().contains(sidePopup),"sidecar and its popup removed");
         check(!stack.Y().contains(popup) && !stack.Y().contains(nestedPopup),"nested panel popups removed");
@@ -70,6 +76,8 @@ public final class InevitableLifecycleTest {
         check(stack.Y().contains(unrelated) && untouched.popup==unrelated,"other panel left intact");
         check(first.s$src$Ljava_util_ArrayList_$1a2240q().isEmpty(),"owner popup list cleared");
         stack.closeTransients();
+        check(!rowBind.task.capturing && rowBind.task.cancellations==1,
+                "navigation cancels module-row binds as well as editor binds");
         check(!stack.Y().contains(unrelated) && untouched.popup==null,"navigation closes remaining popup");
         stack.A();
         check(first.hasLayout() && second.hasLayout(),"first render assigns positions");

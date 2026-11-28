@@ -3,6 +3,7 @@ package gg.vape.module.utility.inventory;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import gg.vape.config.ConfigJsonUtils;
 import func.skidline.RectData;
 import gg.vape.module.none.ClientSettings;
 import gg.vape.module.utility.inventory.HotbarSlotRule;
@@ -18,12 +19,14 @@ import gg.vape.utils.render.ItemIconRenderer;
 import gg.vape.wrapper.impl.ItemStack;
 import gg.vape.wrapper.impl.Minecraft;
 import java.util.List;
+import java.util.Map;
 
 public class HotbarSlotRuleGroupComponent
 extends GuiComponent {
     private static String[] iconNames;
     private HotbarSlotRuleEditorComponent editor;
     private List<HotbarSlotRule> rules;
+    private JsonObject preservedData = new JsonObject();
     private SquareIconButtonComponent closeButton = new SquareIconButtonComponent("newclose");
 
     public static void V(String[] stringArray) {
@@ -33,7 +36,7 @@ extends GuiComponent {
     @Override
     public void g(GuiMouseEvent guiMouseEvent) {
         ClientSettings.getFrame(HotbarSlotRuleItemPickerFrame.class).setGroupComponent(this);
-        if (this.editor.getSelectedGroup().equals(this)) {
+        if (this.equals(this.editor.getSelectedGroup())) {
             HotbarSlotRuleItemPickerFrame hotbarSlotRuleItemPickerFrame = ClientSettings.getFrame(HotbarSlotRuleItemPickerFrame.class);
             if (ClientSettings.INSTANCE.getActiveStack() instanceof ClickGuiFrameManager) {
                 ClickGuiFrameManager clickGuiFrameManager = (ClickGuiFrameManager)ClientSettings.INSTANCE.getActiveStack();
@@ -87,17 +90,28 @@ extends GuiComponent {
     }
 
     public HotbarSlotRuleGroupComponent addCloseListener(GuiClickListener guiClickListener) {
-        this.closeButton.addClickListener(guiClickListener);
+        // rebuildChildren may visit this group repeatedly; keep one handler.
+        this.closeButton.setClickListener(guiClickListener);
         return this;
     }
 
+    public void notifyRulesChanged() {
+        this.editor.getRuleValue().notifyChanged();
+    }
+
     public JsonObject toJson() {
-        JsonObject jsonObject = new JsonObject();
+        JsonObject jsonObject = ConfigJsonUtils.deepCopy(this.preservedData);
+        JsonArray original = ConfigJsonUtils.getJsonArray(this.preservedData, "hotbars");
         JsonArray jsonArray = new JsonArray();
-        for (HotbarSlotRule hotbarSlotRule : this.rules) {
-            jsonArray.add((JsonElement)hotbarSlotRule.toJson());
+        for (int i = 0; i < this.rules.size(); ++i) {
+            JsonObject slot = original != null && i < original.size() && original.get(i).isJsonObject()
+                    ? ConfigJsonUtils.deepCopy(original.get(i).getAsJsonObject()) : new JsonObject();
+            for (Map.Entry<String, JsonElement> entry : this.rules.get(i).toJson().entrySet()) {
+                slot.add(entry.getKey(), ConfigJsonUtils.deepCopy(entry.getValue()));
+            }
+            jsonArray.add(slot);
         }
-        jsonObject.add("hotbars", (JsonElement)jsonArray);
+        jsonObject.add("hotbars", jsonArray);
         return jsonObject;
     }
 
@@ -131,11 +145,15 @@ extends GuiComponent {
 
     public void loadJson(JsonObject jsonObject) {
         JsonArray jsonArray = jsonObject.getAsJsonArray("hotbars");
+        if (jsonArray == null || jsonArray.size() > this.getRules().size()) {
+            throw new IllegalArgumentException("Invalid hotbar slots");
+        }
         int n = jsonArray.size();
         for (int i = 0; i < n; ++i) {
             JsonObject jsonObject2 = jsonArray.get(i).getAsJsonObject();
             this.getRules().get(i).loadJson(jsonObject2);
         }
+        this.preservedData = ConfigJsonUtils.deepCopy(jsonObject);
     }
 
     @Override

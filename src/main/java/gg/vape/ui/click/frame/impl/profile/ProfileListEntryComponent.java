@@ -56,17 +56,8 @@ extends InteractiveComponent {
             this.setIgnoreFrameClipping(false);
             ClientSettings.activeComponent = null;
             if (this.dropIndex != -1) {
-                ProfilesManager profilesManager = Vape.INSTANCE.getProfilesManager();
-                List<Profile> profiles = profilesManager.getProfiles();
-                Profile displacedProfile = this.dropIndex < profiles.size() ? profiles.get(this.dropIndex) : null;
-                if (displacedProfile != null) {
-                    displacedProfile.setDirty(true);
-                }
-                profiles.remove(this.profile);
-                profiles.add(this.dropIndex, this.profile);
-                this.profile.setDirty(true);
+                Vape.INSTANCE.getProfilesManager().moveProfile(this.profile, this.dropIndex);
             }
-            Vape.INSTANCE.getProfilesManager().sortProfiles();
             ProfilesSettingsFrame.refreshProfileList();
             this.dropIndex = -1;
             return;

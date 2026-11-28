@@ -57,7 +57,12 @@ extends Value<Integer, AntiBotBooleanValue> {
     public AntiBotBooleanValue copy() {
         AntiBotBooleanValue copy = new AntiBotBooleanValue(
                 null, this.getName(), (Integer)this.getDefaultValue());
-        copy.setValue(this.getValue());
+        copy.setPersistenceSuppressed(true);
+        try {
+            copy.setValue(this.getValue());
+        } finally {
+            copy.setPersistenceSuppressed(false);
+        }
         return copy;
     }
 

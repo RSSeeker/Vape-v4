@@ -199,8 +199,23 @@ extends Value<double[], RandomValue> {
         this.notifyChanged();
     }
 
+    protected String getFormatPattern() {
+        return this.formatPattern;
+    }
+
+    protected void copyRangeConfigurationTo(RandomValue copy) {
+        copy.increment = this.increment;
+        copy.absoluteClampLimit = this.absoluteClampLimit;
+        copy.displayFormat.setMaximumFractionDigits(this.displayFormat.getMaximumFractionDigits());
+        copy.displayFormat.setMinimumFractionDigits(this.displayFormat.getMinimumFractionDigits());
+    }
+
     public RandomValue copyDefinition() {
-        return new RandomValue(null, this.getName(), (double[])this.getDefaultValue(), this.getAllowedMinimum(), this.getAllowedMaximum(), this.formatPattern, this.suffix);
+        double[] defaults = this.getDefaultValue();
+        RandomValue copy = new RandomValue(null, this.getName(), new double[]{defaults[0], defaults[1]},
+                this.getAllowedMinimum(), this.getAllowedMaximum(), this.formatPattern, this.suffix.trim());
+        this.copyRangeConfigurationTo(copy);
+        return copy;
     }
 
     @Override

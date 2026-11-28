@@ -20,6 +20,7 @@ implements GuiClickListener {
     @Override
     public void onSecondaryClick() {
         this.pickerFrame.getGroupComponent().getRules().set(this.slotIndex, new HotbarSlotRule(0));
+        this.pickerFrame.getGroupComponent().notifyRulesChanged();
     }
 
     @Override

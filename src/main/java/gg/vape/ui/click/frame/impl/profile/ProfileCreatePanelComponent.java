@@ -65,8 +65,7 @@ extends GuiComponent {
     }
 
     private void startProfileCreation() {
-        Profile activeProfile = Vape.INSTANCE.getProfilesManager().getActiveProfile();
-        activeProfile.captureCurrentState();
+        Profile activeProfile = Vape.INSTANCE.getProfilesManager().captureActiveProfile();
         this.pendingProfile = activeProfile;
         Profile draftProfile = new Profile(activeProfile.getName(), "4.21");
         draftProfile.loadJson(activeProfile.toJson(true));

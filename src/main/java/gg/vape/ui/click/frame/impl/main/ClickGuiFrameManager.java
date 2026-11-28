@@ -2,6 +2,7 @@ package gg.vape.ui.click.frame.impl.main;
 
 import gg.vape.Vape;
 import gg.vape.module.none.ClientSettings;
+import gg.vape.ui.click.component.input.BindableInputComponent;
 import gg.vape.ui.click.frame.Frame;
 import gg.vape.ui.click.frame.FrameStackManager;
 import gg.vape.ui.click.frame.impl.hud.HudModuleConfigFrameBase;
@@ -44,6 +45,9 @@ extends FrameStackManager {
     }
 
     public void setSidecarFrame(@Nullable Frame frame) {
+        if (this.sidecarFrame != null && this.sidecarFrame != frame) {
+            BindableInputComponent.cancelCapturesInTree(this.sidecarFrame);
+        }
         if (frame != null) {
             if (this.sidecarFrame != null && this.sidecarFrame != frame) {
                 this.m(this.sidecarFrame);

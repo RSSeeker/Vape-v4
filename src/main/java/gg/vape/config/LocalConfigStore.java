@@ -106,7 +106,7 @@ public final class LocalConfigStore {
         return root;
     }
 
-    public static boolean saveSettings(JsonObject settings) {
+    public static synchronized boolean saveSettings(JsonObject settings) {
         if (settings == null) {
             return false;
         }
@@ -115,7 +115,7 @@ public final class LocalConfigStore {
         return write(root);
     }
 
-    public static boolean saveProfiles(JsonObject profiles) {
+    public static synchronized boolean saveProfiles(JsonObject profiles) {
         if (profiles == null) {
             return false;
         }
@@ -124,7 +124,22 @@ public final class LocalConfigStore {
         return write(root);
     }
 
-    public static boolean saveGlobal(JsonObject global) {
+    /** Write the two parts of one captured snapshot together. */
+    public static synchronized boolean saveSettingsAndProfiles(JsonObject settings, JsonObject profiles) {
+        return saveSettingsAndProfiles(settings, profiles, null);
+    }
+
+    /** Persist pending sync intents in the same transaction as their profiles. */
+    public static synchronized boolean saveSettingsAndProfiles(JsonObject settings, JsonObject profiles, JsonObject pendingSync) {
+        if (settings == null || profiles == null) return false;
+        JsonObject root = mutableRoot();
+        root.add("settings", settings);
+        root.add("profiles", profiles);
+        if (pendingSync != null) root.add("pendingProfileSync", pendingSync);
+        return write(root);
+    }
+
+    public static synchronized boolean saveGlobal(JsonObject global) {
         if (global == null) {
             return false;
         }
@@ -133,21 +148,26 @@ public final class LocalConfigStore {
         return write(root);
     }
 
-    public static JsonObject loadSettings() {
+    public static synchronized JsonObject loadSettings() {
         JsonObject root = read();
         return root != null && root.has("settings")
                 ? root.getAsJsonObject("settings") : null;
     }
 
-    public static JsonObject loadProfiles() {
+    public static synchronized JsonObject loadProfiles() {
         JsonObject root = read();
         return root != null && root.has("profiles")
                 ? root.getAsJsonObject("profiles") : null;
     }
 
-    public static JsonObject loadGlobal() {
+    public static synchronized JsonObject loadGlobal() {
         JsonObject root = read();
         return root != null && root.has("global")
                 ? root.getAsJsonObject("global") : null;
+    }
+
+    public static synchronized JsonObject loadPendingProfileSync() {
+        JsonObject root = read();
+        return root != null ? ConfigJsonUtils.getJsonObject(root, "pendingProfileSync") : null;
     }
 }

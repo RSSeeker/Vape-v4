@@ -16,6 +16,7 @@ import gg.vape.config.Profile;
 import gg.vape.config.SettingsDataType;
 import gg.vape.event.impl.EventTickBase;
 import gg.vape.manager.client.OnlineConnectionManager;
+import gg.vape.manager.client.ProfilesManager;
 import gg.vape.notification.SettingsSyncStatusNotification;
 import gg.vape.runtime.NativeBridge;
 import gg.vape.utils.Base64Util;
@@ -23,6 +24,8 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -30,8 +33,11 @@ public class SyncThread {
     private SyncStoreRequestWorker storeRequestWorker;
     private final SyncDebounceWorker debounceWorker;
     private final AtomicBoolean pendingSave = new AtomicBoolean();
+    private final Object localSaveLock = new Object();
     private final Vape vape;
-    private long lastSaveTime;
+    private volatile long lastSaveTime;
+    // Guarded by this; unlike a timestamp, two edits in one millisecond differ.
+    private long changeRevision;
     private boolean onlineSettingsApplied;
 
     public SyncThread(Vape vape) {
@@ -49,17 +55,34 @@ public class SyncThread {
             }
 
             this.syncOnlineSettings();
-            this.prepareActiveProfileForSave();
-
-            JsonObject settingsPayload = this.buildSettingsPayload(true);
-            JsonObject profilesPayload = this.vape.getProfilesManager().toJson(true);
-            for (Profile profile : this.vape.getProfilesManager().getProfiles()) {
-                profile.setSaveQueued(true);
+            JsonObject settingsPayload;
+            JsonObject profilesPayload;
+            JsonObject localProfilesPayload;
+            JsonObject pendingProfileSync;
+            Map<Profile, Long> sentRevisions = new IdentityHashMap<Profile, Long>();
+            Map<UUID, Long> sentDeletions;
+            boolean localSaveOk;
+            // The shutdown hook can save too. Serialize capture and local I/O
+            // so an older capture cannot overwrite a newer shutdown snapshot.
+            synchronized (this.localSaveLock) {
+                synchronized (this.vape.getProfilesManager()) {
+                    // Record revisions before capture: a concurrent live edit
+                    // during or after capture must remain dirty for another save.
+                    for (Profile profile : this.vape.getProfilesManager().getProfiles()) {
+                        if (profile.isDirty()) sentRevisions.put(profile, profile.getDirtyRevision());
+                    }
+                    this.prepareActiveProfileForSave();
+                    settingsPayload = this.buildSettingsPayload(true);
+                    sentDeletions = this.vape.getProfilesManager().getPendingDeletionRevisions();
+                    profilesPayload = this.vape.getProfilesManager().toJson(true);
+                    localProfilesPayload = this.buildLocalProfilesPayload();
+                    pendingProfileSync = this.vape.getProfilesManager().pendingSyncState();
+                    for (Profile profile : this.vape.getProfilesManager().getProfiles()) {
+                        profile.setSaveQueued(true);
+                    }
+                }
+                localSaveOk = LocalConfigStore.saveSettingsAndProfiles(settingsPayload, localProfilesPayload, pendingProfileSync);
             }
-
-            boolean localSaveOk = LocalConfigStore.saveSettings(settingsPayload)
-                    | LocalConfigStore.saveProfiles(
-                            this.buildLocalProfilesPayload());
 
             ApiResponse<Boolean> settingsResponse = ApiServices.getInstance().getUserDataApi().saveUserData(settingsPayload)
                     .exceptionally(error -> handleSettingsSaveFailure(notification, error))
@@ -69,8 +92,13 @@ public class SyncThread {
             ApiResponse<RemoteProfileDataMap> profilesResponse = ApiServices.getInstance().getUserDataApi().saveProfileData(profilesPayload)
                     .exceptionally(error -> handleProfilesSaveFailure(notification, error))
                     .join();
-            this.updateProfilesSaveStatus(notification, profilesResponse);
+            this.updateProfilesSaveStatus(notification, profilesResponse, sentRevisions, sentDeletions);
             this.applySavedProfileIds(profilesResponse);
+            if (profilesResponse != null && profilesResponse.isSuccessful()) {
+                // Commit acknowledged intents and newly assigned IDs locally as
+                // well; replay after a crash is otherwise possible.
+                this.saveLocalSnapshot();
+            }
 
             notification.complete();
             if (notification.hasSaveError()
@@ -82,9 +110,8 @@ public class SyncThread {
         catch (Exception exception) {
             Vape.logThrowable(exception);
         }
-        finally {
-            this.pendingSave.set(false);
-        }
+        // requestSave() consumes the pending flag before the worker starts.
+        // A new change during this save must remain pending for the next pass.
     }
 
     /**
@@ -94,10 +121,18 @@ public class SyncThread {
      */
     public void saveLocalSnapshot() {
         try {
-            this.prepareActiveProfileForSave();
-            LocalConfigStore.saveSettings(this.buildSettingsPayload(true));
-            LocalConfigStore.saveProfiles(
-                    this.buildLocalProfilesPayload());
+            synchronized (this.localSaveLock) {
+                JsonObject settings;
+                JsonObject profiles;
+                JsonObject pendingProfileSync;
+                synchronized (this.vape.getProfilesManager()) {
+                    this.prepareActiveProfileForSave();
+                    settings = this.buildSettingsPayload(true);
+                    profiles = this.buildLocalProfilesPayload();
+                    pendingProfileSync = this.vape.getProfilesManager().pendingSyncState();
+                }
+                LocalConfigStore.saveSettingsAndProfiles(settings, profiles, pendingProfileSync);
+            }
         }
         catch (Throwable ignored) {
         }
@@ -135,10 +170,7 @@ public class SyncThread {
 
     private void prepareActiveProfileForSave() {
         try {
-            Profile activeProfile = this.vape.getProfilesManager().getActiveProfile();
-            if (activeProfile != null) {
-                activeProfile.captureCurrentState();
-            }
+            this.vape.getProfilesManager().captureActiveProfile();
         }
         catch (Throwable throwable) {
             Vape.logThrowable(throwable);
@@ -161,7 +193,8 @@ public class SyncThread {
         }
     }
 
-    private void updateProfilesSaveStatus(SettingsSyncStatusNotification notification, ApiResponse<RemoteProfileDataMap> response) {
+    private void updateProfilesSaveStatus(SettingsSyncStatusNotification notification, ApiResponse<RemoteProfileDataMap> response,
+                                          Map<Profile, Long> sentRevisions, Map<UUID, Long> sentDeletions) {
         if (response == null) {
             if (notification.getProfilesSaveStatus() == 1) {
                 notification.setProfilesSaveStatus(5);
@@ -170,9 +203,10 @@ public class SyncThread {
         }
         if (response.isSuccessful()) {
             notification.setProfilesSaveStatus(1);
-            for (Profile profile : this.vape.getProfilesManager().getProfiles()) {
-                profile.setDirty(false);
+            for (Map.Entry<Profile, Long> entry : sentRevisions.entrySet()) {
+                entry.getKey().clearDirtyIfUnchanged(entry.getValue());
             }
+            this.vape.getProfilesManager().acknowledgeDeletions(sentDeletions);
         } else if (isRateLimited(response)) {
             notification.setProfilesSaveStatus(3);
         } else {
@@ -243,7 +277,7 @@ public class SyncThread {
         return throwable;
     }
 
-    public void requestSave() {
+    public synchronized void requestSave() {
         this.lastSaveTime = System.currentTimeMillis();
         this.pendingSave.set(false);
         if (this.storeRequestWorker == null) {
@@ -251,6 +285,14 @@ public class SyncThread {
             new Thread(this.storeRequestWorker, "InevitableClient settings save worker").start();
         }
         this.storeRequestWorker.requestSave();
+    }
+
+    synchronized long getChangeRevision() {
+        return this.changeRevision;
+    }
+
+    synchronized void requestSaveIfUnchanged(long revision) {
+        if (this.pendingSave.get() && this.changeRevision == revision) this.requestSave();
     }
 
     public boolean hasPendingSave() {
@@ -278,6 +320,7 @@ public class SyncThread {
                             this.normalizeLocalProfilesPayload(localProfiles));
                 }
                 this.vape.loadConfigData(config, true);
+                this.vape.getProfilesManager().restorePendingSyncState(LocalConfigStore.loadPendingProfileSync());
                 return;
             }
             // 全新注入（本地没有配置文件，只会读到原生存储 / 云端等其他目录的配置）：
@@ -299,11 +342,8 @@ public class SyncThread {
 
     private void finalizeFreshInstallFrameState() {
         gg.vape.module.none.ClientSettings.closeAllCategoryFrames();
-        Profile activeProfile = this.vape.getProfilesManager().getActiveProfile();
-        if (activeProfile != null) {
-            activeProfile.captureCurrentState();
-            activeProfile.setDirty(true);
-        }
+        Profile activeProfile = this.vape.getProfilesManager().captureActiveProfile();
+        if (activeProfile != null) activeProfile.setDirty(true);
         this.vape.saveAndStop();
     }
 
@@ -354,13 +394,27 @@ public class SyncThread {
         }
     }
 
-    public void clearPendingSave() {
+    public synchronized void clearPendingSave() {
         this.pendingSave.set(false);
     }
 
-    public void markDirty() {
+    public synchronized void markDirty() {
+        ++this.changeRevision;
         this.pendingSave.set(true);
-        this.debounceWorker.markChanged();
+    }
+
+    /** Atomically mark the current profile and queue its save relative to capture. */
+    public void markSettingsDirty() {
+        ProfilesManager manager = this.vape.getProfilesManager();
+        if (manager == null) {
+            this.markDirty();
+            return;
+        }
+        synchronized (manager) {
+            Profile active = manager.getActiveProfileOrNull();
+            if (active != null) active.setDirty(true);
+            this.markDirty();
+        }
     }
 
     public void start() {

@@ -1,10 +1,8 @@
 package gg.vape.api;
 
 import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import gg.vape.api.ApiHttpClient;
 import java.util.List;
 import java.util.UUID;
 import org.jetbrains.annotations.Nullable;
@@ -14,23 +12,25 @@ public class PublicProfilePartialJsonPayloadBuilder {
                                    @Nullable String description, @Nullable List<String> tags,
                                    @Nullable Boolean listed, @Nullable Boolean anonymous,
                                    @Nullable Boolean shareCodeFriendsOnly, @Nullable JsonObject profileData) {
-        JsonArray tagsJson = new JsonArray();
-        if (tags != null) {
-            for (String tag : tags) {
-                tagsJson.add((JsonElement)new JsonPrimitive(tag));
-            }
-        }
         JsonObject payload = new JsonObject();
         payload.addProperty("profileId", (Number)profileId);
-        payload.add("derivedFrom", ApiHttpClient.GSON.toJsonTree((Object)derivedFrom));
-        payload.addProperty("name", name);
-        payload.addProperty("vapeVersion", "4.21");
-        payload.addProperty("description", description);
-        payload.add("tags", (JsonElement)tagsJson);
-        payload.addProperty("listed", listed);
-        payload.addProperty("anonymous", anonymous);
-        payload.addProperty("shareCodeFriendsOnly", shareCodeFriendsOnly);
-        payload.add("profileData", (JsonElement)profileData);
+        // This is a partial update. Omitted fields must not erase the public
+        // profile's existing details when only its modules are being updated.
+        if (derivedFrom != null) payload.addProperty("derivedFrom", derivedFrom.toString());
+        if (name != null) payload.addProperty("name", name);
+        if (description != null) payload.addProperty("description", description);
+        if (tags != null) {
+            JsonArray tagsJson = new JsonArray();
+            for (String tag : tags) tagsJson.add(new JsonPrimitive(tag));
+            payload.add("tags", tagsJson);
+        }
+        if (listed != null) payload.addProperty("listed", listed);
+        if (anonymous != null) payload.addProperty("anonymous", anonymous);
+        if (shareCodeFriendsOnly != null) payload.addProperty("shareCodeFriendsOnly", shareCodeFriendsOnly);
+        if (profileData != null) {
+            payload.addProperty("vapeVersion", "4.21");
+            payload.add("profileData", profileData);
+        }
         return payload;
     }
 }

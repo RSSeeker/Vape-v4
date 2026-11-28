@@ -20,7 +20,7 @@ implements Runnable {
             catch (InterruptedException interruptedException) {
                 interruptedException.printStackTrace();
             }
-            if (!this.saveRequested.get()) continue;
+            if (!this.saveRequested.getAndSet(false)) continue;
             try {
                 Thread.sleep(100L);
             }
@@ -28,7 +28,6 @@ implements Runnable {
                 interruptedException.printStackTrace();
             }
             Vape.INSTANCE.getSyncThread().saveSettings();
-            this.saveRequested.set(false);
         }
     }
 }

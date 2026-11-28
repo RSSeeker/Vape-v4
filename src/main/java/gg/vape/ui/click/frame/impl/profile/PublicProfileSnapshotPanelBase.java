@@ -138,7 +138,10 @@ extends PublicProfileOverlayPanelBase {
         if (this.editable && this.snapshot.getProfile() != null) {
             guiComponent = new ProfileSnapshotApplyBarComponent(this.snapshot, panelComponent3.A(), false);
             ((ProfileSnapshotApplyBarComponent)guiComponent).setReturnStack(ClientSettings.publicProfilesStack);
-            ((ProfileSnapshotApplyBarComponent)guiComponent).setSnapshot(this.snapshot);
+            ((ProfileSnapshotApplyBarComponent)guiComponent).setApplyCallback(edited -> {
+                this.snapshot = edited;
+                this.e();
+            });
             panelComponent3.h(guiComponent, new Object[0]);
         } else {
             guiComponent = new ProfileSnapshotModuleCountEmptyStateComponent(list.size());

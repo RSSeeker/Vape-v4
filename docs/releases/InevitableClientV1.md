@@ -6,6 +6,7 @@ InevitableClient V1 is an independent Windows x64, source-based rebrand of the r
 
 - A new six-panel, dark and neutral click GUI for Combat, Movement, Visual, Utility, Profiles and Settings. The panels use the actual modules and value editors; Ctrl-F and Settings provide access to classic search, tools and the HUD editor. Panel positions are stored separately from classic frame positions.
 - Existing English/Chinese support, profile and keybind formats, and the previously implemented combat, rotation and Search improvements. StorageESP and SpawnerFinder include their additional filters; Search scans loaded chunks progressively. These tools cannot see unloaded chunks or prove a location is a base.
+- Profile editing stages detached settings until Apply, preserves unknown module data, and keeps pending profile sync changes with the local snapshot. Unsupported inventory data is retained until explicitly reset. Complex third-party value types without a compatible detached codec are retained but do not have an editor.
 - Script reload re-executes declarations, retains saved values when a setting is removed and reintroduced during the session, and discards callbacks from the previous script scope. A failed load disables the script and restores its previous setting lists; it cannot undo arbitrary side effects the script performed before failing.
 - Non-destructive loader materialization: an adjacent DLL is used only when it matches the embedded DLL. Existing recovery files are not swept or truncated.
 

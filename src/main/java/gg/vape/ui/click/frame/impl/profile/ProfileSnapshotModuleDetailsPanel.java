@@ -28,6 +28,7 @@ extends PanelComponent {
         this.moduleNameLabel = new SimpleTextLabelComponent("Module Name");
         this.enabledButton = new TextButton("ON", 0.633, ProfileSnapshotModuleDetailsPanel.J.l, ProfileSnapshotModuleDetailsPanel.J.l, 16.0, 10.0);
         this.bindInput = new BindableInputComponent(null, ProfileSnapshotModuleDetailsPanel.J.A);
+        this.bindInput.setSaveChanges(false);
         this.resetButton = new TextButton("RESET THIS MODULE", 0.633, ProfileSnapshotModuleDetailsPanel.J.i, ProfileSnapshotModuleDetailsPanel.J.i, 52.0, 10.0);
         this.settingsPanel.l$src$Lgg_vape_ui_click_layout_ComponentLayout_$di1tij().M("wrap");
         this.settingsPanel.t(144.0);
@@ -54,27 +55,40 @@ extends PanelComponent {
         this.h(new SpacerComponent(0.0, 4.0), new Object[0]);
         this.h(simpleTextLabelComponent, new Object[0]);
         this.h(this.settingsPanel, new Object[0]);
+        this.enabledButton.addClickListener(this::toggleSelectedModule);
         this.resetButton.addClickListener(this::resetSelectedModule);
     }
 
     public void setSnapshot(ProfileSnapshot snapshot) {
+        this.cancelCaptures();
         this.snapshot = snapshot;
     }
 
+    public void cancelCaptures() {
+        BindableInputComponent.cancelCapturesInTree(this);
+    }
+
+    private void toggleSelectedModule() {
+        if (this.selectedModule == null) return;
+        this.selectedModule.setEnabled(!this.selectedModule.isEnabled());
+        this.enabledButton.setLabelText(this.selectedModule.isEnabled() ? "ON" : "OFF");
+    }
+
     private void resetSelectedModule() {
+        if (this.snapshot == null || this.selectedModule == null) return;
+        this.cancelCaptures();
         this.snapshot.getGuiBuilder().resetModule(this.selectedModule);
+        this.enabledButton.setLabelText(this.selectedModule.isEnabled() ? "ON" : "OFF");
     }
 
     public void setSelectedModule(ProfileModuleSnapshot moduleSnapshot) {
+        this.cancelCaptures();
         this.selectedModule = moduleSnapshot;
         this.moduleNameLabel.setText(moduleSnapshot.getName());
         this.enabledButton.setLabelText(moduleSnapshot.isEnabled() ? "ON" : "OFF");
-        if (moduleSnapshot.hasBind()) {
-            this.bindInput.setVisible(true);
-            this.bindInput.setBendable(moduleSnapshot.getBindSnapshot().getValue());
-        } else {
-            this.bindInput.setVisible(false);
-        }
+        // Keep an empty bind control visible so an unbound module can be bound.
+        this.bindInput.setBendable(moduleSnapshot.getBindSnapshot().getValue());
+        this.bindInput.setVisible(moduleSnapshot.getModule().getBind().usesOwnKeybindStorage());
         this.settingsPanel.removeMarkedChildren();
         List<GuiComponent> settingComponents = this.snapshot.getGuiBuilder().getModuleComponents(moduleSnapshot);
         for (GuiComponent settingComponent : settingComponents) {

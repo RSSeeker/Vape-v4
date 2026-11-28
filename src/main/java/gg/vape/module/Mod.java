@@ -184,7 +184,9 @@ EventListener {
         jsonObject.addProperty("name", this.getName());
         if (this.bind.usesOwnKeybindStorage()) {
             jsonArray = this.bind.serializeBoundInputs();
-            if (this.defaultKeybind == 0 && jsonArray.size() != 0 || jsonArray.size() == 1 && jsonArray.get(0).getAsInt() != this.defaultKeybind) {
+            // Preserve multi-key binds and explicit removal of a default key.
+            // Omission means "restore the default" during profile loading.
+            if (!ConfigJsonUtils.isDefaultBinding(jsonArray, this.defaultKeybind)) {
                 jsonObject.add("keybinds_2", (JsonElement)jsonArray);
             }
             if (this.bind.supportsActivationMode() && this.bind.getActivationMode() != BindActivationMode.TOGGLE) {

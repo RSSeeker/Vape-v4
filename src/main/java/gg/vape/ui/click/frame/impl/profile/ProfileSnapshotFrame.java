@@ -1,7 +1,5 @@
 package gg.vape.ui.click.frame.impl.profile;
 
-import gg.vape.Vape;
-import gg.vape.config.Profile;
 import gg.vape.config.ProfileModuleSnapshot;
 import gg.vape.config.ProfileSnapshot;
 import gg.vape.module.none.ClientSettings;
@@ -18,14 +16,19 @@ import gg.vape.ui.click.frame.impl.profile.ProfileSnapshotModuleDetailsPanel;
 import gg.vape.ui.click.frame.impl.profile.ProfileSnapshotModuleListPanel;
 import gg.vape.utils.render.GuiRenderPrimitives;
 import java.awt.Color;
+import java.util.function.Consumer;
 import org.jetbrains.annotations.Nullable;
 
 public class ProfileSnapshotFrame
 extends Frame {
     private ProfileSnapshot snapshot;
+    @Nullable
+    private Consumer<ProfileSnapshot> applyCallback;
     private final ProfileSnapshotModuleDetailsPanel moduleDetailsPanel;
     @Nullable
     private FrameStackManager returnStack;
+    @Nullable
+    private Frame returnSidecar;
     private final PanelComponent detailsContainer;
     private final ProfileSnapshotModuleListPanel moduleListPanel;
     private final PanelComponent rootPanel = new PanelComponent(332.0, 182.0);
@@ -41,10 +44,12 @@ extends Frame {
         this.closeEditor();
     }
 
-    public void setSnapshot(ProfileSnapshot snapshot) {
-        this.snapshot = snapshot;
-        this.moduleDetailsPanel.setSnapshot(snapshot);
-        this.moduleListPanel.setSnapshot(snapshot);
+    public void setSnapshot(ProfileSnapshot snapshot, @Nullable Consumer<ProfileSnapshot> applyCallback) {
+        // Parent panels keep their staged state when this editor is discarded.
+        this.snapshot = snapshot.fork();
+        this.applyCallback = applyCallback;
+        this.moduleDetailsPanel.setSnapshot(this.snapshot);
+        this.moduleListPanel.setSnapshot(this.snapshot);
         this.moduleListPanel.selectInitialModule();
     }
 
@@ -69,23 +74,27 @@ extends Frame {
     }
 
     private void applyChanges() {
-        this.snapshot.applyToProfile();
-        Profile profile = Vape.INSTANCE.getProfilesManager().getActiveProfileOrNull();
-        if (this.snapshot.getProfile() != null && this.snapshot.getProfile().equals(profile)) {
-            Vape.INSTANCE.getProfilesManager().setActiveProfile(this.snapshot.getProfile());
+        this.moduleDetailsPanel.cancelCaptures();
+        if (this.snapshot != null) {
+            this.snapshot.applyAndSave();
+            if (this.applyCallback != null) this.applyCallback.accept(this.snapshot);
         }
     }
 
     private void closeEditor() {
+        this.moduleDetailsPanel.cancelCaptures();
+        this.applyCallback = null;
         FrameStackManager frameStackManager = this.returnStack;
         if (frameStackManager != null) {
             if (frameStackManager instanceof ClickGuiFrameManager) {
                 ClickGuiFrameManager clickGuiFrameManager = (ClickGuiFrameManager)frameStackManager;
-                clickGuiFrameManager.closeSidecar();
+                if (this.returnSidecar != null) clickGuiFrameManager.setSidecarFrame(this.returnSidecar);
+                else clickGuiFrameManager.closeSidecar();
             } else {
                 ClientSettings.INSTANCE.switchFrameStack(frameStackManager);
             }
             this.returnStack = null;
+            this.returnSidecar = null;
         } else {
             ClientSettings.INSTANCE.switchFrameStack(ClientSettings.mainStack);
         }
@@ -113,8 +122,13 @@ extends Frame {
     }
 
     public void selectModule(ProfileModuleSnapshot moduleSnapshot) {
-        this.moduleDetailsPanel.setSelectedModule(moduleSnapshot);
-        this.moduleListPanel.selectModuleRow(moduleSnapshot);
+        if (this.snapshot == null || moduleSnapshot == null) return;
+        for (ProfileModuleSnapshot candidate : this.snapshot.getAllModules()) {
+            if (candidate.getModule() != moduleSnapshot.getModule()) continue;
+            this.moduleDetailsPanel.setSelectedModule(candidate);
+            this.moduleListPanel.selectModuleRow(candidate);
+            return;
+        }
     }
 
     public ProfileSnapshot getSnapshot() {
@@ -123,6 +137,9 @@ extends Frame {
 
     public void setReturnStack(@Nullable FrameStackManager returnStack) {
         this.returnStack = returnStack;
+        Frame sidecar = returnStack instanceof ClickGuiFrameManager
+                ? ((ClickGuiFrameManager)returnStack).getSidecarFrame() : null;
+        this.returnSidecar = sidecar == this ? null : sidecar;
     }
 
     private void showCloseConfirmation() {
@@ -133,6 +150,7 @@ extends Frame {
         if (this.snapshot == null) {
             return;
         }
+        this.moduleDetailsPanel.cancelCaptures();
         this.snapshot.getGuiBuilder().resetAllModules();
         this.moduleListPanel.rebuildModuleRows();
     }

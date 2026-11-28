@@ -36,6 +36,7 @@ extends FlowLayoutComponent {
         this.moduleList.setShowDisabledOverlay(false);
         this.moduleList.F(FrameScrollbarPlacement.OUTSIDE);
         this.applyBar = new ProfileSnapshotApplyBarComponent(null, width, false);
+        this.applyBar.setApplyCallback(edited -> this.rebuildRows());
         this.h(this.applyBar, new Object[0]);
         this.h(this.moduleList, new Object[0]);
         this.rebuildRows();
@@ -71,7 +72,8 @@ extends FlowLayoutComponent {
         ProfileSnapshot profileSnapshot = this.profile.createSnapshot(false);
         if (profileSnapshot != null) {
             for (ProfileModuleSnapshot profileModuleSnapshot : profileSnapshot.getSortedModules(false)) {
-                ProfileModuleSnapshotRowComponent moduleRow = new ProfileModuleSnapshotRowComponent(this.A(), profileSnapshot, profileModuleSnapshot);
+                ProfileModuleSnapshotRowComponent moduleRow = new ProfileModuleSnapshotRowComponent(this.A(), profileSnapshot, profileModuleSnapshot,
+                        edited -> this.rebuildRows());
                 this.applyStyle(moduleRow);
                 this.moduleList.h(moduleRow, new Object[0]);
             }

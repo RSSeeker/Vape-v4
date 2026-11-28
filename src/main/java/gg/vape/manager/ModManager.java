@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import gg.vape.Vape;
+import gg.vape.config.ConfigJsonUtils;
 import gg.vape.config.Profile;
 import gg.vape.event.EventHandler;
 import gg.vape.event.EventListener;
@@ -262,12 +263,13 @@ implements EventListener {
         for (Mod mod : this.collectMods()) {
             if (mod instanceof HudModule || mod.getCategory().equals(Category.NONE)) continue;
             try {
-                if (enabledStates.has(mod.getName())) {
-                    if (!mod.isVisible()) continue;
+                Boolean savedEnabled = ConfigJsonUtils.getBooleanIgnoreCase(enabledStates, mod.getName());
+                if (savedEnabled != null) {
+                    if (savedEnabled.booleanValue() && !mod.isVisible()) continue;
                     try {
-                        if (mod.isEnabled()) continue;
-                        mod.setEnabled(enabledStates.get(mod.getName()).getAsBoolean());
-                        ++enabledCount;
+                        if (mod.isEnabled() == savedEnabled.booleanValue()) continue;
+                        mod.setEnabled(savedEnabled.booleanValue());
+                        if (savedEnabled.booleanValue()) ++enabledCount;
                     }
                     catch (Exception exception) {
                         Vape.logThrowable(exception);
@@ -486,10 +488,10 @@ implements EventListener {
 
     public void applyHudModuleStates(JsonObject enabledStates) {
         for (Mod mod : this.collectMods()) {
-            if (!(mod instanceof HudModule) || !enabledStates.has(mod.getName())) continue;
-            boolean enabled = enabledStates.get(mod.getName()).getAsBoolean();
-            if (mod.isEnabled() == enabled) continue;
-            mod.setEnabled(enabled);
+            if (!(mod instanceof HudModule)) continue;
+            Boolean enabled = ConfigJsonUtils.getBooleanIgnoreCase(enabledStates, mod.getName());
+            if (enabled == null || mod.isEnabled() == enabled.booleanValue()) continue;
+            mod.setEnabled(enabled.booleanValue());
         }
     }
 
@@ -535,7 +537,8 @@ implements EventListener {
     public List<Mod> getProfileModules(JsonObject enabledModuleStates) {
         ArrayList<Mod> modules = new ArrayList<Mod>();
         for (Mod mod : this.collectMods()) {
-            if (!enabledModuleStates.has(mod.getName()) || !mod.isVisible() || mod.getCategory() == Category.NONE) continue;
+            if (!Boolean.TRUE.equals(ConfigJsonUtils.getBooleanIgnoreCase(enabledModuleStates, mod.getName()))
+                    || !mod.isVisible() || mod.getCategory() == Category.NONE) continue;
             modules.add(mod);
         }
         return modules;

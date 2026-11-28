@@ -7,17 +7,11 @@ import gg.vape.utils.SleepUtil;
 public class SyncDebounceWorker
 implements Runnable {
     private static final long DEBOUNCE_MILLIS = 3000L;
-    private long lastChangeTime;
-
     @Override
     public void run() {
         while (!Vape.INSTANCE.isEnabled()) {
             this.processPendingSave();
         }
-    }
-
-    public void markChanged() {
-        this.lastChangeTime = System.currentTimeMillis();
     }
 
     private void processPendingSave() {
@@ -29,12 +23,13 @@ implements Runnable {
             if (!ClientSettings.INSTANCE.isMainGuiStack() && !ClientSettings.INSTANCE.inputEnabled) {
                 return;
             }
-            long observedChangeTime = this.lastChangeTime;
-            if (Vape.INSTANCE.getSyncThread().hasPendingSave()) {
+            SyncThread sync = Vape.INSTANCE.getSyncThread();
+            long observedRevision = sync.getChangeRevision();
+            if (sync.hasPendingSave()) {
                 SleepUtil.sleep(DEBOUNCE_MILLIS);
-                if (this.lastChangeTime == observedChangeTime) {
-                    Vape.INSTANCE.getSyncThread().requestSave();
-                }
+                // Compare and consume under the same lock used by markDirty().
+                // An edit between the timer check and queueing cannot be lost.
+                sync.requestSaveIfUnchanged(observedRevision);
             }
         }
         catch (Exception exception) {

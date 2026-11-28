@@ -9,7 +9,6 @@ import gg.vape.api.PublicProfilePartialJsonPayloadBuilder;
 import gg.vape.config.LegacyPublicProfile;
 import gg.vape.config.Profile;
 import gg.vape.config.ProfileSnapshot;
-import gg.vape.config.ProfilesSyncPayloadBuilder;
 import gg.vape.config.PublicProfile;
 import gg.vape.config.PublicProfileReview;
 import gg.vape.config.PublicProfileReviewDisplayType;
@@ -20,7 +19,6 @@ import gg.vape.event.EventListener;
 import gg.vape.event.impl.PublicProfileReviewEvent;
 import gg.vape.manager.client.PublicProfileManager;
 import gg.vape.module.none.ClientSettings;
-import gg.vape.sync.RemoteProfileDataMap;
 import gg.vape.ui.click.component.ConfirmationDialogComponent;
 import gg.vape.ui.click.component.DualTextLabelRowComponent;
 import gg.vape.ui.click.component.FilledSpacerComponent;
@@ -54,13 +52,11 @@ import gg.vape.ui.click.frame.impl.profile.PublicProfilesFrame;
 import java.awt.Color;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -72,6 +68,8 @@ implements EventListener {
     private final String[] tabs;
     @Nullable
     protected PublicProfileShareInfo shareInfo;
+    @Nullable
+    private UUID selectedSourceId;
     private final Set<Long> pendingViewedReviewIds = new HashSet<>();
     private PanelComponent tabContent;
     private CompactPublicProfileFilterTokenSelectorComponent tagSelector;
@@ -83,6 +81,7 @@ implements EventListener {
         this.selectedTab = this.tabs[0];
         this.publicProfile = publicProfile;
         this.shareInfo = publicProfile != null ? publicProfile.getShareInfo() : null;
+        this.selectedSourceId = this.shareInfo != null ? this.shareInfo.getDerivedFrom() : null;
         this.snapshot = profileSnapshot;
         this.gZ = false;
         this.setDetailsCallback(this::showDetailsTabs);
@@ -134,10 +133,16 @@ implements EventListener {
             PublicProfileManager.showWarning("Failed to update profile: " + apiResponse.getError());
             return;
         }
-        assert apiResponse.getData() != null;
-        this.shareInfo = ((PublicProfile)apiResponse.getData()).getShareInfo();
-        PublicProfileManager.showInfo("Successfully updated profile " + this.publicProfile.getName() + "!");
-        Vape.INSTANCE.getPublicProfileManager().replaceProfile(this.publicProfile, (PublicProfile)apiResponse.getData());
+        PublicProfile replacement = apiResponse.getData();
+        if (replacement == null) {
+            PublicProfileManager.showWarning("The profile update returned no data.");
+            return;
+        }
+        PublicProfile previous = this.publicProfile;
+        this.publicProfile = replacement;
+        this.shareInfo = replacement.getShareInfo();
+        PublicProfileManager.showInfo("Successfully updated profile " + replacement.getName() + "!");
+        Vape.INSTANCE.getPublicProfileManager().replaceProfile(previous, replacement);
         this.e();
     }
 
@@ -161,7 +166,7 @@ implements EventListener {
     }
 
     private CompletableFuture updateModulesOnly() {
-        return this.updatePublicProfile(this.publicProfile.getShareInfo().getDerivedFrom(), null, null, null, null, null, true);
+        return this.updatePublicProfile(this.selectedSourceId, null, null, null, null, null, true);
     }
 
     private CompletableFuture confirmDeleteProfile() {
@@ -173,7 +178,13 @@ implements EventListener {
     }
 
     private void changeSourceProfile(Profile profile) {
-        this.shareInfo.setDerivedFrom(profile.getOnlineId());
+        if (profile.getOnlineId() == null) {
+            PublicProfileManager.showWarning("Save this profile before using it as a source.");
+            return;
+        }
+        // Keep the source selection staged until the public update succeeds;
+        // changing the UI must not mutate the shared PublicProfile object.
+        this.selectedSourceId = profile.getOnlineId();
         this.snapshot = ProfileSnapshot.createEditableCopy(this.publicProfile, profile);
         this.e();
     }
@@ -189,11 +200,8 @@ implements EventListener {
         ApiServices.getInstance().getPublicProfileApi().deleteProfile(this.publicProfile.getProfileId()).whenCompleteAsync(this::handleProfileDeleted, ClientSettings.UI_EXECUTOR).exceptionally(PublicProfileOwnerDetailsPanel::ignoreDeleteFailure);
     }
 
-    private CompletableFuture<RemoteProfileDataMap> updatePublicProfile(@Nullable UUID sourceProfileId, @Nullable String description, @Nullable List<String> tags, @Nullable Boolean shareCodeOnly, @Nullable Boolean anonymous, @Nullable Boolean friendsOnly, boolean includeProfileData) {
+    private CompletableFuture<ApiResponse<PublicProfile>> updatePublicProfile(@Nullable UUID sourceProfileId, @Nullable String description, @Nullable List<String> tags, @Nullable Boolean shareCodeOnly, @Nullable Boolean anonymous, @Nullable Boolean friendsOnly, boolean includeProfileData) {
         assert this.publicProfile != null;
-        if (includeProfileData) {
-            this.snapshot.applyToProfile();
-        }
         if (tags != null && tags.size() < 5) {
             String normalizedTag = LegacyPublicProfile.normalizeTag(this.tagSelector.getInput().getText().trim());
             if (normalizedTag != null) {
@@ -208,29 +216,18 @@ implements EventListener {
             }
         }
         JsonObject profileData = null;
-        if (includeProfileData && this.snapshot.getProfile() != null && (profileData = this.snapshot.getProfile().getData()) == null) {
-            Vape.INSTANCE.getProfilesManager().captureProfileState(this.snapshot.getProfile());
+        if (includeProfileData && this.snapshot != null && this.snapshot.getProfile() != null) {
+            profileData = this.snapshot.toPublicationData();
         }
+        // A public edit is a detached draft. Do not also overwrite the source
+        // private profile (or rename it to the public profile's title).
         return ApiServices.getInstance().getPublicProfileApi().editProfile(PublicProfilePartialJsonPayloadBuilder.build(this.publicProfile.getProfileId(), sourceProfileId, this.publicProfile.getName(), description, tags, shareCodeOnly != null ? Boolean.valueOf(shareCodeOnly == false) : null, anonymous, friendsOnly, profileData))
-                .whenCompleteAsync(this::handleProfileUpdated, ClientSettings.UI_EXECUTOR)
-                .thenComposeAsync(this::syncUpdatedProfile)
-                .thenApplyAsync(PublicProfileOwnerDetailsPanel::extractRemoteProfileData, ClientSettings.UI_EXECUTOR);
+                .whenCompleteAsync(this::handleProfileUpdated, ClientSettings.UI_EXECUTOR);
     }
 
     @EventHandler
     public void e(PublicProfileReviewEvent publicProfileReviewEvent) {
         this.showReviews();
-    }
-
-    private CompletionStage<ApiResponse<RemoteProfileDataMap>> syncUpdatedProfile(ApiResponse<PublicProfile> apiResponse) {
-        if (apiResponse == null || !apiResponse.isSuccessful()) {
-            return CompletableFuture.completedFuture(null);
-        }
-        Profile profile = this.snapshot.getProfile();
-        if (profile == null) {
-            return CompletableFuture.completedFuture(null);
-        }
-        return ApiServices.getInstance().getUserDataApi().saveProfileData(ProfilesSyncPayloadBuilder.build(Collections.singletonList(profile), null));
     }
 
 
@@ -509,13 +506,6 @@ implements EventListener {
         return ApiServices.getInstance().getPublicProfileApi().getReviewPage(this.publicProfile.getProfileId(), pagedResultListComponent.getNextPageIndex()).thenApplyAsync(response -> this.mapReviewsPage(pagedResultListComponent, reviewFactory, response), (Executor)ClientSettings.UI_EXECUTOR);
     }
 
-    private static RemoteProfileDataMap extractRemoteProfileData(ApiResponse<RemoteProfileDataMap> apiResponse) {
-        if (!apiResponse.isSuccessful()) {
-            return null;
-        }
-        return apiResponse.getData();
-    }
-
     @Override
     protected void e() {
         super.e();
@@ -529,7 +519,7 @@ implements EventListener {
         if (this.publicProfile == null || this.shareInfo == null) {
             return;
         }
-        Profile profile = this.shareInfo.getDerivedFrom() != null ? Vape.INSTANCE.getProfilesManager().getProfileByOnlineId(this.shareInfo.getDerivedFrom()) : null;
+        Profile profile = this.selectedSourceId != null ? Vape.INSTANCE.getProfilesManager().getProfileByOnlineId(this.selectedSourceId) : null;
         List<Profile> list = Vape.INSTANCE.getPublicProfileManager().getDerivedProfiles();
         ArrayList<Profile> arrayList = new ArrayList<Profile>(Vape.INSTANCE.getProfilesManager().getProfiles());
         arrayList.removeIf(list::contains);
@@ -542,7 +532,7 @@ implements EventListener {
     }
 
     private CompletableFuture updateProfileAndDetails(TextInputComponentBase descriptionInput, BooleanToggleComponent shareCodeOnlyToggle, BooleanToggleComponent anonymousToggle, BooleanToggleComponent friendsOnlyToggle) {
-        return this.updatePublicProfile(this.publicProfile.getShareInfo().getDerivedFrom(), descriptionInput.getText(), this.tagSelector.getTokenValues(), shareCodeOnlyToggle.isOn(), anonymousToggle.isOn(), friendsOnlyToggle.isOn(), true);
+        return this.updatePublicProfile(this.selectedSourceId, descriptionInput.getText(), this.tagSelector.getTokenValues(), shareCodeOnlyToggle.isOn(), anonymousToggle.isOn(), friendsOnlyToggle.isOn(), true);
     }
 
     private void flushViewedReviews() {

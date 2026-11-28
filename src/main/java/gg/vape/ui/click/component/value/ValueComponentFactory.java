@@ -56,20 +56,18 @@ public class ValueComponentFactory {
                 component = null;
             }
         } else if (value instanceof HotbarSlotRuleValue) {
-            if (!snapshotEditor) {
-                HotbarSlotRuleValue hotbarSlotRuleValue = (HotbarSlotRuleValue)value;
-                if (componentMode == ValueComponentMode.STANDALONE && hotbarSlotRuleValue.getEditor() != null
-                        && hotbarSlotRuleValue.getEditor().getParentFrameComponent() != null
-                        && value.getOwner() instanceof gg.vape.module.Mod) {
-                    return new gg.vape.ui.click.frame.impl.ClientSettingsActionButtonRowComponent("Open original editor",
-                            () -> gg.vape.module.none.ClientSettings.INSTANCE.openClassicModule((gg.vape.module.Mod)value.getOwner()));
-                }
-                if (hotbarSlotRuleValue.getEditor() != null) {
-                    component = hotbarSlotRuleValue.getEditor();
-                    component.setVisible(true);
-                } else {
-                    component = new HotbarSlotRuleEditorComponent(hotbarSlotRuleValue);
-                }
+            HotbarSlotRuleValue hotbarSlotRuleValue = (HotbarSlotRuleValue)value;
+            if (!snapshotEditor && componentMode == ValueComponentMode.STANDALONE && hotbarSlotRuleValue.getEditor() != null
+                    && hotbarSlotRuleValue.getEditor().getParentFrameComponent() != null
+                    && value.getOwner() instanceof gg.vape.module.Mod) {
+                return new gg.vape.ui.click.frame.impl.ClientSettingsActionButtonRowComponent("Open original editor",
+                        () -> gg.vape.module.none.ClientSettings.INSTANCE.openClassicModule((gg.vape.module.Mod)value.getOwner()));
+            }
+            if (hotbarSlotRuleValue.getEditor() != null) {
+                component = hotbarSlotRuleValue.getEditor();
+                component.setVisible(true);
+            } else {
+                component = new HotbarSlotRuleEditorComponent(hotbarSlotRuleValue);
             }
         } else if (value instanceof EntityTargetFilterValue) {
             component = snapshotEditor ? new EntityTargetFilterPopupComponent((EntityTargetFilterValue)value) : new EntityTargetFilterComponent((EntityTargetFilterValue)value);

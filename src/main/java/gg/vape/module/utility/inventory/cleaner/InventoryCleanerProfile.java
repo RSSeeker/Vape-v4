@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import gg.vape.Vape;
+import gg.vape.config.ConfigJsonUtils;
 import gg.vape.module.utility.InventoryManager;
 import gg.vape.unmap.ModeOption;
 import gg.vape.unmap.ModeSelection;
@@ -19,10 +20,12 @@ import org.jetbrains.annotations.UnmodifiableView;
 
 public class InventoryCleanerProfile {
     private String name = "";
+    private final boolean detachedPreview;
     public final ModeOption noArmorManagement;
     public ModeValue armorMode;
     private final Set<ItemInventoryFilterRule> itemRules;
     private final Map<Integer, SlotInventoryFilterRule> slotRules = new LinkedHashMap<Integer, SlotInventoryFilterRule>();
+    private JsonObject preservedData = new JsonObject();
     public final ModeOption bestArmor;
 
     public void clearItemRules() {
@@ -30,7 +33,9 @@ public class InventoryCleanerProfile {
     }
 
     public JsonObject toJson(boolean embedSharedPresets) {
-        JsonObject jsonObject = new JsonObject();
+        JsonObject jsonObject = ConfigJsonUtils.deepCopy(this.preservedData);
+        jsonObject.remove("slots");
+        jsonObject.remove("inventoryFilters");
         jsonObject.addProperty("name", this.name);
         JsonArray slotRulesJson = new JsonArray();
         for (SlotInventoryFilterRule rule : this.slotRules.values()) {
@@ -69,12 +74,28 @@ public class InventoryCleanerProfile {
         return this.name;
     }
 
+    /** A profile preview must not edit the shared preset registry. */
+    public boolean isDetachedPreview() {
+        return this.detachedPreview;
+    }
+
     public void assignDefaultName() {
+        this.assignDefaultName(Vape.INSTANCE.getModManager().getMod(InventoryManager.class).getProfileValue().getProfiles());
+    }
+
+    public void assignDefaultName(Collection<InventoryCleanerProfile> profiles) {
         int suffix = 1;
-        for (InventoryCleanerProfile profile : Vape.INSTANCE.getModManager().getMod(InventoryManager.class).getProfileValue().getProfiles()) {
-            if (!profile.getName().equalsIgnoreCase("Inventory #" + suffix)) continue;
-            ++suffix;
-        }
+        boolean taken;
+        do {
+            taken = false;
+            for (InventoryCleanerProfile profile : profiles) {
+                if (profile != this && profile.getName().equalsIgnoreCase("Inventory #" + suffix)) {
+                    taken = true;
+                    ++suffix;
+                    break;
+                }
+            }
+        } while (taken);
         this.name = "Inventory #" + suffix;
     }
 
@@ -83,21 +104,30 @@ public class InventoryCleanerProfile {
     }
 
     public InventoryCleanerProfile(JsonObject jsonObject) {
+        this(jsonObject, false);
+    }
+
+    public InventoryCleanerProfile(JsonObject jsonObject, boolean detachedPreview) {
         JsonElement jsonElement;
         SlotInventoryFilterRule slotInventoryFilterRule;
+        this.detachedPreview = detachedPreview;
+        this.preservedData = ConfigJsonUtils.deepCopy(jsonObject);
         this.itemRules = new LinkedHashSet<ItemInventoryFilterRule>();
         this.noArmorManagement = new ModeOption("No armor management");
         this.bestArmor = new ModeOption("Best armor");
-        this.armorMode = ModeValue.create((Object)this, "armor_mode", "", "Armor Mode", (ModeSelection)this.noArmorManagement, this.noArmorManagement, this.bestArmor);
+        this.armorMode = this.createArmorMode();
+        this.armorMode.setPersistenceSuppressed(true);
         this.name = jsonObject.get("name").getAsString();
         if (this.name.trim().isEmpty()) {
             this.assignDefaultName();
         }
         JsonArray slotRulesJson = jsonObject.getAsJsonArray("slots");
-        for (int i = 0; i < slotRulesJson.size(); ++i) {
-            JsonObject ruleJson = slotRulesJson.get(i).getAsJsonObject();
-            slotInventoryFilterRule = new SlotInventoryFilterRule(ruleJson);
-            this.slotRules.put(slotInventoryFilterRule.getSlot(), slotInventoryFilterRule);
+        if (slotRulesJson != null) {
+            for (int i = 0; i < slotRulesJson.size(); ++i) {
+                JsonObject ruleJson = slotRulesJson.get(i).getAsJsonObject();
+                slotInventoryFilterRule = new SlotInventoryFilterRule(ruleJson);
+                this.slotRules.put(slotInventoryFilterRule.getSlot(), slotInventoryFilterRule);
+            }
         }
         JsonArray itemRulesJson = jsonObject.getAsJsonArray("inventoryFilters");
         if (itemRulesJson != null) {
@@ -108,8 +138,25 @@ public class InventoryCleanerProfile {
             }
         }
         if ((jsonElement = jsonObject.get("armor_mode")) != null) {
-            this.armorMode.parse(jsonElement.getAsString());
+            String savedMode = jsonElement.getAsString();
+            if (!this.noArmorManagement.getSerializedName().equalsIgnoreCase(savedMode)
+                    && !this.bestArmor.getSerializedName().equalsIgnoreCase(savedMode)) {
+                throw new IllegalArgumentException("Unsupported armor mode");
+            }
+            this.armorMode.parse(savedMode);
         }
+        this.armorMode.setPersistenceSuppressed(detachedPreview);
+    }
+
+    private ModeValue createArmorMode() {
+        // The mode is serialized inside the inventory, not as an independent
+        // global value. Its options still need an owner for isSelected().
+        ModeValue mode = new ModeValue(null, "armor_mode", "", this.noArmorManagement,
+                new ModeSelection[]{this.noArmorManagement, this.bestArmor});
+        mode.setDescription("Armor Mode");
+        this.noArmorManagement.attachToModeWithoutRegistry(mode);
+        this.bestArmor.attachToModeWithoutRegistry(mode);
+        return mode;
     }
 
     public SlotInventoryFilterRule getOrCreateSlotRule(int slot) {
@@ -117,10 +164,16 @@ public class InventoryCleanerProfile {
     }
 
     public InventoryCleanerProfile() {
+        this(false);
+    }
+
+    public InventoryCleanerProfile(boolean detachedPreview) {
+        this.detachedPreview = detachedPreview;
         this.itemRules = new LinkedHashSet<ItemInventoryFilterRule>();
         this.noArmorManagement = new ModeOption("No armor management");
         this.bestArmor = new ModeOption("Best armor");
-        this.armorMode = ModeValue.create((Object)this, "armor_mode", "", "Armor Mode", (ModeSelection)this.noArmorManagement, this.noArmorManagement, this.bestArmor);
+        this.armorMode = this.createArmorMode();
+        this.armorMode.setPersistenceSuppressed(detachedPreview);
         this.assignDefaultName();
         for (int i = 0; i < 9; ++i) {
             this.slotRules.put(i, new SlotInventoryFilterRule(i));

@@ -38,11 +38,16 @@ implements INamed {
     }
 
     public void attachToMode(ModeValue modeValue) {
-        this.owningMode = modeValue;
+        this.attachToModeWithoutRegistry(modeValue);
         if (!selectionsByMode.containsKey(modeValue)) {
             selectionsByMode.put(modeValue, new ArrayList());
         }
         selectionsByMode.get(modeValue).add(this);
+    }
+
+    /** For short-lived embedded modes that are owned by another value. */
+    public void attachToModeWithoutRegistry(ModeValue modeValue) {
+        this.owningMode = modeValue;
     }
 
     public static void setLegacyState(int[] state) {

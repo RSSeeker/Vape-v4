@@ -78,6 +78,7 @@ import gg.vape.ui.click.frame.impl.hud.ReachDisplayHudFrame;
 import gg.vape.ui.click.frame.impl.hud.ScoreboardHudFrame;
 import gg.vape.ui.click.frame.impl.main.ClickGuiFrameManager;
 import gg.vape.ui.click.frame.impl.main.ClickGuiLayer;
+import gg.vape.ui.click.component.input.BindableInputComponent;
 import gg.vape.ui.click.frame.impl.profile.ProfileSnapshotFrame;
 import gg.vape.ui.click.frame.impl.profile.ProfilesSettingsFrame;
 import gg.vape.ui.click.frame.impl.profile.PublicProfilesFrame;
@@ -967,6 +968,9 @@ extends Mod {
     }
 
     public void onDisable() {
+        if (this.activeStack != null) {
+            for (Frame frame : new ArrayList<Frame>(this.activeStack.Y())) BindableInputComponent.cancelCapturesInTree(frame);
+        }
         if (this.activeStack == inevitableStack) inevitableStack.closeTransients();
         super.onDisable();
         this.disableBlurShader();
@@ -1156,6 +1160,9 @@ extends Mod {
             this.returnMainStack = previous;
         }
         if (frameStackManager == inevitableStack) this.forcedLegacySearch = false;
+        if (previous != null && previous != frameStackManager) {
+            for (Frame frame : new ArrayList<Frame>(previous.Y())) BindableInputComponent.cancelCapturesInTree(frame);
+        }
         if (previous == inevitableStack && frameStackManager != previous) inevitableStack.closeTransients();
         this.removeClosedPopups();
         activeComponent = null;

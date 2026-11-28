@@ -3,8 +3,10 @@ package gg.vape.value;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import gg.vape.input.BindActivationMode;
 import gg.vape.input.BindSet;
 import gg.vape.value.Value;
+import java.util.ArrayList;
 
 public class BindValue
 extends Value<BindSet, BindValue> {
@@ -45,9 +47,22 @@ extends Value<BindSet, BindValue> {
 
     @Override
     public boolean loadJson(JsonObject jsonObject) {
+        if (!this.matchesJsonId(jsonObject)) return false;
         JsonArray binds = jsonObject.getAsJsonArray("binds");
-        ((BindSet)this.getValue()).loadBoundInputs(binds, false);
+        if (binds != null) {
+            this.getValue().getBoundInputs().clear();
+            this.getValue().loadBoundInputs(binds, false);
+        }
         return super.loadJson(jsonObject);
+    }
+
+    @Override
+    public void reset() {
+        if (!this.isResettable()) return;
+        BindSet binding = this.getValue();
+        binding.setBoundInputs(new ArrayList<Integer>(binding.getDefaultKeys()));
+        binding.setActivationMode(BindActivationMode.TOGGLE);
+        this.notifyChanged();
     }
 
     public static BindValue createWithKey(Object owner, String name, int keyCode) {

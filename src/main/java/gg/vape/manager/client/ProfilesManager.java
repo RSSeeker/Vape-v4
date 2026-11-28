@@ -3,6 +3,7 @@ package gg.vape.manager.client;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import gg.vape.Vape;
 import gg.vape.config.BuiltinProfile;
 import gg.vape.config.BuiltinProfileState;
@@ -26,19 +27,21 @@ import gg.vape.ui.click.frame.impl.profile.ProfilesSettingsFrame;
 import gg.vape.value.Value;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.jetbrains.annotations.Nullable;
 
 public class ProfilesManager {
-    private final List<Profile> profiles = new ArrayList<Profile>();
+    // UI and input handlers also iterate this list while a save can run.
+    private final List<Profile> profiles = new CopyOnWriteArrayList<Profile>();
     static final boolean assertionsDisabled = !ProfilesManager.class.desiredAssertionStatus();
-    private Profile activeProfile;
+    private volatile Profile activeProfile;
     private boolean suppressDefaultFrameStates;
-    private final Set<UUID> deletedRemoteProfileIds = new LinkedHashSet<UUID>();
+    private final Map<UUID, Long> deletedRemoteProfileRevisions = new LinkedHashMap<UUID, Long>();
+    private long deletionRevision;
 
     public void resetAllSettings() {
         for (Mod object : Vape.INSTANCE.getModManager().getAllModules()) {
@@ -84,23 +87,29 @@ public class ProfilesManager {
     }
 
     public void removeProfile(Profile profile) {
-        this.profiles.remove(profile);
+        synchronized (this) {
+            if (!this.profiles.remove(profile)) return;
+            if (profile.getOnlineId() != null) {
+                this.deletedRemoteProfileRevisions.put(profile.getOnlineId(), ++this.deletionRevision);
+            }
+        }
         ClientSettings.getFrame(ProfilesSettingsFrame.class).removeProfile(profile);
         Vape.INSTANCE.saveAndStop();
         new ProfileListMutationEvent(profile, ProfileListMutationAction.REMOVE).fire();
-        if (profile.getOnlineId() != null) {
-            this.deletedRemoteProfileIds.add(profile.getOnlineId());
-        }
     }
 
     public void addProfile(Profile profile, boolean prepend) {
-        if (prepend) {
-            this.profiles.add(0, profile);
-            for (Profile profile2 : this.profiles) {
-                profile2.setSortOrder(profile2.getCurrentSortIndex());
+        synchronized (this) {
+            // Restoring a profile cancels a pending deletion of the same ID.
+            if (profile.getOnlineId() != null) this.deletedRemoteProfileRevisions.remove(profile.getOnlineId());
+            if (prepend) {
+                this.profiles.add(0, profile);
+                for (Profile existing : this.profiles) {
+                    existing.setSortOrder(existing.getCurrentSortIndex());
+                }
+            } else {
+                this.profiles.add(profile);
             }
-        } else {
-            this.profiles.add(profile);
         }
         ClientSettings.getFrame(ProfilesSettingsFrame.class).addProfile(profile);
         ProfilesSettingsFrame.refreshProfileList();
@@ -181,16 +190,15 @@ public class ProfilesManager {
         return null;
     }
 
-    public JsonObject toJson(boolean dirtyOnly) {
+    public synchronized JsonObject toJson(boolean dirtyOnly) {
         if (dirtyOnly) {
             ArrayList<Profile> dirtyProfiles = new ArrayList<Profile>();
             for (Profile profile : this.getProfiles()) {
                 if (!profile.isDirty()) continue;
                 dirtyProfiles.add(profile);
             }
-            ArrayList<UUID> deletedIds = new ArrayList<UUID>(this.deletedRemoteProfileIds);
-            this.deletedRemoteProfileIds.clear();
-            return ProfilesSyncPayloadBuilder.build(dirtyProfiles, (List<UUID>)deletedIds);
+            ArrayList<UUID> deletedIds = new ArrayList<UUID>(this.deletedRemoteProfileRevisions.keySet());
+            return ProfilesSyncPayloadBuilder.build(dirtyProfiles, deletedIds);
         }
         JsonObject result = new JsonObject();
         for (Profile profile : this.getProfiles()) {
@@ -199,7 +207,68 @@ public class ProfilesManager {
         return result;
     }
 
-    public void clearProfiles() {
+    /** Snapshot deletion intents without consuming them until the server accepts them. */
+    public synchronized Map<UUID, Long> getPendingDeletionRevisions() {
+        return new LinkedHashMap<UUID, Long>(this.deletedRemoteProfileRevisions);
+    }
+
+    public synchronized void acknowledgeDeletions(Map<UUID, Long> sent) {
+        for (Map.Entry<UUID, Long> entry : sent.entrySet()) {
+            if (entry.getValue().equals(this.deletedRemoteProfileRevisions.get(entry.getKey()))) {
+                this.deletedRemoteProfileRevisions.remove(entry.getKey());
+            }
+        }
+    }
+
+    /** Keep unsent profile changes alongside the local snapshot across restarts. */
+    public synchronized JsonObject pendingSyncState() {
+        JsonObject state = new JsonObject();
+        JsonArray updates = new JsonArray();
+        JsonArray deletions = new JsonArray();
+        for (Profile profile : this.profiles) {
+            if (profile.isDirty()) updates.add(new JsonPrimitive(profile.getLocalId().toString()));
+        }
+        for (UUID id : this.deletedRemoteProfileRevisions.keySet()) deletions.add(new JsonPrimitive(id.toString()));
+        state.add("updates", updates);
+        state.add("deletions", deletions);
+        return state;
+    }
+
+    public synchronized void restorePendingSyncState(@Nullable JsonObject state) {
+        if (state == null) return;
+        JsonArray updates = gg.vape.config.ConfigJsonUtils.getJsonArray(state, "updates");
+        if (updates != null) for (JsonElement element : updates) {
+            UUID id = parsePendingUuid(element);
+            Profile profile = id == null ? null : this.getProfileByLocalId(id);
+            if (profile != null) profile.setDirty(true);
+        }
+        JsonArray deletions = gg.vape.config.ConfigJsonUtils.getJsonArray(state, "deletions");
+        if (deletions != null) for (JsonElement element : deletions) {
+            UUID id = parsePendingUuid(element);
+            // Never replay a stale deletion against a profile that is present
+            // in the same local snapshot.
+            if (id != null && this.getProfileByOnlineId(id) == null && !this.deletedRemoteProfileRevisions.containsKey(id)) {
+                this.deletedRemoteProfileRevisions.put(id, ++this.deletionRevision);
+            }
+        }
+    }
+
+    @Nullable
+    private static UUID parsePendingUuid(JsonElement element) {
+        try {
+            return element != null && element.isJsonPrimitive() ? UUID.fromString(element.getAsString()) : null;
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    public synchronized boolean hasPendingSync() {
+        if (!this.deletedRemoteProfileRevisions.isEmpty()) return true;
+        for (Profile profile : this.profiles) if (profile.isDirty()) return true;
+        return false;
+    }
+
+    public synchronized void clearProfiles() {
         this.profiles.clear();
     }
 
@@ -219,7 +288,7 @@ public class ProfilesManager {
         }
     }
 
-    public void setActiveProfile(Profile profile) {
+    public synchronized void setActiveProfile(Profile profile) {
         if (this.activeProfile != null && this.activeProfile.equals(profile)) {
             return;
         }
@@ -231,14 +300,36 @@ public class ProfilesManager {
         EventBus.getInstance().post(new ProfileChangeEvent(previousProfile, profile));
     }
 
-    public void switchProfile(Profile profile) {
+    /** Reapply an edited active profile without changing which profile is selected. */
+    public synchronized void reloadActiveProfile(Profile expectedProfile) {
+        if (expectedProfile == null || this.activeProfile != expectedProfile) return;
+        this.resetAllSettings();
+        expectedProfile.apply();
+        EventBus.getInstance().post(new ProfileChangeEvent(expectedProfile, expectedProfile));
+    }
+
+    public synchronized void switchProfile(Profile profile) {
         if (this.getActiveProfile() != null) {
             this.getActiveProfile().captureCurrentState();
         }
         this.setActiveProfile(profile);
     }
 
-    public void captureProfileState(Profile profile) {
+    /** Capture the selected profile while preventing a concurrent switch. */
+    public synchronized Profile captureActiveProfile() {
+        Profile current = this.getActiveProfile();
+        if (current != null) current.captureCurrentState();
+        return current;
+    }
+
+    /** Do not capture a profile which stopped being active before the lock. */
+    public synchronized boolean captureIfActive(Profile expected) {
+        if (expected == null || this.activeProfile != expected) return false;
+        expected.captureCurrentState();
+        return true;
+    }
+
+    public synchronized void captureProfileState(Profile profile) {
         Profile currentProfile = this.getActiveProfile();
         if (profile.equals(currentProfile)) {
             profile.captureCurrentState();
@@ -258,7 +349,7 @@ public class ProfilesManager {
         return remoteProfiles;
     }
 
-    public Profile getActiveProfile() {
+    public synchronized Profile getActiveProfile() {
         boolean activeProfileInvalid = this.activeProfile == null || !this.getProfiles().contains(this.activeProfile) && !this.activeProfile.isDraft();
         if (activeProfileInvalid) {
             if (!this.getProfiles().isEmpty()) {
@@ -284,8 +375,24 @@ public class ProfilesManager {
         return null;
     }
 
-    public void sortProfiles() {
+    public synchronized void sortProfiles() {
         this.profiles.sort(Profile::compareSortOrder);
+    }
+
+    /** Move and dirty every profile whose serialized sort index changed. */
+    public void moveProfile(Profile profile, int destination) {
+        synchronized (this) {
+            int original = this.profiles.indexOf(profile);
+            if (original < 0 || destination < 0 || destination >= this.profiles.size() || original == destination) return;
+            this.profiles.remove(original);
+            this.profiles.add(destination, profile);
+            for (int index = Math.min(original, destination); index <= Math.max(original, destination); ++index) {
+                Profile changed = this.profiles.get(index);
+                changed.setSortOrder(index);
+                changed.setDirty(true);
+            }
+        }
+        Vape.INSTANCE.saveAndStop();
     }
 
     public Profile getActiveProfileOrNull() {

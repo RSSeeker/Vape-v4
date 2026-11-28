@@ -13,6 +13,7 @@ import gg.vape.ui.click.frame.FrameStackManager;
 import gg.vape.ui.click.frame.impl.main.ClickGuiFrameManager;
 import gg.vape.ui.click.frame.impl.profile.ProfileSnapshotFrame;
 import gg.vape.ui.font.SmoothFontRenderer;
+import java.util.function.Consumer;
 import org.jetbrains.annotations.Nullable;
 
 public class ProfileSnapshotApplyBarComponent
@@ -24,6 +25,12 @@ extends FlowLayoutComponent {
     private float leftPadding = 6.0f;
     private boolean countAllModules;
     private ProfileSnapshot snapshot;
+    @Nullable
+    private Consumer<ProfileSnapshot> applyCallback;
+
+    public void setApplyCallback(@Nullable Consumer<ProfileSnapshot> applyCallback) {
+        this.applyCallback = applyCallback;
+    }
 
     public ProfileSnapshot getSnapshot() {
         return this.snapshot;
@@ -73,19 +80,20 @@ extends FlowLayoutComponent {
             if (resetAction) {
                 ConfirmationDialogComponent.showStandard(this.L$src$Lgg_vape_ui_click_frame_Frame_$1djx6sa(), "Are you sure you want to reset all settings?", "Reset", "reset_circle", () -> this.handleResetConfirmed(profileSnapshotFrame));
             } else {
-                Profile profile = Vape.INSTANCE.getProfilesManager().getActiveProfileOrNull();
+                if (this.getSnapshot() == null) return;
                 Profile snapshotProfile = this.getSnapshot().getProfile();
-                profile.captureCurrentState();
-                if (snapshotProfile != null && snapshotProfile.equals(profile)) {
-                    this.setSnapshot(snapshotProfile.createSnapshot(false));
+                if (Vape.INSTANCE.getProfilesManager().captureIfActive(snapshotProfile)) {
+                    ProfileSnapshot refreshed = snapshotProfile.createSnapshot(false);
+                    if (refreshed != null) this.setSnapshot(refreshed);
                 }
-                profileSnapshotFrame.setSnapshot(this.getSnapshot());
+                profileSnapshotFrame.setSnapshot(this.getSnapshot(), this.applyCallback);
                 if (ClientSettings.INSTANCE.getActiveStack() instanceof ClickGuiFrameManager) {
                     ClickGuiFrameManager clickGuiFrameManager = (ClickGuiFrameManager)ClientSettings.INSTANCE.getActiveStack();
                     profileSnapshotFrame.setReturnStack(clickGuiFrameManager);
                     clickGuiFrameManager.setSidecarFrame(profileSnapshotFrame);
                 } else {
-                    profileSnapshotFrame.setReturnStack(this.getReturnStack());
+                    FrameStackManager origin = this.getReturnStack();
+                    profileSnapshotFrame.setReturnStack(origin != null ? origin : ClientSettings.INSTANCE.getActiveStack());
                     ClientSettings.INSTANCE.switchFrameStack(ClientSettings.profileSnapshotStack);
                 }
             }

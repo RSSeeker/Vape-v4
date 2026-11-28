@@ -41,6 +41,9 @@ public final class ObfuscatedClassAudit {
             "gg/vape/event/impl/EventRenderWorldPassExecutorDrain"));
     // Localization edits and separately reviewed module behavior changes.
     private static final Set<String> EXPECTED_ENGLISH_MODULE_CHANGES = new HashSet<>(Arrays.asList(
+            "gg/vape/module/Mod",
+            "gg/vape/module/blatant/antibot/AntiBotBooleanValue",
+            "gg/vape/module/blatant/antibot/AntiBotModeValue",
             "gg/vape/module/combat/AimAssist",
             "gg/vape/module/combat/AutoMace",
             "gg/vape/module/combat/HitSwap",
@@ -53,12 +56,28 @@ public final class ObfuscatedClassAudit {
             "gg/vape/module/extension/ReloadScriptsModule",
             "gg/vape/module/extension/ScriptModule",
             "gg/vape/module/none/ClientSettings",
+            "gg/vape/module/none/ClientSettingsBooleanValue",
             "gg/vape/module/none/TextGuiSettings",
             "gg/vape/module/render/Search",
             "gg/vape/module/render/SpawnerFinder",
             "gg/vape/module/render/StorageESP",
             "gg/vape/module/render/hud/MotionBlur",
-            "gg/vape/module/render/search/SearchBlockChunkScanner"));
+            "gg/vape/module/render/search/SearchBlockChunkScanner",
+            "gg/vape/module/utility/inventory/HotbarSlotRuleEditorComponent",
+            "gg/vape/module/utility/inventory/HotbarSlotRuleGroupComponent",
+            "gg/vape/module/utility/inventory/HotbarSlotRuleGroupSelectClickHandler",
+            "gg/vape/module/utility/inventory/HotbarSlotRuleItemPickerFrame",
+            "gg/vape/module/utility/inventory/HotbarSlotRuleItemSelectClickHandler",
+            "gg/vape/module/utility/inventory/HotbarSlotRuleSlotSelectClickHandler",
+            "gg/vape/module/utility/inventory/HotbarSlotRuleValue",
+            "gg/vape/module/utility/inventory/cleaner/AbstractInventoryFilterRule",
+            "gg/vape/module/utility/inventory/cleaner/InventoryCleanerProfile",
+            "gg/vape/module/utility/inventory/cleaner/InventoryCleanerProfileValue",
+            "gg/vape/module/utility/inventory/cleaner/ui/InventoryCleanerPopupFrame",
+            "gg/vape/module/utility/inventory/cleaner/ui/InventoryCleanerProfileRowClickHandler",
+            "gg/vape/module/utility/inventory/cleaner/ui/InventoryCleanerProfileValueComponent",
+            "gg/vape/module/utility/inventory/cleaner/ui/InventoryFilterRuleEditorFrame",
+            "gg/vape/module/utility/inventory/cleaner/ui/InventoryFilterRuleEditorPanel"));
 
     private static final class Metadata extends ClassVisitor {
         String source;

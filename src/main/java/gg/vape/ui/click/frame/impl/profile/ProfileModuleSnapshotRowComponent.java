@@ -1,5 +1,6 @@
 package gg.vape.ui.click.frame.impl.profile;
 
+import gg.vape.Vape;
 import gg.vape.config.ProfileModuleSnapshot;
 import gg.vape.config.ProfileSnapshot;
 import gg.vape.module.none.ClientSettings;
@@ -12,6 +13,7 @@ import gg.vape.ui.font.SmoothFontRenderer;
 import gg.vape.unmap.ColorUtil;
 import gg.vape.utils.render.GuiRenderPrimitives;
 import java.awt.Color;
+import java.util.function.Consumer;
 
 public class ProfileModuleSnapshotRowComponent
 extends GuiComponent {
@@ -19,6 +21,7 @@ extends GuiComponent {
     private Color badgeTextColor;
     private Color textColor;
     private final ProfileSnapshot snapshot;
+    private final Consumer<ProfileSnapshot> applyCallback;
     private Color enabledBadgeColor;
     private Color enabledTextColor;
     private Color hoverBorderColor;
@@ -26,14 +29,29 @@ extends GuiComponent {
 
     @Override
     public void g(GuiMouseEvent guiMouseEvent) {
+        ProfileSnapshot editable = this.snapshot;
+        ProfileModuleSnapshot selected = this.moduleSnapshot;
+        if (Vape.INSTANCE.getProfilesManager().captureIfActive(editable.getProfile())) {
+            ProfileSnapshot refreshed = editable.getProfile().createSnapshot(false);
+            if (refreshed != null) {
+                for (ProfileModuleSnapshot candidate : refreshed.getAllModules()) {
+                    if (candidate.getModule() == selected.getModule()) {
+                        editable = refreshed;
+                        selected = candidate;
+                        break;
+                    }
+                }
+            }
+        }
         ProfileSnapshotFrame profileSnapshotFrame = ClientSettings.getFrame(ProfileSnapshotFrame.class);
-        profileSnapshotFrame.setSnapshot(this.snapshot);
-        profileSnapshotFrame.selectModule(this.moduleSnapshot);
+        profileSnapshotFrame.setSnapshot(editable, this.applyCallback);
+        profileSnapshotFrame.selectModule(selected);
         if (ClientSettings.INSTANCE.getActiveStack() instanceof ClickGuiFrameManager) {
             ClickGuiFrameManager clickGuiFrameManager = (ClickGuiFrameManager)ClientSettings.INSTANCE.getActiveStack();
             profileSnapshotFrame.setReturnStack(clickGuiFrameManager);
             clickGuiFrameManager.setSidecarFrame(profileSnapshotFrame);
         } else {
+            profileSnapshotFrame.setReturnStack(ClientSettings.INSTANCE.getActiveStack());
             ClientSettings.INSTANCE.switchFrameStack(ClientSettings.profileSnapshotStack);
         }
     }
@@ -99,6 +117,12 @@ extends GuiComponent {
     }
 
     public ProfileModuleSnapshotRowComponent(double width, ProfileSnapshot snapshot, ProfileModuleSnapshot moduleSnapshot) {
+        this(width, snapshot, moduleSnapshot, null);
+    }
+
+    public ProfileModuleSnapshotRowComponent(double width, ProfileSnapshot snapshot, ProfileModuleSnapshot moduleSnapshot,
+                                             Consumer<ProfileSnapshot> applyCallback) {
+        this.applyCallback = applyCallback;
         this.backgroundColor = ProfileModuleSnapshotRowComponent.J.m;
         this.hoverBorderColor = ProfileModuleSnapshotRowComponent.J.l;
         this.badgeTextColor = ProfileModuleSnapshotRowComponent.J.Z;

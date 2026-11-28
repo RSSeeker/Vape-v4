@@ -220,6 +220,18 @@ implements INamed {
         this.conditions.put(conditionalValue, null);
     }
 
+    /** Copy editor visibility rules while replacing module-local dependencies
+     * with their detached counterparts. Unmapped global dependencies remain
+     * read-only references to the original condition. */
+    public void copyConditionsTo(Value<?, ?> target, Map<Value<?, ?>, Value<?, ?>> proxies) {
+        for (Map.Entry<ConditionalValue, ValueCondition> entry : this.conditions.entrySet()) {
+            Value<?, ?> proxy = proxies.get(entry.getKey());
+            ConditionalValue condition = proxy instanceof ConditionalValue ? (ConditionalValue)proxy : entry.getKey();
+            if (entry.getValue() == null) target.addConditionalValue(condition);
+            else target.addCondition(entry.getValue().rebind(proxies));
+        }
+    }
+
     public void setSerializable(boolean serializable) {
         this.serializable = serializable;
     }
@@ -403,6 +415,10 @@ implements INamed {
     public T setBase64Encoded(boolean encodeBase64) {
         this.encodeBase64 = encodeBase64;
         return (T)this;
+    }
+
+    public boolean isBase64Encoded() {
+        return this.encodeBase64;
     }
 
     static {
