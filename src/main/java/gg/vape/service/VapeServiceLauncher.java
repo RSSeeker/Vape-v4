@@ -1,6 +1,6 @@
 package gg.vape.service;
 
-import gg.vape.brand.SoulboundPaths;
+import gg.vape.brand.InevitablePaths;
 import gg.vape.service.http.LegacyHttpServer;
 import gg.vape.service.store.FileStore;
 import gg.vape.service.zeus.ZeusServer;
@@ -36,7 +36,7 @@ public final class VapeServiceLauncher {
             public void run() {
                 startInternal();
             }
-        }, "Soulbound-service");
+        }, "InevitableClient-service");
         thread.setDaemon(true);
         thread.start();
     }
@@ -92,12 +92,12 @@ public final class VapeServiceLauncher {
 
             httpServer = http;
             zeusServer = zeus;
-            System.out.println("[Soulbound] experimental service started: http://" + bindAddress + ":" + http.port()
+            System.out.println("[InevitableClient] experimental service started: http://" + bindAddress + ":" + http.port()
                     + ", zeus://" + bindAddress + ":" + zeus.port() + ", data=" + dataFile.toAbsolutePath());
         } catch (Throwable failure) {
             httpServer = null;
             zeusServer = null;
-            System.out.println("[Soulbound] experimental service unavailable: " + failure.getMessage());
+            System.out.println("[InevitableClient] experimental service unavailable: " + failure.getMessage());
         }
     }
 
@@ -106,7 +106,7 @@ public final class VapeServiceLauncher {
         if (configured != null && !configured.trim().isEmpty()) {
             return Paths.get(configured);
         }
-        return SoulboundPaths.serviceDataFile(SoulboundPaths.clientDirectoryFromNativeOrHome()).toPath();
+        return InevitablePaths.serviceDataFile(InevitablePaths.clientDirectoryFromNativeOrHome()).toPath();
     }
 
     private static String env(String name, String fallback) {
@@ -127,7 +127,7 @@ public final class VapeServiceLauncher {
         } catch (NumberFormatException ignored) {
             // fall through to default
         }
-        System.out.println("[Soulbound] invalid " + name + "=" + value + ", using default " + fallback);
+        System.out.println("[InevitableClient] invalid " + name + "=" + value + ", using default " + fallback);
         return fallback;
     }
 

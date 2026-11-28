@@ -63,12 +63,12 @@ static void injector_diag(const wchar_t *format, ...) {
 }
 
 /* A matching DLL may be adjacent to the launcher, or the embedded DLL may
- * be extracted under <exe>\<selected client folder>\SoulboundRecovery.
+ * be extracted under <exe>\<selected client folder>\InevitableClientRecovery.
  * Derive the launcher directory from either path without a shared TEMP marker. */
 static int injector_directory(wchar_t *output, size_t capacity) {
     wchar_t *marker;
     wchar_t *last = NULL;
-    const wchar_t *markers[] = {L"\\.soulbound\\", L"\\.vapeclient\\"};
+    const wchar_t *markers[] = {L"\\.inevitable\\", L"\\.soulbound\\", L"\\.vapeclient\\"};
     size_t i;
     if (output == NULL || capacity == 0) {
         injector_diag(L"injector_directory: null args");
@@ -112,7 +112,7 @@ static int client_directory(wchar_t *output, size_t capacity) {
             }
         }
     }
-    if (!soulbound_client_directory(output, output, capacity)) {
+    if (!inevitable_client_directory(output, output, capacity)) {
         return 0;
     }
     if (!CreateDirectoryW(output, NULL)
@@ -152,7 +152,7 @@ static void ensure_log_path(void) {
     process_id = GetCurrentProcessId();
     GetLocalTime(&now);
     _snwprintf_s(g_log_file, MAX_PATH, _TRUNCATE,
-            L"%ls\\soulbound-native-%lu-%04u%02u%02u-%02u%02u%02u.log",
+            L"%ls\\inevitable-native-%lu-%04u%02u%02u-%02u%02u%02u.log",
             log_directory, (unsigned long)process_id,
             now.wYear, now.wMonth, now.wDay,
             now.wHour, now.wMinute, now.wSecond);
@@ -310,14 +310,14 @@ static int materialize_embedded_product_jar(
     }
     _snwprintf_s(temp_directory,
             sizeof(temp_directory) / sizeof(temp_directory[0]), _TRUNCATE,
-            L"%ls\\SoulboundRecovery", temp_root);
+            L"%ls\\InevitableClientRecovery", temp_root);
     if (!CreateDirectoryW(temp_directory, NULL)
             && GetLastError() != ERROR_ALREADY_EXISTS) {
         vape_log(L"CreateDirectoryW failed: %lu", GetLastError());
         return 0;
     }
     if (_snwprintf_s(jar_base, MAX_PATH, _TRUNCATE,
-            L"%ls\\Soulbound-product-%lu", temp_directory,
+            L"%ls\\InevitableClient-product-%lu", temp_directory,
             (unsigned long)GetCurrentProcessId()) < 0) {
         vape_log(L"temporary product JAR path is too long");
         return 0;

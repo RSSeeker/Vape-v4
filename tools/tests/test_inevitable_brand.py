@@ -11,16 +11,16 @@ class BrandTests(unittest.TestCase):
     def test_version_and_legacy_paths(self):
         with tempfile.TemporaryDirectory() as temporary:
             classes = Path(temporary) / "classes"; classes.mkdir()
-            sources = [ROOT / "src/main/java/gg/vape/brand/SoulboundBrand.java",
-                       ROOT / "src/main/java/gg/vape/brand/SoulboundPaths.java",
-                       ROOT / "tools/tests/SoulboundBrandTest.java"]
+            sources = [ROOT / "src/main/java/gg/vape/brand/InevitableBrand.java",
+                       ROOT / "src/main/java/gg/vape/brand/InevitablePaths.java",
+                       ROOT / "tools/tests/InevitableBrandTest.java"]
             subprocess.run(["javac", "--release", "8", "-encoding", "UTF-8", "-d", str(classes),
                             *(str(p) for p in sources)], check=True)
-            resource = classes / "META-INF/soulbound-version.properties"; resource.parent.mkdir()
+            resource = classes / "META-INF/inevitable-version.properties"; resource.parent.mkdir()
             for value, expected in (("1", "1"), ("1.1", "1.1"), ("1.2", "1.2"), ("invalid", "1"), (None, "1")):
                 if value is None: resource.unlink()
                 else: resource.write_text("version=" + value + "\n", encoding="utf-8")
-                subprocess.run(["java", "-cp", str(classes), "SoulboundBrandTest", expected],
+                subprocess.run(["java", "-cp", str(classes), "InevitableBrandTest", expected],
                                check=True, env=os.environ.copy())
 
 if __name__ == "__main__": unittest.main()

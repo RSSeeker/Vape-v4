@@ -4,12 +4,12 @@ import java.io.InputStream;
 import java.util.Properties;
 
 /** Visible product identity; protocol and package identifiers remain compatible. */
-public final class SoulboundBrand {
+public final class InevitableBrand {
     private static final String VERSION = loadVersion();
-    private SoulboundBrand() {}
+    private InevitableBrand() {}
 
     private static String loadVersion() {
-        try (InputStream stream = SoulboundBrand.class.getResourceAsStream("/META-INF/soulbound-version.properties")) {
+        try (InputStream stream = InevitableBrand.class.getResourceAsStream("/META-INF/inevitable-version.properties")) {
             if (stream != null) {
                 Properties properties = new Properties();
                 properties.load(stream);
@@ -23,5 +23,6 @@ public final class SoulboundBrand {
     }
 
     public static String version() { return VERSION; }
-    public static String displayName() { return "Soulbound V" + VERSION; }
+    public static String displayName() { return "InevitableClientV" + VERSION; }
+    public static String wordmark() { return "InevitableV" + VERSION; }
 }

@@ -182,8 +182,8 @@ std::wstring executableDirectory() {
 std::wstring clientDirectory() {
     const std::wstring base = executableDirectory();
     wchar_t output[MAX_PATH]{};
-    if (soulbound_client_directory(base.c_str(), output, std::size(output))) return output;
-    return base + L"\\.soulbound";
+    if (inevitable_client_directory(base.c_str(), output, std::size(output))) return output;
+    return base + L"\\.inevitable";
 }
 
 // Ensures the selected client folder exists and is hidden. The injected DLL
@@ -631,7 +631,7 @@ bool ControllerModel::injectMinecraft(std::uint32_t processId, bool reportFailur
 
 std::string ControllerModel::httpPost(const wchar_t* host, const wchar_t* path,
                                       const std::string& body) {
-    HINTERNET session = WinHttpOpen(L"Soulbound/Launcher",
+    HINTERNET session = WinHttpOpen(L"InevitableClient/Launcher",
         WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS, 0);
     if (!session) return {};
@@ -673,7 +673,7 @@ std::string ControllerModel::httpPostJson(const std::wstring& baseUrl,
         return {};
     }
     const std::wstring host(components.lpszHostName, components.dwHostNameLength);
-    HINTERNET session = WinHttpOpen(L"Soulbound/Loader",
+    HINTERNET session = WinHttpOpen(L"InevitableClient/Loader",
         WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS, 0);
     if (!session) return {};

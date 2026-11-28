@@ -22,21 +22,21 @@ def read_version(properties):
     # ignore malformed or duplicate definitions that Gradle might interpret.
     lines = Path(properties).read_text(encoding="utf-8").splitlines()
     candidates = [line for line in lines
-                  if re.match(r"^[ \t]*soulboundVersion(?:[ \t:=]|$)", line)]
+                  if re.match(r"^[ \t]*inevitableVersion(?:[ \t:=]|$)", line)]
     require(len(candidates) == 1,
-            "gradle.properties must contain one soulboundVersion assignment")
-    match = re.fullmatch(r"[ \t]*soulboundVersion[ \t]*=[ \t]*([^\s#]+)[ \t]*", candidates[0])
+            "gradle.properties must contain one inevitableVersion assignment")
+    match = re.fullmatch(r"[ \t]*inevitableVersion[ \t]*=[ \t]*([^\s#]+)[ \t]*", candidates[0])
     require(match is not None and bool(VERSION.fullmatch(match.group(1))),
-            "soulboundVersion must be numeric, e.g. 1 or 1.1")
+            "inevitableVersion must be numeric, e.g. 1 or 1.1")
     return match.group(1)
 
 
 def validate_payload(data, version):
     with zipfile.ZipFile(io.BytesIO(data)) as jar:
         names = jar.namelist()
-        for name in ("META-INF/soulbound-version.properties", "META-INF/MANIFEST.MF"):
+        for name in ("META-INF/inevitable-version.properties", "META-INF/MANIFEST.MF"):
             require(names.count(name) == 1, "payload metadata is missing or duplicated: " + name)
-        resource = jar.read("META-INF/soulbound-version.properties").decode("utf-8").strip()
+        resource = jar.read("META-INF/inevitable-version.properties").decode("utf-8").strip()
         require(resource == "version=" + version, "payload version resource does not match")
         manifest = jar.read("META-INF/MANIFEST.MF").decode("utf-8").replace("\r\n", "\n")
         manifest = re.sub(r"\n ", "", manifest)
@@ -61,17 +61,17 @@ def validate_checksums(checksums, executable, dll, prefix=""):
 def validate(properties, tag=None, payloads=(), executable=None, dll=None, checksums=None, scan_hashes=None):
     version = read_version(properties)
     if tag is not None:
-        require(tag == "SoulboundV" + version, "tag must be SoulboundV" + version)
+        require(tag == "InevitableClientV" + version, "tag must be InevitableClientV" + version)
     for payload in payloads:
         validate_payload(Path(payload).read_bytes(), version)
     require((executable is None) == (dll is None), "supply both --executable and --dll")
     if executable is not None:
         executable, dll = Path(executable), Path(dll)
-        require(executable.name == "SoulboundV" + version + ".exe", "executable filename does not match version")
-        require(dll.name == "SoulboundNative.dll", "unexpected native DLL filename")
+        require(executable.name == "InevitableClientV" + version + ".exe", "executable filename does not match version")
+        require(dll.name == "InevitableClientNative.dll", "unexpected native DLL filename")
         exe_bytes, dll_bytes = executable.read_bytes(), dll.read_bytes()
         # Require the terminating wide NUL so V1.1 cannot satisfy the V1 check.
-        require(("Soulbound V" + version + "\0").encode("utf-16le") in exe_bytes,
+        require(("InevitableClientV" + version + "\0").encode("utf-16le") in exe_bytes,
                 "expected exact loader title is missing")
         require(pe_resource(exe_bytes, 422) == dll_bytes, "embedded DLL differs from shipped DLL")
         validate_payload(pe_resource(dll_bytes, 421), version)
@@ -97,7 +97,7 @@ def main():
     try:
         version = validate(args.properties, args.tag, args.payload, args.executable, args.dll,
                            args.checksums, args.scan_hashes)
-        print("Soulbound version verified: " + version + " (tag SoulboundV" + version + ")")
+        print("InevitableClient version verified: " + version + " (tag InevitableClientV" + version + ")")
     except (ValueError, OSError, KeyError, zipfile.BadZipFile, ParityError, UnicodeError) as error:
         print("Version verification failed: " + str(error), file=sys.stderr)
         return 1

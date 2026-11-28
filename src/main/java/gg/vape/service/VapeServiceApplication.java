@@ -33,9 +33,9 @@ public final class VapeServiceApplication {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             httpServer.close();
             zeusServer.close();
-        }, "Soulbound-service-shutdown"));
+        }, "InevitableClient-service-shutdown"));
 
-        System.out.printf("Soulbound experimental service started: http://%s:%d, zeus://%s:%d, data=%s%n",
+        System.out.printf("InevitableClient experimental service started: http://%s:%d, zeus://%s:%d, data=%s%n",
                 config.bindAddress(), config.httpPort(), config.bindAddress(), config.zeusPort(),
                 config.dataFile().toAbsolutePath());
         new CountDownLatch(1).await();

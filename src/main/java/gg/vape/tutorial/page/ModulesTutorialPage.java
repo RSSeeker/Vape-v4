@@ -32,7 +32,7 @@ extends TutorialPage {
 
     public ModulesTutorialPage() {
         super("Modules");
-        this.addAction(new MultiComponentHighlightTutorialAction((GuiComponent)ClientSettings.settingsSearchFrame, ModuleCategoryNavigationButtonComponent.class, "Soulbound Module Categories", "Soulbound primarily consists of modules, split into separate module categories", false).setTooltipPlacement(TutorialTooltipPlacement.RIGHT));
+        this.addAction(new MultiComponentHighlightTutorialAction((GuiComponent)ClientSettings.settingsSearchFrame, ModuleCategoryNavigationButtonComponent.class, "InevitableClient Module Categories", "InevitableClient primarily consists of modules, split into separate module categories", false).setTooltipPlacement(TutorialTooltipPlacement.RIGHT));
         this.addAction(new MultiComponentHighlightTutorialAction((GuiComponent)ClientSettings.settingsSearchFrame, new ModulesTutorialCategoryButtonSelector(this, ModuleCategoryNavigationButtonComponent.class), "Open the combat category", "Click the combat category button", true).setTooltipPlacement(TutorialTooltipPlacement.RIGHT));
         this.addAction(new MultiComponentHighlightTutorialAction((GuiComponent)ClientSettings.legitModuleCategoryFrame, ModuleComponent.class, "Modules", "Modules in this category are listed here.", false).setTooltipPlacement(TutorialTooltipPlacement.RIGHT));
         this.addAction(new MultiComponentHighlightTutorialAction((GuiComponent)ClientSettings.legitModuleCategoryFrame, new ModulesTutorialNamedModuleRowSelector(this, ModuleComponent.class), "Module", "For a module to do anything, you can enable it by left clicking its button.", false).setTooltipPlacement(TutorialTooltipPlacement.RIGHT));

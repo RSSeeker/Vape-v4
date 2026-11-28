@@ -38,7 +38,7 @@ public class SyncThread {
         this.vape = vape;
         this.debounceWorker = new SyncDebounceWorker();
         Runtime.getRuntime().addShutdownHook(
-                new Thread(this::saveLocalSnapshot, "Soulbound local config save"));
+                new Thread(this::saveLocalSnapshot, "InevitableClient local config save"));
     }
 
     public void saveSettings() {
@@ -248,7 +248,7 @@ public class SyncThread {
         this.pendingSave.set(false);
         if (this.storeRequestWorker == null) {
             this.storeRequestWorker = new SyncStoreRequestWorker();
-            new Thread(this.storeRequestWorker, "Soulbound settings save worker").start();
+            new Thread(this.storeRequestWorker, "InevitableClient settings save worker").start();
         }
         this.storeRequestWorker.requestSave();
     }
@@ -364,7 +364,7 @@ public class SyncThread {
     }
 
     public void start() {
-        new Thread(this.debounceWorker, "Soulbound settings sync worker").start();
+        new Thread(this.debounceWorker, "InevitableClient settings sync worker").start();
     }
 
     private void syncOnlineSettings() {

@@ -13,7 +13,7 @@ public final class ClickGuiFriendsThemeConfigFactory {
     }
 
     public static ClickGuiOverlaySpec createOverlay() {
-        return ClickGuiOverlaySpec.builder().title("Soulbound Online Settings").sidecarIcon("settings").initializeContent(ClickGuiFriendsThemeConfigFactory::populate).transitionMode(ClickGuiOverlayTransitionMode.REPLACE).build();
+        return ClickGuiOverlaySpec.builder().title("InevitableClient Online Settings").sidecarIcon("settings").initializeContent(ClickGuiFriendsThemeConfigFactory::populate).transitionMode(ClickGuiOverlayTransitionMode.REPLACE).build();
     }
 
     private static void populate(PanelComponent panelComponent) {

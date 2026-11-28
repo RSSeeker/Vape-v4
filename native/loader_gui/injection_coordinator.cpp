@@ -182,7 +182,8 @@ bool writeTextFile(const std::wstring& path, const std::wstring& text) {
  * <client root>\.vapeclient) so a marker survives a hidden-folder surprise. */
 void writeInjectionMarker(const std::wstring& installDirectory, bool manualMapped,
         const std::wstring& manualMapError, std::uint32_t processId) {
-    const std::wstring currentMarker = L"\\.soulbound\\";
+    const std::wstring currentMarker = L"\\.inevitable\\";
+    const std::wstring previousMarker = L"\\.soulbound\\";
     const std::wstring legacyMarker = L"\\.vapeclient\\";
     const std::wstring fileName = manualMapped ? L"manual-map-ok.txt"
                                                : L"manual-map-fallback.txt";
@@ -190,13 +191,16 @@ void writeInjectionMarker(const std::wstring& installDirectory, bool manualMappe
                                                 : L"manual-map-ok.txt";
     std::vector<std::wstring> directories;
     directories.push_back(installDirectory);
-    const auto current = installDirectory.rfind(currentMarker);
-    const auto legacy = installDirectory.rfind(legacyMarker);
-    const bool useCurrent = current != std::wstring::npos && (legacy == std::wstring::npos || current > legacy);
-    const auto position = useCurrent ? current : legacy;
-    if (position != std::wstring::npos) {
-        directories.push_back(installDirectory.substr(0, position) + (useCurrent ? currentMarker : legacyMarker));
+    std::wstring::size_type position = std::wstring::npos;
+    const std::wstring* chosen = nullptr;
+    for (const auto* marker : {&currentMarker, &previousMarker, &legacyMarker}) {
+        const auto found = installDirectory.rfind(*marker);
+        if (found != std::wstring::npos && (position == std::wstring::npos || found > position)) {
+            position = found;
+            chosen = marker;
+        }
     }
+    if (chosen != nullptr) directories.push_back(installDirectory.substr(0, position) + *chosen);
     SYSTEMTIME now{};
     GetLocalTime(&now);
     wchar_t stamp[64]{};
@@ -351,7 +355,7 @@ bool InjectionCoordinator::injectProductDll(std::uint32_t processId,
      * process module list. Fall back to the LoadLibraryW loader when the
      * reflective loader is unavailable or refuses the image. */
     const std::wstring installDirectory = parentDirectory(dllPath);
-    const std::wstring manualJarBase = installDirectory + L"\\Soulbound-product-" +
+    const std::wstring manualJarBase = installDirectory + L"\\InevitableClient-product-" +
         std::to_wstring(processId);
     std::wstring manualJarPath;
     bool manualMapped = false;

@@ -99,7 +99,7 @@ implements Runnable {
         if (this.o) return;
         this.o = true;
         final long generation = ++this.workerGeneration;
-        this.worker = new Thread(() -> this.runForGeneration(generation), "Soulbound-Search");
+        this.worker = new Thread(() -> this.runForGeneration(generation), "InevitableClient-Search");
         this.worker.setDaemon(true);
         this.worker.start();
     }

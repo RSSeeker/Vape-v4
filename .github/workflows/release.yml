@@ -1,4 +1,4 @@
-name: Publish tested Soulbound release
+name: Publish tested InevitableClient release
 
 # A product tag can publish only after a completed CI run for that exact commit.
 # Manual dispatch remains available for selecting a specific successful run.
@@ -6,11 +6,11 @@ name: Publish tested Soulbound release
 on:
   push:
     tags:
-      - 'SoulboundV*'
+      - 'InevitableClientV*'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing tag, e.g. SoulboundV1 or SoulboundV1.1'
+        description: 'Existing tag, e.g. InevitableClientV1 or InevitableClientV1.1'
         required: true
         type: string
       run_id:
@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$EVENT" == push ]]; then TAG="$PUSH_TAG"; else TAG="$INPUT_TAG"; fi
-          [[ "$TAG" =~ ^SoulboundV[1-9][0-9]*(\.[0-9]+)*$ ]] || { echo 'Invalid product tag'; exit 1; }
+          [[ "$TAG" =~ ^InevitableClientV[1-9][0-9]*(\.[0-9]+)*$ ]] || { echo 'Invalid product tag'; exit 1; }
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
       - name: Check out release tag
         uses: actions/checkout@v4
@@ -88,7 +88,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh run download "$RUN_ID" --name windows-x64-soulbound-bundle --dir bundle
+          gh run download "$RUN_ID" --name windows-x64-inevitable-bundle --dir bundle
           gh run download "$RUN_ID" --name rebuilt-bundle-scan-report --dir scan
       - name: Verify artifacts and scanned hashes
         env:
@@ -97,7 +97,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -B tools/verify_release_version.py --tag "$TAG" \
-            --executable "bundle/$TAG.exe" --dll bundle/SoulboundNative.dll \
+            --executable "bundle/$TAG.exe" --dll bundle/InevitableClientNative.dll \
             --checksums bundle/SHA256SUMS.txt --scan-hashes scan/sample-hashes.txt
           test -s bundle/MODULE-PARITY-REPORT.txt
           test -s scan/clamav-report.txt
@@ -108,8 +108,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release create "$TAG" "bundle/$TAG.exe" bundle/SoulboundNative.dll \
+          gh release create "$TAG" "bundle/$TAG.exe" bundle/InevitableClientNative.dll \
             bundle/SHA256SUMS.txt bundle/MODULE-PARITY-REPORT.txt \
             scan/clamav-report.txt scan/sample-hashes.txt \
-            --verify-tag --title "Soulbound V${TAG#SoulboundV}" \
+            --verify-tag --title "InevitableClientV${TAG#InevitableClientV}" \
             --notes-file "docs/releases/$TAG.md"

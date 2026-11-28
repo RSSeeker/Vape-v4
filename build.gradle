@@ -15,15 +15,15 @@ plugins {
 }
 
 group = 'gg.vape.recovery'
-version = (findProperty('soulboundVersion') ?: '1').toString()
+version = (findProperty('inevitableVersion') ?: '1').toString()
 if (!(version ==~ /[1-9][0-9]*(\.[0-9]+)*/)) {
-    throw new GradleException('soulboundVersion must be numeric, e.g. 1 or 1.1')
+    throw new GradleException('inevitableVersion must be numeric, e.g. 1 or 1.1')
 }
 
 tasks.named('processResources') {
-    inputs.property('soulboundVersion', project.version.toString())
-    filesMatching('META-INF/soulbound-version.properties') {
-        expand(soulboundVersion: project.version.toString())
+    inputs.property('inevitableVersion', project.version.toString())
+    filesMatching('META-INF/inevitable-version.properties') {
+        expand(inevitableVersion: project.version.toString())
     }
 }
 
@@ -225,9 +225,9 @@ tasks.register('injectionJar', com.github.jengelman.gradle.plugins.shadow.tasks.
     exclude 'module-info.class', 'META-INF/versions/**'
     manifest {
         attributes(
-                'Implementation-Title': 'Soulbound Java payload',
+                'Implementation-Title': 'InevitableClient Java payload',
                 'Implementation-Version': project.version,
-                'Soulbound-Target-Java': '8')
+                'InevitableClient-Target-Java': '8')
     }
 }
 
@@ -505,7 +505,7 @@ tasks.register('configureNative', Exec) {
         dependsOn(tasks.named('obfuscatePayload'))
     }
     inputs.file(embeddedProductJar)
-    inputs.property('soulboundVersion', project.version.toString())
+    inputs.property('inevitableVersion', project.version.toString())
     inputs.files(fileTree(nativeSourceDirectory) {
         include 'CMakeLists.txt', '**/*.c', '**/*.h', '**/*.cpp', '**/*.in', '**/*.rc', '**/*.png', '**/*.ico', '**/*.manifest'
         exclude 'legacy_*'
@@ -534,14 +534,14 @@ tasks.register('buildNative', Exec) {
     description = 'Builds the DLL containing the recovered Java product and its injector.'
     dependsOn(tasks.named('configureNative'))
     inputs.file(embeddedProductJar)
-    inputs.property('soulboundVersion', project.version.toString())
+    inputs.property('inevitableVersion', project.version.toString())
     inputs.files(fileTree(nativeSourceDirectory) {
         include 'CMakeLists.txt', '**/*.c', '**/*.h', '**/*.cpp', '**/*.in', '**/*.rc', '**/*.png', '**/*.ico', '**/*.manifest'
         exclude 'legacy_*'
     })
     outputs.files(
-            nativeBuildDirectory.map { it.file('dist/SoulboundNative.dll') },
-            nativeBuildDirectory.map { it.file('dist/SoulboundV' + project.version + '.exe') })
+            nativeBuildDirectory.map { it.file('dist/InevitableClientNative.dll') },
+            nativeBuildDirectory.map { it.file('dist/InevitableClientV' + project.version + '.exe') })
     doFirst {
         commandLine 'cmake', '--build', nativeBuildDirectory.get().asFile.absolutePath,
                 '--config', 'Release'
@@ -573,15 +573,15 @@ tasks.register('prepareInjectionBundle', Sync) {
     description = 'Creates the single-file GUI injection bundle.'
     dependsOn(tasks.named('signNativeBundle'))
     from(nativeBuildDirectory.map { it.dir('dist') }) {
-        include 'SoulboundV' + project.version + '.exe'
-        include 'SoulboundNative.dll'
+        include 'InevitableClientV' + project.version + '.exe'
+        include 'InevitableClientNative.dll'
     }
     // Include both native README files; their relative language links work in the bundle.
     from(file('native/README.md'))
     from(file('native/README_EN.md'))
     into(injectionBundleDirectory)
     doLast {
-        def injector = injectionBundleDirectory.get().file('SoulboundV' + project.version + '.exe').asFile
+        def injector = injectionBundleDirectory.get().file('InevitableClientV' + project.version + '.exe').asFile
         if (!injector.isFile() || injector.length() == 0L) {
             throw new GradleException('incomplete native injection bundle')
         }

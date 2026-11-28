@@ -1,7 +1,7 @@
 package gg.vape.ui.click.frame.impl;
 
 import gg.vape.Vape;
-import gg.vape.brand.SoulboundBrand;
+import gg.vape.brand.InevitableBrand;
 import gg.vape.config.PublicProfileSettings;
 import gg.vape.module.none.ClientSettings;
 import gg.vape.ui.click.component.ColorDividerComponent;
@@ -93,7 +93,7 @@ extends Frame {
         this.Y(238.0);
         GuiRenderPrimitives.C(this.G$src$D$1b2f02a(), this.n() + this.j$src$Lgg_vape_ui_click_frame_FrameHeaderComponent_$175vsfc().L() + 2.0, this.A(), this.L() - (this.j$src$Lgg_vape_ui_click_frame_FrameHeaderComponent_$175vsfc().L() + 8.0), ClientSettingsFrame.J.i);
         SmoothFontRenderer smoothFontRenderer = Vape.INSTANCE.getFontManager().E(0.7, false);
-        String string = SoulboundBrand.displayName();
+        String string = InevitableBrand.displayName();
         double d = smoothFontRenderer.N(string);
         smoothFontRenderer.d(string, this.G$src$D$1b2f02a() + this.A() - d - 4.0, this.n() + this.L() - 4.5, ClientSettingsFrame.J.h);
     }

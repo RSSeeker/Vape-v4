@@ -31,7 +31,7 @@ extends PanelComponent {
 
     public FriendRequestsPanel() {
         super(105.0, 150.0);
-        this.usernameInput = new FriendRequestUsernameInputComponent(this, "Add Soulbound friend...");
+        this.usernameInput = new FriendRequestUsernameInputComponent(this, "Add InevitableClient friend...");
         this.setDisabledOverlayColor(FriendRequestsPanel.J.i);
         this.l$src$Lgg_vape_ui_click_layout_ComponentLayout_$di1tij().M("wrap");
         this.usernameInput.setVisible(true);

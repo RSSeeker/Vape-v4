@@ -50,7 +50,7 @@ public class NotificationSoundPlayer {
     }
 
     public void startSoundThread() {
-        new Thread(this::runSoundLoop, "Soulbound notification sound player").start();
+        new Thread(this::runSoundLoop, "InevitableClient notification sound player").start();
     }
 
     private void runSoundLoop() {

@@ -3,7 +3,7 @@ package gg.vape.config;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import gg.vape.api.ApiHttpClient;
-import gg.vape.brand.SoulboundPaths;
+import gg.vape.brand.InevitablePaths;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -15,9 +15,9 @@ import java.nio.file.StandardCopyOption;
 
 /**
  * Local, offline config storage. Writes a single JSON document to
- * {@code <vape.directory>\.soulbound\config.json} for a fresh install, or
- * {@code <vape.directory>\.vapeclient\config.json} if only the legacy folder
- * exists. Without a launcher-supplied directory it uses the working directory;
+ * {@code <vape.directory>\.inevitable\config.json} for a fresh install, or
+ * an existing .soulbound / .vapeclient folder when present. Without a
+ * launcher-supplied directory it uses the working directory;
  * it does not import data from the old %APPDATA% location.
  */
 public final class LocalConfigStore {
@@ -33,7 +33,7 @@ public final class LocalConfigStore {
         if (nativeDirectory == null || nativeDirectory.trim().isEmpty()) {
             nativeDirectory = System.getProperty("user.dir", ".");
         }
-        return SoulboundPaths.clientDirectory(new File(nativeDirectory));
+        return InevitablePaths.clientDirectory(new File(nativeDirectory));
     }
 
     public static File directory() {

@@ -81,7 +81,7 @@ extends ConfigSettingsModule {
         this.clickDisable = BooleanValue.create(this, "Click disable", false, "Click modules in text gui to toggle them");
         this.shadow = BooleanValue.create(this, "Shadow", true, "Renders shadowed text");
         this.animations = BooleanValue.create(this, "Animations", true, "Use animations on text gui");
-        this.watermark = BooleanValue.create(this, "Watermark", false, "Renders a Soulbound watermark");
+        this.watermark = BooleanValue.create(this, "Watermark", false, "Renders a InevitableClient watermark");
         this.renderBackground = BooleanValue.create(this, "Render background", true);
         this.hideModules = BooleanValue.create(this, "Hide modules", false, "Allows you to blacklist certain modules from being shown");
         this.hiddenModules = (OptionalLimitValue)OptionalLimitValue.createWithDescription(this, "module-show-blacklist", "Hidden Modules", "Name of module to hide", OptionalLimitValue.BLOCK_LIST_COLOR, Arrays.asList("ESP", "NameTags", "StorageESP")).setSuggestionProvider(new ModuleNameSuggestionProvider());

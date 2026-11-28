@@ -407,7 +407,7 @@ extends InteractiveComponent {
             LocalOnlineFriend localFriend = Vape.INSTANCE.getOnlineManager().getLocalFriend();
             boolean localPlayerIsLeader = leader != null && leader.equals(localFriend);
             if (localPlayerIsLeader) {
-                this.titleLabel.setText("My Soulbound Party");
+                this.titleLabel.setText("My InevitableClient Party");
                 this.actionButton.setLabelText("DISBAND");
                 this.actionButton.w("Disband party");
             } else {

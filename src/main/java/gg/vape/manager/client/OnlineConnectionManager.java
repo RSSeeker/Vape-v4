@@ -301,7 +301,7 @@ public class OnlineConnectionManager {
         // 离线（无账号/token 或本地服务不可用）：只置为离线状态并写日志，
         // 不主动弹出注册/登录界面；用户手动打开账号页仍可正常使用（入口不禁用）。
         this.setAccountState(OnlineAccountState.REGISTRATION_OFFLINE);
-        Vape.debugLog("[Soulbound] Online service initialization failed; account state set to REGISTRATION_OFFLINE");
+        Vape.debugLog("[InevitableClient] Online service initialization failed; account state set to REGISTRATION_OFFLINE");
         this.initializationStarted = false;
     }
 

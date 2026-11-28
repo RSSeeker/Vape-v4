@@ -151,7 +151,7 @@ static void render_selector(const process_candidate *candidates, size_t count,
         SetConsoleCursorPosition(output, home);
         previous_rows = rows;
     }
-    wprintf(L"Soulbound injector\n");
+    wprintf(L"InevitableClient injector\n");
     wprintf(L"DLL: %ls\n\n", dll_path);
     wprintf(L"Select a Java game window (Up/Down to select, Enter to inject, Esc to exit)\n\n");
     if (count == 0) {
@@ -388,7 +388,7 @@ cleanup:
 static void usage(void) {
     wchar_t executable[MAX_PATH];
     if (GetModuleFileNameW(NULL, executable, MAX_PATH) == 0) {
-        wcsncpy_s(executable, MAX_PATH, L"Soulbound.exe", _TRUNCATE);
+        wcsncpy_s(executable, MAX_PATH, L"InevitableClient.exe", _TRUNCATE);
     }
     executable[MAX_PATH - 1] = L'\0';
     fwprintf(stderr,
@@ -421,7 +421,7 @@ int console_main(int argc, wchar_t **argv) {
     }
     /* Use the same checked, non-destructive materializer as GUI mode. */
     if (!vape421_materialize_dll(process_id, dll_path, MAX_PATH)) {
-        fwprintf(stderr, L"Could not extract the embedded SoulboundNative.dll.\n");
+        fwprintf(stderr, L"Could not extract the embedded InevitableClientNative.dll.\n");
         return 2;
     }
     if (argc != 1) {

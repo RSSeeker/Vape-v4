@@ -1,7 +1,7 @@
 param(
     [string]$BuildDir = "build/native",
     [string]$Version = "",
-    [string]$Subject = "CN=Soulbound",
+    [string]$Subject = "CN=InevitableClient",
     [switch]$Quiet
 )
 
@@ -13,17 +13,17 @@ function Write-Step($msg) {
 
 # Resolve the injector version from the dist folder when not supplied.
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    $candidates = @(Get-ChildItem -Path (Join-Path $BuildDir "dist") -Filter "SoulboundV*.exe" -File -ErrorAction SilentlyContinue)
+    $candidates = @(Get-ChildItem -Path (Join-Path $BuildDir "dist") -Filter "InevitableClientV*.exe" -File -ErrorAction SilentlyContinue)
     if ($candidates.Count -ne 1) {
-        throw "Supply -Version when the dist directory does not contain exactly one Soulbound executable."
+        throw "Supply -Version when the dist directory does not contain exactly one InevitableClient executable."
     }
-    if ($candidates[0].Name -match '^SoulboundV([1-9][0-9]*(\.[0-9]+)*)\.exe$') { $Version = $Matches[1] }
+    if ($candidates[0].Name -match '^InevitableClientV([1-9][0-9]*(\.[0-9]+)*)\.exe$') { $Version = $Matches[1] }
 }
 
-if ($Version -notmatch '^[1-9][0-9]*(\.[0-9]+)*$') { throw "Invalid Soulbound version: $Version" }
+if ($Version -notmatch '^[1-9][0-9]*(\.[0-9]+)*$') { throw "Invalid InevitableClient version: $Version" }
 
-$dllPath = Join-Path $BuildDir "dist/SoulboundNative.dll"
-$exePath = Join-Path $BuildDir "dist/SoulboundV$Version.exe"
+$dllPath = Join-Path $BuildDir "dist/InevitableClientNative.dll"
+$exePath = Join-Path $BuildDir "dist/InevitableClientV$Version.exe"
 
 if (-not (Test-Path $dllPath)) { throw "missing native dll: $dllPath" }
 if (-not (Test-Path $exePath)) { throw "missing injector exe: $exePath" }

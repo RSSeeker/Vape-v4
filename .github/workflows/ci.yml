@@ -149,9 +149,9 @@ jobs:
         run: |
           $baseline = @(Get-ChildItem -Path 'build/module-parity-baseline/build/libs' -Filter '*-injection.jar' -File)
           $current = @(Get-ChildItem -Path 'build/libs' -Filter '*-injection.jar' -File)
-          $executables = @(Get-ChildItem -Path 'build/injection' -Filter 'SoulboundV*.exe' -File)
+          $executables = @(Get-ChildItem -Path 'build/injection' -Filter 'InevitableClientV*.exe' -File)
           if ($baseline.Count -ne 1 -or $current.Count -ne 1 -or $executables.Count -ne 1) {
-            throw 'Expected exactly one baseline JAR, Soulbound JAR, and Soulbound EXE.'
+            throw 'Expected exactly one baseline JAR, InevitableClient JAR, and InevitableClient EXE.'
           }
           python -B -X utf8 tools/verify_module_parity.py `
             --baseline-source 'build/module-parity-baseline' --current-source '.' `
@@ -159,7 +159,7 @@ jobs:
             --embedded-jar 'build/obfuscated-payload/payload.jar' `
             --original-exe (Join-Path $env:RUNNER_TEMP 'Vape-v4.21.58-original.exe') `
             --original-jar-output (Join-Path $env:RUNNER_TEMP 'Vape-original-payload.jar') `
-            --current-exe $executables[0].FullName --current-dll 'build/injection/SoulboundNative.dll' `
+            --current-exe $executables[0].FullName --current-dll 'build/injection/InevitableClientNative.dll' `
             --report 'build/injection/MODULE-PARITY-REPORT.txt'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -206,9 +206,9 @@ jobs:
       - name: Record bundle checksums
         shell: pwsh
         run: |
-          $executables = @(Get-ChildItem -Path build/injection -Filter 'SoulboundV*.exe' -File)
+          $executables = @(Get-ChildItem -Path build/injection -Filter 'InevitableClientV*.exe' -File)
           if ($executables.Count -ne 1) { throw "Expected exactly one rebuilt EXE" }
-          $dll = Get-Item -LiteralPath 'build/injection/SoulboundNative.dll'
+          $dll = Get-Item -LiteralPath 'build/injection/InevitableClientNative.dll'
           $checksums = foreach ($file in ($executables + @($dll))) {
             $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $($file.Name)"
@@ -220,11 +220,11 @@ jobs:
       - name: Verify product, bundle and embedded versions agree
         shell: pwsh
         run: |
-          $exe = @(Get-ChildItem -Path build/injection -Filter 'SoulboundV*.exe' -File)
+          $exe = @(Get-ChildItem -Path build/injection -Filter 'InevitableClientV*.exe' -File)
           $jar = @(Get-ChildItem -Path build/libs -Filter '*-injection.jar' -File)
           if ($exe.Count -ne 1 -or $jar.Count -ne 1) { throw 'Expected one executable and one source payload.' }
           python -B -X utf8 tools/verify_release_version.py --executable $exe[0].FullName `
-            --dll 'build/injection/SoulboundNative.dll' --checksums 'build/injection/SHA256SUMS.txt' `
+            --dll 'build/injection/InevitableClientNative.dll' --checksums 'build/injection/SHA256SUMS.txt' `
             --payload $jar[0].FullName --payload 'build/obfuscated-payload/payload.jar'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -236,10 +236,10 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload Soulbound Windows x64 bundle
+      - name: Upload InevitableClient Windows x64 bundle
         uses: actions/upload-artifact@v4
         with:
-          name: windows-x64-soulbound-bundle
+          name: windows-x64-inevitable-bundle
           path: build/injection/
           if-no-files-found: error
           retention-days: 14
@@ -250,13 +250,13 @@ jobs:
         shell: pwsh
         run: |
           foreach ($version in @('1.1', '1.2')) {
-            .\gradlew.bat prepareInjectionBundle -PtargetRelease=8 -PnoObfuscation "-PsoulboundVersion=$version" "-PnativeJavaHome=${{ steps.setup-jdk8.outputs.path }}" --stacktrace
+            .\gradlew.bat prepareInjectionBundle -PtargetRelease=8 -PnoObfuscation "-PinevitableVersion=$version" "-PnativeJavaHome=${{ steps.setup-jdk8.outputs.path }}" --stacktrace
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            $properties = Join-Path $env:RUNNER_TEMP "soulbound-version-$version.properties"
-            "soulboundVersion=$version" | Set-Content -LiteralPath $properties -Encoding ascii
-            python -B -X utf8 tools/verify_release_version.py --properties $properties --tag "SoulboundV$version" `
-              --payload "build/libs/soulbound-$version-injection.jar" `
-              --executable "build/injection/SoulboundV$version.exe" --dll 'build/injection/SoulboundNative.dll'
+            $properties = Join-Path $env:RUNNER_TEMP "inevitable-version-$version.properties"
+            "inevitableVersion=$version" | Set-Content -LiteralPath $properties -Encoding ascii
+            python -B -X utf8 tools/verify_release_version.py --properties $properties --tag "InevitableClientV$version" `
+              --payload "build/libs/inevitable-$version-injection.jar" `
+              --executable "build/injection/InevitableClientV$version.exe" --dll 'build/injection/InevitableClientNative.dll'
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
@@ -269,7 +269,7 @@ jobs:
       - name: Download this run's Windows bundle
         uses: actions/download-artifact@v4
         with:
-          name: windows-x64-soulbound-bundle
+          name: windows-x64-inevitable-bundle
           path: bundle
       - name: Hash and scan without executing the bundle
         shell: bash

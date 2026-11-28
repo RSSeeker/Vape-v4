@@ -44,14 +44,14 @@ int main() {
     if (slash == std::wstring::npos) return 1;
     dir.resize(slash);
     wchar_t rootBuffer[MAX_PATH]{};
-    if (!soulbound_client_directory(dir.c_str(), rootBuffer, std::size(rootBuffer))) return 1;
+    if (!inevitable_client_directory(dir.c_str(), rootBuffer, std::size(rootBuffer))) return 1;
     const std::wstring root(rootBuffer);
-    const std::wstring recovery = root + L"\\SoulboundRecovery";
+    const std::wstring recovery = root + L"\\InevitableClientRecovery";
     CreateDirectoryW(root.c_str(), nullptr);
     CreateDirectoryW(recovery.c_str(), nullptr);
     const unsigned long pid = GetCurrentProcessId();
-    const std::wstring external = dir + L"\\SoulboundNative.dll";
-    const std::wstring stale = recovery + L"\\SoulboundNative-" + std::to_wstring(pid) + L".dll";
+    const std::wstring external = dir + L"\\InevitableClientNative.dll";
+    const std::wstring stale = recovery + L"\\InevitableClientNative-" + std::to_wstring(pid) + L".dll";
     const std::wstring sentinel = recovery + L"\\materializer-sentinel-" + std::to_wstring(pid);
     const unsigned char wrong[] = {0x4d, 0x5a, 0x00, 0x11};
     const unsigned char expected[] = {0x4d, 0x5a, 0x00, 0x10};

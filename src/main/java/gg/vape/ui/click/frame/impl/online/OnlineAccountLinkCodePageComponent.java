@@ -45,7 +45,7 @@ extends OnlineConnectionSettingsPageComponent {
         this.qk.setLeftInset(10.0f);
         this.qk.setRightInset(6.0f);
         this.h(this.qk, new Object[0]);
-        this.qR = new WrappingTextLabelComponent("Create a profile to access Soulbound Online features\n \nYour selected username will not be visible anywhere unless you share it privately, or publicly comment with it", 0.7);
+        this.qR = new WrappingTextLabelComponent("Create a profile to access InevitableClient Online features\n \nYour selected username will not be visible anywhere unless you share it privately, or publicly comment with it", 0.7);
         this.qR.o(this.A() - 20.0);
         this.qR.Y(40.0);
         this.qR.setTextColor(OnlineAccountLinkCodePageComponent.J.Z);

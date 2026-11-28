@@ -47,7 +47,7 @@ extends OnlineConnectionSettingsPageComponent {
     @Override
     public void s() {
         if (OnlineConnectionManager.INSTANCE.getAccountState().equals((Object)OnlineAccountState.BANNED)) {
-            this.DX.setText("You have been banned from Soulbound Online");
+            this.DX.setText("You have been banned from InevitableClient Online");
         } else if (OnlineConnectionManager.INSTANCE.getAccountState().equals((Object)OnlineAccountState.REGISTRATION_OFFLINE)) {
             this.DX.setText("Registration is currently offline");
         } else {

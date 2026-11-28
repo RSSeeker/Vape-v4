@@ -2,11 +2,13 @@ package gg.vape.ui.click.component.value;
 
 import gg.vape.input.KeyboardInput;
 import gg.vape.ui.click.component.TextInputComponentBase;
+import gg.vape.ui.font.FontOption;
 import gg.vape.ui.font.SmoothFontRenderer;
 import gg.vape.utils.render.GuiRenderPrimitives;
 import gg.vape.utils.render.RenderUtils;
 import gg.vape.value.StringValue;
 import gg.vape.value.Value;
+import java.util.Objects;
 
 public class StringValueTextInputComponent
 extends TextInputComponentBase {
@@ -32,7 +34,8 @@ extends TextInputComponentBase {
     @Override
     public void bindValue(Value boundValue) {
         super.bindValue(boundValue);
-        this.setText(boundValue.toString());
+        // Initializing an editor must not write the already saved value back.
+        super.setText(Objects.toString(boundValue.getValue(), ""));
     }
 
     @Override
@@ -44,7 +47,8 @@ extends TextInputComponentBase {
         this.onDisable();
         this.setPlaceholderText(this.stringValue.getName());
         if (!this.isFocused()) {
-            this.setText((String)this.stringValue.getValue());
+            String current = Objects.toString(this.stringValue.getValue(), "");
+            if (!current.equals(this.getText())) super.setText(current);
         }
         double inputX = this.G$src$D$1b2f02a() + 5.0;
         double textX = inputX + 5.0;
@@ -81,7 +85,14 @@ extends TextInputComponentBase {
             horizontalOffset += leftEdgeCorrection;
             cursorX += leftEdgeCorrection;
         }
-        inputRenderer.d(displayText, textX + horizontalOffset, textY, StringValueTextInputComponent.J.Z);
+        // Script/user text is data, not a translation key.
+        boolean showingPrompt = this.getText().isEmpty() && !focused;
+        if (!showingPrompt) FontOption.setTranslationDisabled(true);
+        try {
+            inputRenderer.d(displayText, textX + horizontalOffset, textY, StringValueTextInputComponent.J.Z);
+        } finally {
+            if (!showingPrompt) FontOption.setTranslationDisabled(false);
+        }
         if (clipped) {
             RenderUtils.T();
         }
@@ -102,7 +113,11 @@ extends TextInputComponentBase {
     @Override
     public void setText(String text) {
         super.setText(text);
-        this.stringValue.setValue(this.getText());
+        // Values notify listeners and schedule persistence on every assignment.
+        // Do so only for an actual edit, not for each render or focus change.
+        if (!Objects.equals(this.stringValue.getValue(), this.getText())) {
+            this.stringValue.setValue(this.getText());
+        }
     }
 
     public StringValueTextInputComponent(StringValue stringValue) {

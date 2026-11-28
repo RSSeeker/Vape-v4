@@ -102,7 +102,7 @@ extends SettingsSubpageFrame {
     }
 
     public OnlineConnectionSettingsFrame() {
-        super("vape_online", "Soulbound Online", false, false);
+        super("vape_online", "InevitableClient Online", false, false);
         this.xq = new OnlineConnectionRetryPageComponent();
         this.xK = new OnlineAccountLinkCodePageComponent();
         this.xb = new OnlineAccountUnavailablePageComponent();

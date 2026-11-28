@@ -6,7 +6,7 @@ import re
 import sys
 from verify_release_version import VERSION, read_version
 
-PROPERTY = re.compile(rb"(?m)^(soulboundVersion[ \t]*=[ \t]*)([^\s#]+)([ \t]*)(?=\r?$)")
+PROPERTY = re.compile(rb"(?m)^(inevitableVersion[ \t]*=[ \t]*)([^\s#]+)([ \t]*)(?=\r?$)")
 
 
 def bump(properties, version):
@@ -34,10 +34,10 @@ def main():
     except (ValueError, OSError, UnicodeError) as error:
         print("Version update failed: " + str(error), file=sys.stderr)
         return 1
-    print("Soulbound version: " + previous + " -> " + args.version)
-    print("Display: Soulbound V" + args.version)
-    print("Tag/executable: SoulboundV" + args.version + " / SoulboundV" + args.version + ".exe")
-    print("Write docs/releases/SoulboundV" + args.version + ".md and test the exact commit before tagging.")
+    print("InevitableClient version: " + previous + " -> " + args.version)
+    print("Display: InevitableClientV" + args.version)
+    print("Tag/executable: InevitableClientV" + args.version + " / InevitableClientV" + args.version + ".exe")
+    print("Write docs/releases/InevitableClientV" + args.version + ".md and test the exact commit before tagging.")
     return 0
 
 

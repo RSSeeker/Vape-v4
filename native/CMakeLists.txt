@@ -6,7 +6,7 @@ if(NOT DEFINED VAPE421_VERSION OR VAPE421_VERSION STREQUAL "")
     set(VAPE421_VERSION "1")
 endif()
 if(NOT VAPE421_VERSION MATCHES "^[1-9][0-9]*(\\.[0-9]+)*$")
-    message(FATAL_ERROR "Invalid Soulbound version: ${VAPE421_VERSION}")
+    message(FATAL_ERROR "Invalid InevitableClient version: ${VAPE421_VERSION}")
 endif()
 configure_file(brand_version.h.in generated/brand_version.h @ONLY)
 
@@ -167,11 +167,11 @@ if(BUILD_TESTING)
     target_compile_options(Vape421LoaderLanguageTest PRIVATE /W4 /utf-8)
     add_test(NAME Vape421LoaderLanguage COMMAND Vape421LoaderLanguageTest)
 
-    add_executable(SoulboundClientDataPathTest tests/client_data_path_test.c)
-    target_include_directories(SoulboundClientDataPathTest PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_compile_definitions(SoulboundClientDataPathTest PRIVATE WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
-    target_compile_options(SoulboundClientDataPathTest PRIVATE /W4 /utf-8)
-    add_test(NAME SoulboundClientDataPath COMMAND SoulboundClientDataPathTest)
+    add_executable(InevitableClientClientDataPathTest tests/client_data_path_test.c)
+    target_include_directories(InevitableClientClientDataPathTest PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_definitions(InevitableClientClientDataPathTest PRIVATE WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(InevitableClientClientDataPathTest PRIVATE /W4 /utf-8)
+    add_test(NAME InevitableClientClientDataPath COMMAND InevitableClientClientDataPathTest)
 
     add_executable(Vape421ResourceIntegrityTest tests/embedded_resource_integrity_test.cpp)
     target_include_directories(Vape421ResourceIntegrityTest PRIVATE
@@ -215,9 +215,9 @@ set_property(TARGET Vape421Native Vape421LoaderGui
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 
 set_target_properties(Vape421Native PROPERTIES
-        OUTPUT_NAME "SoulboundNative")
+        OUTPUT_NAME "InevitableClientNative")
 set_target_properties(Vape421LoaderGui PROPERTIES
-        OUTPUT_NAME "SoulboundV${VAPE421_VERSION}")
+        OUTPUT_NAME "InevitableClientV${VAPE421_VERSION}")
 
 set_target_properties(Vape421Native Vape421LoaderGui PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/dist")

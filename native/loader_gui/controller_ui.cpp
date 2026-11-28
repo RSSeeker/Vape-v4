@@ -103,7 +103,7 @@ int ControllerUi::run(int showCommand) {
         klass.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
     }
     klass.hIconSm = klass.hIcon;
-    klass.lpszClassName = L"SoulboundController";
+    klass.lpszClassName = L"InevitableClientController";
     RegisterClassExW(&klass);
 
     const UINT dpi = GetDpiForSystem();
@@ -112,7 +112,7 @@ int ControllerUi::run(int showCommand) {
     RECT bounds{0, 0, clientWidth, clientHeight};
     AdjustWindowRectExForDpi(&bounds, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU |
         WS_MINIMIZEBOX, FALSE, 0, dpi);
-    window_ = CreateWindowExW(0, klass.lpszClassName, SOULBOUND_TITLE_W,
+    window_ = CreateWindowExW(0, klass.lpszClassName, INEVITABLE_TITLE_W,
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
         CW_USEDEFAULT, CW_USEDEFAULT, bounds.right - bounds.left,
         bounds.bottom - bounds.top, nullptr, nullptr, instance_, this);
@@ -249,25 +249,25 @@ void ControllerUi::drawSettingsPanel(Gdiplus::Graphics& graphics) {
         static_cast<BYTE>(80.0f * settingsProgress_), 0, 0, 0));
     graphics.FillRectangle(&shade, left + width, 0.0f, CanvasWidth - left - width,
         CanvasHeight);
-    Gdiplus::SolidBrush panelFill(Gdiplus::Color(255, 23, 22, 23));
+    Gdiplus::SolidBrush panelFill(Gdiplus::Color(255, 22, 22, 22));
     graphics.FillRectangle(&panelFill, left, 0.0f, width, CanvasHeight);
-    Gdiplus::Pen edge(Gdiplus::Color(255, 46, 45, 46), 1.0f);
+    Gdiplus::Pen edge(Gdiplus::Color(255, 45, 45, 45), 1.0f);
     graphics.DrawLine(&edge, left + width - 0.5f, 0.0f,
         left + width - 0.5f, CanvasHeight);
 
     drawText(graphics, ls(Ls::SettingsLabel), left + 18, 14, 160, 24, 14,
-        Gdiplus::Color(255, 218, 215, 219), true);
-    Gdiplus::Pen divider(Gdiplus::Color(255, 46, 45, 46), 1.0f);
+        Gdiplus::Color(255, 216, 216, 216), true);
+    Gdiplus::Pen divider(Gdiplus::Color(255, 45, 45, 45), 1.0f);
     graphics.DrawLine(&divider, left + 16, 46.5f, left + width - 16, 46.5f);
 
     const bool enabled = model_.autoInjectEnabled();
     const bool hovered = pointerIn(left + 18, 60, 196, 28);
     // Checked state is a plain solid green square, not a box with an inner mark.
     drawRoundedRect(graphics, left + 18, 64, 14, 14, 2,
-        enabled ? Gdiplus::Color(255, 126, 105, 218) : Gdiplus::Color(255, 32, 31, 32),
-        enabled ? Gdiplus::Color(255, 126, 105, 218)
-                : (hovered ? Gdiplus::Color(255, 96, 95, 96)
-                           : Gdiplus::Color(255, 62, 61, 62)));
+        enabled ? Gdiplus::Color(255, 118, 118, 118) : Gdiplus::Color(255, 31, 31, 31),
+        enabled ? Gdiplus::Color(255, 118, 118, 118)
+                : (hovered ? Gdiplus::Color(255, 95, 95, 95)
+                           : Gdiplus::Color(255, 61, 61, 61)));
     if (enabled) {
         // White tick drawn into the solid green square.
         Gdiplus::Pen tick(Gdiplus::Color(255, 246, 246, 246), 1.6f);
@@ -280,8 +280,8 @@ void ControllerUi::drawSettingsPanel(Gdiplus::Graphics& graphics) {
         graphics.DrawLines(&tick, points, 3);
     }
     drawText(graphics, ls(Ls::AutoInjectLabel), left + 40, 60, width - 58, 22, 12,
-        hovered ? Gdiplus::Color(255, 226, 224, 227)
-                : Gdiplus::Color(255, 202, 199, 203));
+        hovered ? Gdiplus::Color(255, 225, 225, 225)
+                : Gdiplus::Color(255, 200, 200, 200));
 
     // Nothing is printed underneath the option: the skipped/failed explanation
     // is folded into the floating tooltip together with the description.
@@ -508,11 +508,11 @@ void ControllerUi::paint() {
     scaleX_ = static_cast<float>(width) / CanvasWidth;
     scaleY_ = static_cast<float>(height) / CanvasHeight;
     graphics.ScaleTransform(scaleX_, scaleY_);
-    Gdiplus::SolidBrush background(Gdiplus::Color(255, 18, 19, 32));
+    Gdiplus::SolidBrush background(Gdiplus::Color(255, 20, 20, 20));
     graphics.FillRectangle(&background, 0.0f, 0.0f, CanvasWidth, CanvasHeight);
-    Gdiplus::SolidBrush accent(Gdiplus::Color(255, 126, 105, 218));
+    Gdiplus::SolidBrush accent(Gdiplus::Color(255, 118, 118, 118));
     graphics.FillRectangle(&accent, 0.0f, 0.0f, CanvasWidth, 3.0f);
-    Gdiplus::Pen frame(Gdiplus::Color(255, 49, 45, 72), 1.0f);
+    Gdiplus::Pen frame(Gdiplus::Color(255, 48, 48, 48), 1.0f);
     graphics.DrawRectangle(&frame, 12.0f, 14.0f, CanvasWidth - 24.0f, CanvasHeight - 28.0f);
 
     switch (model_.page()) {
@@ -529,7 +529,7 @@ void ControllerUi::paint() {
     if (model_.page() == ControllerPage::MinecraftSelection) {
         // Static three-dot handle marking the settings flyout edge; it does not
         // react to the pointer.
-        Gdiplus::SolidBrush handle(Gdiplus::Color(85, 210, 207, 211));
+        Gdiplus::SolidBrush handle(Gdiplus::Color(85, 208, 208, 208));
         for (int index = 0; index < 3; ++index) {
             graphics.FillEllipse(&handle, 6.0f, 228.0f + index * 8.0f, 3.0f, 3.0f);
         }
@@ -747,8 +747,8 @@ void ControllerUi::drawLogo(Gdiplus::Graphics& graphics, float y) {
     if (logo_ && logo_->GetLastStatus() == Gdiplus::Ok) {
         graphics.DrawImage(logo_.get(), 294.0f, y + 2.0f, 200.0f, 40.0f);
     }
-    drawText(graphics, L"V" SOULBOUND_VERSION_W, 501.0f, y + 11.0f, 62.0f, 22.0f, 12.0f,
-        Gdiplus::Color(255, 157, 225, 211), true);
+    drawText(graphics, L"V" INEVITABLE_VERSION_W, 501.0f, y + 11.0f, 62.0f, 22.0f, 12.0f,
+        Gdiplus::Color(255, 210, 210, 210), true);
 }
 
 void ControllerUi::drawLogin(Gdiplus::Graphics& graphics) {
@@ -756,20 +756,20 @@ void ControllerUi::drawLogin(Gdiplus::Graphics& graphics) {
     const auto input = [&](float y, const std::wstring& placeholder,
                            const std::wstring& value, bool password, bool focused) {
         drawRoundedRect(graphics, 278, y, 268, 36, 6,
-            Gdiplus::Color(255, 18, 19, 32),
-            focused ? Gdiplus::Color(255, 48, 47, 48)
-                    : Gdiplus::Color(255, 34, 33, 34));
+            Gdiplus::Color(255, 20, 20, 20),
+            focused ? Gdiplus::Color(255, 47, 47, 47)
+                    : Gdiplus::Color(255, 33, 33, 33));
         std::wstring shown = password && !value.empty() ? std::wstring(value.size(), L'*') : value;
         if (shown.empty()) shown = placeholder;
         drawText(graphics, shown, 294, y, 236, 36, 13,
-            value.empty() ? Gdiplus::Color(255, 105, 102, 106)
-                          : Gdiplus::Color(255, 195, 192, 196));
+            value.empty() ? Gdiplus::Color(255, 103, 103, 103)
+                          : Gdiplus::Color(255, 193, 193, 193));
         const auto blink = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count() / 500;
         if (focused && (blink & 1) == 0) {
             const float caretX = 294.0f + std::min(224.0f,
                 static_cast<float>(shown.empty() ? 0 : shown.size()) * 6.8f);
-            Gdiplus::Pen caret(Gdiplus::Color(255, 196, 193, 197), 1.0f);
+            Gdiplus::Pen caret(Gdiplus::Color(255, 194, 194, 194), 1.0f);
             graphics.DrawLine(&caret, caretX, y + 10, caretX, y + 26);
         }
     };
@@ -778,25 +778,25 @@ void ControllerUi::drawLogin(Gdiplus::Graphics& graphics) {
     const bool enabled = !model_.username().empty();
     const bool loginHover = enabled && pointerIn(352, 302.4f, 112.8f, 36);
     drawRoundedRect(graphics, 352, 302.4f, 112.8f, 36, 3,
-        enabled ? (loginHover ? Gdiplus::Color(255, 147, 126, 236)
-                              : Gdiplus::Color(255, 108, 89, 194))
+        enabled ? (loginHover ? Gdiplus::Color(255, 138, 138, 138)
+                              : Gdiplus::Color(255, 101, 101, 101))
                 : Gdiplus::Color(255, 51, 51, 51));
     drawText(graphics, ls(Ls::Login), 352, 302.4f, 112.8f, 36, 13,
-        enabled ? Gdiplus::Color(255, 220, 225, 222) : Gdiplus::Color(255, 116, 113, 117), true,
+        enabled ? Gdiplus::Color(255, 224, 224, 224) : Gdiplus::Color(255, 114, 114, 114), true,
         Gdiplus::StringAlignmentCenter);
 
-    Gdiplus::Pen line(Gdiplus::Color(255, 34, 33, 34), 1.0f);
+    Gdiplus::Pen line(Gdiplus::Color(255, 33, 33, 33), 1.0f);
     graphics.DrawLine(&line, 278.0f, 374.0f, 392.0f, 374.0f);
     graphics.DrawLine(&line, 432.0f, 374.0f, 546.0f, 374.0f);
     drawText(graphics, ls(Ls::Or), 392, 362, 40, 24, 12,
-        Gdiplus::Color(255, 192, 189, 193), true, Gdiplus::StringAlignmentCenter);
+        Gdiplus::Color(255, 190, 190, 190), true, Gdiplus::StringAlignmentCenter);
     drawText(graphics, ls(Ls::BrowserLogin), 328, 399, 160, 28, 12,
-        pointerIn(328, 399, 160, 28) ? Gdiplus::Color(255, 79, 146, 241)
-                                    : Gdiplus::Color(255, 46, 120, 227),
+        pointerIn(328, 399, 160, 28) ? Gdiplus::Color(255, 139, 139, 139)
+                                    : Gdiplus::Color(255, 112, 112, 112),
         true, Gdiplus::StringAlignmentCenter);
     const auto status = model_.status();
     if (!status.empty()) drawText(graphics, status, 250, 438, 324, 24, 12,
-        Gdiplus::Color(255, 175, 75, 75), false, Gdiplus::StringAlignmentCenter);
+        Gdiplus::Color(255, 96, 96, 96), false, Gdiplus::StringAlignmentCenter);
 }
 
 void ControllerUi::drawBrowserAuth(Gdiplus::Graphics& graphics) {
@@ -805,7 +805,7 @@ void ControllerUi::drawBrowserAuth(Gdiplus::Graphics& graphics) {
     Gdiplus::Region previousClip;
     graphics.GetClip(&previousClip);
     graphics.SetClip(&cardClip, Gdiplus::CombineModeReplace);
-    Gdiplus::SolidBrush panel(Gdiplus::Color(255, 227, 237, 250));
+    Gdiplus::SolidBrush panel(Gdiplus::Color(255, 236, 236, 236));
     graphics.FillRectangle(&panel, 278.0f, 66.0f, 268.0f, 352.0f);
     if (maskTop_ && maskTop_->GetLastStatus() == Gdiplus::Ok)
         graphics.DrawImage(maskTop_.get(), 276.0f, 54.0f, 268.0f, 210.0f);
@@ -828,16 +828,16 @@ void ControllerUi::drawBrowserAuth(Gdiplus::Graphics& graphics) {
     drawText(graphics, ls(Ls::FollowBrowser), 300, 272, 224, 40, 13,
         Gdiplus::Color(255, 20, 20, 20), true, Gdiplus::StringAlignmentCenter);
     drawText(graphics, ls(Ls::Reopen), 363, 306, 50, 25, 13,
-        pointerIn(363, 306, 50, 25) ? Gdiplus::Color(255, 44, 111, 207)
-                                    : Gdiplus::Color(255, 76, 140, 231),
+        pointerIn(363, 306, 50, 25) ? Gdiplus::Color(255, 104, 104, 104)
+                                    : Gdiplus::Color(255, 133, 133, 133),
         true, Gdiplus::StringAlignmentCenter);
     drawText(graphics, ls(Ls::Cancel), 420, 306, 50, 25, 13,
-        pointerIn(420, 306, 50, 25) ? Gdiplus::Color(255, 178, 38, 40)
-                                    : Gdiplus::Color(255, 209, 51, 53),
+        pointerIn(420, 306, 50, 25) ? Gdiplus::Color(255, 68, 68, 68)
+                                    : Gdiplus::Color(255, 85, 85, 85),
         true, Gdiplus::StringAlignmentCenter);
     const auto status = model_.status();
     if (!status.empty()) drawText(graphics, status, 300, 340, 224, 24, 11,
-        Gdiplus::Color(255, 175, 75, 75), false, Gdiplus::StringAlignmentCenter);
+        Gdiplus::Color(255, 96, 96, 96), false, Gdiplus::StringAlignmentCenter);
 }
 
 void ControllerUi::drawMinecraftSelection(Gdiplus::Graphics& graphics) {
@@ -850,38 +850,38 @@ void ControllerUi::drawMinecraftSelection(Gdiplus::Graphics& graphics) {
         const bool waiting = model_.autoInjectArmed();
         drawText(graphics,
             ls(waiting ? Ls::AutoInjectWaitingTitle : Ls::MinecraftNotFound),
-            295, 234, 234, 24, 13, Gdiplus::Color(255, 218, 215, 219), true,
+            295, 234, 234, 24, 13, Gdiplus::Color(255, 216, 216, 216), true,
             Gdiplus::StringAlignmentCenter);
         drawText(graphics,
             ls(waiting ? Ls::AutoInjectWaitingDetail : Ls::OpenMinecraftFirst),
-            295, 251, 234, 22, 12, Gdiplus::Color(255, 116, 113, 117), false,
+            295, 251, 234, 22, 12, Gdiplus::Color(255, 114, 114, 114), false,
             Gdiplus::StringAlignmentCenter);
         return;
     }
     drawLogo(graphics, 182.0f - 80.0f * logoPosition_);
     drawText(graphics, ls(Ls::SelectMinecraft), 220, 150, 384, 38, 18,
-        Gdiplus::Color(255, 218, 215, 219), true, Gdiplus::StringAlignmentCenter);
+        Gdiplus::Color(255, 216, 216, 216), true, Gdiplus::StringAlignmentCenter);
     drawText(graphics,
         ls(model_.autoInjectEnabled() ? Ls::AutoInjectActiveHint
                                       : Ls::EnsureGameLoaded),
         220, 179, 384, 22, 12,
-        Gdiplus::Color(255, 116, 113, 117), false, Gdiplus::StringAlignmentCenter);
+        Gdiplus::Color(255, 114, 114, 114), false, Gdiplus::StringAlignmentCenter);
     float y = 210.0f;
     for (const auto& process : processes) {
         const bool hovered = !process.alreadyInjected && pointerIn(252, y, 320, 48);
         drawRoundedRect(graphics, 252, y, 320, 48, 4,
-            process.alreadyInjected ? Gdiplus::Color(255, 28, 27, 28)
-                : hovered ? Gdiplus::Color(255, 50, 43, 77) : Gdiplus::Color(255, 34, 32, 54),
-            Gdiplus::Color(255, 66, 59, 95));
+            process.alreadyInjected ? Gdiplus::Color(255, 27, 27, 27)
+                : hovered ? Gdiplus::Color(255, 47, 47, 47) : Gdiplus::Color(255, 34, 34, 34),
+            Gdiplus::Color(255, 63, 63, 63));
         // Title box: from 268 to the button right edge (572), minus a small
         // margin. The previous 210px box clipped long titles.
         const float titleWidth = 560.0f - 268.0f;
         drawText(graphics, ellipsize(graphics, process.title, 13.0f, titleWidth),
-            268, y + 4, titleWidth, 22, 13, Gdiplus::Color(255, 202, 199, 203));
+            268, y + 4, titleWidth, 22, 13, Gdiplus::Color(255, 200, 200, 200));
         drawText(graphics, (process.alreadyInjected ? ls(Ls::Injected) : L"PID ") +
             std::to_wstring(process.pid) + (process.alreadyInjected ? L"]" : L""),
             268, y + 24, titleWidth, 18, 11,
-            Gdiplus::Color(255, 105, 102, 106));
+            Gdiplus::Color(255, 103, 103, 103));
         y += 58.0f;
         if (y > 410.0f) break;
     }
@@ -893,21 +893,21 @@ void ControllerUi::drawLoading(Gdiplus::Graphics& graphics) {
     const float trackY = 265.0f;
     const float trackWidth = 240.0f;
     drawRoundedRect(graphics, trackX, trackY, trackWidth, 6, 3,
-        Gdiplus::Color(255, 31, 32, 32));
+        Gdiplus::Color(255, 32, 32, 32));
     drawRoundedRect(graphics, trackX, trackY,
         std::max(6.0f, trackWidth * std::clamp(loadingProgress_, 0.0f, 1.0f)), 6, 3,
-        Gdiplus::Color(255, 126, 105, 218));
+        Gdiplus::Color(255, 118, 118, 118));
 
     const double stageElapsed = model_.stageElapsedSeconds();
     if (stageElapsed >= 15.0) {
         drawText(graphics, ls(Ls::Stage) + std::to_wstring(model_.loadingStage()) + L"/30",
-            300, 286, 224, 24, 12, Gdiplus::Color(255, 139, 136, 140), false,
+            300, 286, 224, 24, 12, Gdiplus::Color(255, 137, 137, 137), false,
             Gdiplus::StringAlignmentCenter);
     }
     if (stageElapsed >= 20.0) {
         drawText(graphics,
             ls(Ls::StageTakingLong),
-            180, 310, 464, 60, 12, Gdiplus::Color(255, 176, 73, 73), false,
+            180, 310, 464, 60, 12, Gdiplus::Color(255, 95, 95, 95), false,
             Gdiplus::StringAlignmentCenter);
     }
 }
@@ -915,35 +915,35 @@ void ControllerUi::drawLoading(Gdiplus::Graphics& graphics) {
 void ControllerUi::drawCachePrompt(Gdiplus::Graphics& graphics) {
     drawLogo(graphics, 179.0f - 80.0f * logoPosition_);
     drawText(graphics, ls(Ls::CachePrompt),
-        180, 232, 464, 48, 15, Gdiplus::Color(255, 210, 207, 211), true,
+        180, 232, 464, 48, 15, Gdiplus::Color(255, 208, 208, 208), true,
         Gdiplus::StringAlignmentCenter);
     drawText(graphics, ls(Ls::FilesStoredIn), 250, 245, 324, 22, 12,
-        Gdiplus::Color(255, 112, 109, 113), false, Gdiplus::StringAlignmentCenter);
+        Gdiplus::Color(255, 110, 110, 110), false, Gdiplus::StringAlignmentCenter);
     drawText(graphics, model_.cacheDirectory(), 150, 267, 524, 24, 12,
-        Gdiplus::Color(255, 151, 148, 152), false, Gdiplus::StringAlignmentCenter);
+        Gdiplus::Color(255, 149, 149, 149), false, Gdiplus::StringAlignmentCenter);
     drawRoundedRect(graphics, 290, 330, 112, 36, 3,
-        pointerIn(290, 330, 112, 36) ? Gdiplus::Color(255, 147, 126, 236)
-                                     : Gdiplus::Color(255, 108, 89, 194));
+        pointerIn(290, 330, 112, 36) ? Gdiplus::Color(255, 138, 138, 138)
+                                     : Gdiplus::Color(255, 101, 101, 101));
     drawRoundedRect(graphics, 422, 330, 112, 36, 3,
-        pointerIn(422, 330, 112, 36) ? Gdiplus::Color(255, 65, 64, 65)
-                                     : Gdiplus::Color(255, 52, 51, 52));
-    drawText(graphics, ls(Ls::Yes), 290, 330, 112, 36, 13, Gdiplus::Color(255, 224, 228, 225), true,
+        pointerIn(422, 330, 112, 36) ? Gdiplus::Color(255, 64, 64, 64)
+                                     : Gdiplus::Color(255, 51, 51, 51));
+    drawText(graphics, ls(Ls::Yes), 290, 330, 112, 36, 13, Gdiplus::Color(255, 227, 227, 227), true,
         Gdiplus::StringAlignmentCenter);
-    drawText(graphics, ls(Ls::No), 422, 330, 112, 36, 13, Gdiplus::Color(255, 174, 171, 175), true,
+    drawText(graphics, ls(Ls::No), 422, 330, 112, 36, 13, Gdiplus::Color(255, 172, 172, 172), true,
         Gdiplus::StringAlignmentCenter);
 }
 
 void ControllerUi::drawLoadingComplete(Gdiplus::Graphics& graphics) {
     drawLogo(graphics, 179.0f - 80.0f * logoPosition_);
     drawText(graphics, ls(Ls::LoadedComplete), 220, 232, 384, 30, 13,
-        Gdiplus::Color(255, 218, 215, 219), true, Gdiplus::StringAlignmentCenter);
+        Gdiplus::Color(255, 216, 216, 216), true, Gdiplus::StringAlignmentCenter);
     drawText(graphics, ls(Ls::OpenGuiHint), 140, 254, 544, 24,
-        12, Gdiplus::Color(255, 116, 113, 117), false, Gdiplus::StringAlignmentCenter);
+        12, Gdiplus::Color(255, 114, 114, 114), false, Gdiplus::StringAlignmentCenter);
     drawRoundedRect(graphics, 356, 348, 112, 36, 3,
-        pointerIn(356, 348, 112, 36) ? Gdiplus::Color(255, 65, 64, 65)
-                                     : Gdiplus::Color(255, 52, 51, 52));
+        pointerIn(356, 348, 112, 36) ? Gdiplus::Color(255, 64, 64, 64)
+                                     : Gdiplus::Color(255, 51, 51, 51));
     drawText(graphics, ls(Ls::CloseWindow), 356, 348, 112, 36, 13,
-        Gdiplus::Color(255, 174, 171, 175), true, Gdiplus::StringAlignmentCenter);
+        Gdiplus::Color(255, 172, 172, 172), true, Gdiplus::StringAlignmentCenter);
 }
 
 void ControllerUi::drawOutdated(Gdiplus::Graphics& graphics) {
@@ -958,9 +958,9 @@ void ControllerUi::drawOutdated(Gdiplus::Graphics& graphics) {
 void ControllerUi::drawError(Gdiplus::Graphics& graphics) {
     drawLogo(graphics, 179);
     drawText(graphics, model_.status().empty() ? ls(Ls::LoadErrorStage0) : model_.status(),
-        150, 150, 504, 220, 13, Gdiplus::Color(255, 203, 200, 204), false,
+        150, 150, 504, 220, 13, Gdiplus::Color(255, 201, 201, 201), false,
         Gdiplus::StringAlignmentCenter, true);
     drawRoundedRect(graphics, 356, 410, 112, 36, 3, Gdiplus::Color(255, 51, 51, 51));
     drawText(graphics, ls(Ls::CopyError), 356, 410, 112, 36, 13,
-        Gdiplus::Color(255, 174, 171, 175), true, Gdiplus::StringAlignmentCenter);
+        Gdiplus::Color(255, 172, 172, 172), true, Gdiplus::StringAlignmentCenter);
 }

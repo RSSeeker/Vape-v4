@@ -377,7 +377,7 @@ extends Mod {
         this.rotationPidMode = new ModeOption("PID");
         this.rotationAiMode = new ModeOption("AI");
         this.rotationKissMode = new ModeOption("Kiss");
-        this.rotationMode = ModeValue.create((Object)this, "Rotation Mode", "PID: Soulbound's original rotation engine.\nAI: LiquidBounce MLP combat regression model.\nKiss: KissClient's Linear engine (speed breathing + triangular jitter + GCD quantise).", (ModeSelection)this.rotationPidMode, this.rotationPidMode, this.rotationAiMode, this.rotationKissMode);
+        this.rotationMode = ModeValue.create((Object)this, "Rotation Mode", "PID: InevitableClient's original rotation engine.\nAI: LiquidBounce MLP combat regression model.\nKiss: KissClient's Linear engine (speed breathing + triangular jitter + GCD quantise).", (ModeSelection)this.rotationPidMode, this.rotationPidMode, this.rotationAiMode, this.rotationKissMode);
         this.aiYawMultiplier = NumberValue.create(this, "AI yaw multiplier", "#.#", "", 0.5, 1.5, 2.0, 0.05, "Multiplier applied to the model's yaw output");
         this.aiPitchMultiplier = NumberValue.create(this, "AI pitch multiplier", "#.#", "", 0.5, 1.0, 2.0, 0.05, "Multiplier applied to the model's pitch output");
         // AI 旋转模式下 aim speed 与 target area 不适用（模型直接输出角度），
