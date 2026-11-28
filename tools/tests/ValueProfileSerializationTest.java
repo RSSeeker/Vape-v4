@@ -572,6 +572,25 @@ public final class ValueProfileSerializationTest {
         JsonObject futureArmor = new JsonParser().parse("{\"id\":\"Inventory\",\"inventories\":[{\"name\":\"Future\",\"armor_mode\":\"New armor mode\"}]}").getAsJsonObject();
         malformedSnapshot.loadJson(futureArmor);
         check(futureArmor.equals(malformedSnapshot.toJson()), "an unknown armor mode is preserved rather than changed to a default");
+        JsonObject futurePriority = new JsonParser().parse("{\"id\":\"Inventory\",\"inventories\":[{\"name\":\"Nested\",\"slots\":[{\"slot\":0,\"priority\":\"future-priority\"}]}]}").getAsJsonObject();
+        malformedSnapshot.loadJson(futurePriority);
+        check(futurePriority.equals(malformedSnapshot.toJson()), "a nested field dropped by a rule codec makes the entire value opaque");
+        java.lang.reflect.Method preservesRules = InventoryCleanerProfileValue.class.getDeclaredMethod("preservesNestedRules", JsonObject.class, JsonObject.class);
+        preservesRules.setAccessible(true);
+        JsonObject nested = new JsonParser().parse("{\"slots\":[{\"slot\":0,\"itemFilter\":{\"items\":[\"stone\"]},\"customRule\":{\"name\":\"Rule\",\"conditions\":[{\"conditions\":[{\"type\":\"QUANTITY\",\"operator\":\"equals\",\"amount\":3}]}]}}]}").getAsJsonObject();
+        JsonObject normalizedNested = new JsonParser().parse("{\"slots\":[{\"slot\":0,\"itemFilter\":\"stone\",\"customRule\":{\"name\":\"Rule\",\"uuid\":\"new\",\"conditions\":[{\"conditions\":[{\"type\":\"QUANTITY\",\"operator\":\"equals\",\"amount\":3}]}]}}]}").getAsJsonObject();
+        check((Boolean)preservesRules.invoke(null, nested, normalizedNested), "a lossless legacy item selection can be normalized");
+        JsonObject futureCondition = ConfigJsonUtils.deepCopy(nested);
+        futureCondition.getAsJsonArray("slots").get(0).getAsJsonObject().getAsJsonObject("customRule")
+                .getAsJsonArray("conditions").get(0).getAsJsonObject().getAsJsonArray("conditions").get(0).getAsJsonObject().addProperty("future", true);
+        check(!(Boolean)preservesRules.invoke(null, futureCondition, normalizedNested), "unknown nested condition fields cannot be discarded");
+        JsonObject futureOperator = ConfigJsonUtils.deepCopy(nested);
+        futureOperator.getAsJsonArray("slots").get(0).getAsJsonObject().getAsJsonObject("customRule")
+                .getAsJsonArray("conditions").get(0).getAsJsonObject().getAsJsonArray("conditions").get(0).getAsJsonObject().addProperty("operator", "future operator");
+        check(!(Boolean)preservesRules.invoke(null, futureOperator, normalizedNested), "a future operator cannot be replaced by a default");
+        JsonObject multipleItems = ConfigJsonUtils.deepCopy(nested);
+        multipleItems.getAsJsonArray("slots").get(0).getAsJsonObject().getAsJsonObject("itemFilter").getAsJsonArray("items").add(new JsonPrimitive("dirt"));
+        check(!(Boolean)preservesRules.invoke(null, multipleItems, normalizedNested), "legacy filters with extra items stay opaque");
         inventoryProxy.reset();
         check(!inventoryProxy.hasUnsupportedData() && inventoryProxy.isDefault(), "an explicit reset unblocks unsupported inventory data");
         check(inventoryProxy.loadJson(inventoryJson), "a valid inventory can be loaded after reset");
@@ -584,6 +603,20 @@ public final class ValueProfileSerializationTest {
         check(inventorySnapshot.isDefault() && inventories.getValue() == liveInventory, "inventory snapshot reset is isolated");
         inventories.reset();
         check(inventories.isDefault() && inventories.getValue() == null, "inventory reset clears a null-default selection");
+
+        gg.vape.module.Macro macroUnderTest = gg.vape.module.Macro.create("test");
+        macroUnderTest.setBoundInputs(Arrays.asList(12, 13));
+        macroUnderTest.loadJson(new JsonParser().parse("{\"keybinds\":[],\"delay\":{\"id\":\"Delay\",\"minimum\":125,\"maximum\":250}}").getAsJsonObject());
+        check(macroUnderTest.getBoundInputs().isEmpty() && macroUnderTest.getDelay().getMinimumValue() == 125 && macroUnderTest.getDelay().getMaximumValue() == 250,
+                "empty macro binds clear existing keys and delay loads without double-click data");
+        macroUnderTest.loadJson(new JsonParser().parse("{\"double_click\":{\"id\":\"Double Click Delay\",\"minimum\":150}}").getAsJsonObject());
+        check(macroUnderTest.getDoubleClickDelay().getMinimumValue() == 150, "double-click delay loads when the main delay is absent");
+        macroUnderTest.loadJson(new JsonParser().parse("{\"delay\":null,\"double_click\":{\"id\":\"Double Click Delay\",\"maximum\":300}}").getAsJsonObject());
+        check(macroUnderTest.getDoubleClickDelay().getMaximumValue() == 300, "null main delay does not prevent double-click loading");
+        macroUnderTest.setBoundInputs(Arrays.asList(99));
+        macroUnderTest.loadJson(new JsonParser().parse("{\"keybinds\":[],\"key_2\":44}").getAsJsonObject());
+        check(macroUnderTest.getBoundInputs().isEmpty() && macroUnderTest.toJson().getAsJsonArray("keybinds").size() == 0,
+                "explicit empty macro binding wins over legacy fields and serializes empty");
 
         Mod module = new Mod("Profile test");
         module.values.add(live);

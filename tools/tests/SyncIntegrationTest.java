@@ -258,6 +258,20 @@ public final class SyncIntegrationTest {
             completed();
             check(ambiguousA.getOnlineId() == null && ambiguousB.getOnlineId() == null && ambiguousA.isDirty() && ambiguousB.isDirty(),
                     "ambiguous legacy names are not assigned to the wrong local profile");
+            ambiguousA.setDirty(false);
+            ambiguousB.setDirty(false);
+            Profile conflicting = new Profile("Same name, other UUID", "4.21");
+            conflicting.updateData(new JsonParser().parse("{\"modules\":[]}").getAsJsonObject());
+            conflicting.setDirty(true);
+            manager.getProfiles().add(conflicting);
+            pending[13] = reply();
+            vape.sync.requestSave();
+            sent();
+            pending[13].complete(ApiResponse.success(new RemoteProfileDataMap().add(
+                    new RemoteProfileData(UUID.randomUUID(), UUID.randomUUID(), "Same name, other UUID"))));
+            completed();
+            check(conflicting.getOnlineId() == null && conflicting.isDirty() && vape.sync.hasPendingSave(),
+                    "a same-name response with a different explicit UUID cannot be used as a fallback");
 
             AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
             Thread paired = new Thread(() -> {

@@ -2,7 +2,6 @@ package gg.vape.service.store;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.google.gson.annotations.SerializedName;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -31,7 +30,6 @@ public final class AccountRecord {
     public Set<Long> onlineFriends = new LinkedHashSet<>();
     public JsonObject globalSettings = defaultGlobalSettings();
     public JsonObject onlineSettings = defaultOnlineSettings();
-    @SerializedName(value = "localFriends", alternate = "friends")
     public JsonArray localFriends = new JsonArray();
     public JsonArray otherData = new JsonArray();
     public Map<String, JsonObject> privateProfiles = new LinkedHashMap<>();

@@ -6,6 +6,8 @@ import java.util.Map;
 
 final class ServiceState {
     long nextUserId = 1L;
+    // Stable identity for the in-process, no-login loader across ephemeral tokens.
+    long embeddedLocalUserId;
     long nextPublicProfileId = 1L;
     long nextFriendRequestId = 1L;
     long nextPartyId = 1L;

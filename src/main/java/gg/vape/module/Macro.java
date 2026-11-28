@@ -49,7 +49,7 @@ extends Bendable {
         if (jsonObject.get("double_click_enabled") != null && !jsonObject.get("double_click_enabled").isJsonNull()) {
             this.doubleClick.loadJson(jsonObject.get("double_click_enabled").getAsJsonObject());
         }
-        if (jsonObject.get("double_click") != null && !jsonObject.get("delay").isJsonNull()) {
+        if (jsonObject.get("delay") != null && jsonObject.get("delay").isJsonObject()) {
             this.delay.loadJson(jsonObject.get("delay").getAsJsonObject());
         }
         if (jsonObject.get("double_click") != null && !jsonObject.get("double_click").isJsonNull()) {

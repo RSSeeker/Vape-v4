@@ -124,8 +124,12 @@ STUBS = {
         public FrameStackManager getActiveStack(){return new FrameStackManager();} public void switchFrameStack(FrameStackManager s){} public void refreshFrameLayouts(){}}
     """,
     "gg/vape/config/ClientSettings.java": """package gg.vape.config; import gg.vape.wrapper.impl.*; public class ClientSettings {
-        public static boolean isReservedEntity(Entity e){return false;} public static boolean isInputDown(int code){return false;} public boolean isTeammate(EntityPlayerSP p,EntityLivingBase e){return false;} public boolean isBot(EntityLivingBase e){return false;}
+        public static final String FORMAT_CODE="\\u00a7"; public static boolean isReservedEntity(Entity e){return false;} public static boolean isInputDown(int code){return false;} public boolean isTeammate(EntityPlayerSP p,EntityLivingBase e){return false;} public boolean isBot(EntityLivingBase e){return false;}
     }""",
+    "gg/vape/module/macro/MacroAction.java": "package gg.vape.module.macro; public class MacroAction {}",
+    "gg/vape/module/macro/CommandMacro.java": "package gg.vape.module.macro; public class CommandMacro extends gg.vape.module.Macro {public CommandMacro(String n){super(n);} public MacroAction createAction(){return null;}}",
+    "gg/vape/module/macro/ItemMacro.java": "package gg.vape.module.macro; public class ItemMacro extends gg.vape.module.Macro {public ItemMacro(String n){super(n);} public MacroAction createAction(){return null;}}",
+    "gg/vape/module/macro/FishingRodMacro.java": "package gg.vape.module.macro; public class FishingRodMacro extends gg.vape.module.Macro {public FishingRodMacro(){super(\"fishing rod\");} public MacroAction createAction(){return null;}}",
     "gg/vape/unmap/ColorUtil.java": "package gg.vape.unmap; import java.awt.Color; public class ColorUtil {public static Color createReadableHsbColor(float h,float s,float b){return Color.getHSBColor(h,s,b);}}",
     "gg/vape/utils/MathUtil.java": "package gg.vape.utils; public class MathUtil {public static double roundToIncrement(double n,double increment){return Math.round(n/increment)*increment;}}",
     "gg/vape/utils/TimerUtil.java": "package gg.vape.utils; public class TimerUtil {public boolean hasTimeElapsed(long millis){return false;} public void reset(){}}",
@@ -145,6 +149,7 @@ STUBS = {
 }
 REAL = [
     "src/main/java/gg/vape/unmap/INamed.java",
+    "src/main/java/gg/vape/module/Macro.java",
     "src/main/java/gg/vape/unmap/Bendable.java",
     "src/main/java/gg/vape/unmap/BendableBindList.java",
     "src/main/java/gg/vape/unmap/BindChangeListener.java",

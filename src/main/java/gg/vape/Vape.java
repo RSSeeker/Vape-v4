@@ -355,7 +355,16 @@ public class Vape {
     }
 
     public boolean initAccountInfo() {
-        ApiAccessTokenProvider.getAccessToken();
+        String accessToken = ApiAccessTokenProvider.getAccessToken();
+        try {
+            // The no-login loader issues a fresh token before injection. The
+            // in-process service must be ready and know that token before the
+            // first account request or fresh-install profile restoration.
+            VapeServiceLauncher.prepareLocalAccess(accessToken);
+        }
+        catch (Throwable throwable) {
+            Vape.logThrowable(throwable);
+        }
         try {
             ApiResponse<AccountInfoResponse> response = ApiServices.getInstance().getAccountInfo().join();
             if (response == null || !response.isSuccessful() || response.getData() == null) {

@@ -298,10 +298,11 @@ public class SyncThread {
         }
         if (match != null) return match;
         // Some older servers do not echo the client UUID. Use the submitted
-        // name only if it identifies exactly one request and one response.
+        // name only if it identifies exactly one request and one response,
+        // and never contradicts an explicit UUID from the server.
         for (RemoteProfileData candidate : data.getProfiles().values()) {
             if (candidate == null || candidate.getProfileId() == null || !matchesProfileName(sentName, candidate)) continue;
-            if (match != null) return null;
+            if (candidate.getUuid() != null || match != null) return null;
             match = candidate;
         }
         if (match == null) return null;

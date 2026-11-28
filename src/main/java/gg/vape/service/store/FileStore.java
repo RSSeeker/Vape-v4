@@ -6,6 +6,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import gg.vape.config.ConfigJsonUtils;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -78,6 +79,46 @@ public final class FileStore {
         state.accountsByToken.put(token, account);
         save();
         return new LoaderLoginResult(token, account);
+    }
+
+    /**
+     * Bind the loader's per-session token to one persistent local identity.
+     * This is called directly by the embedded launcher, never by an HTTP route.
+     * It must not replace an existing account associated with the supplied token.
+     */
+    public synchronized void bindEmbeddedLocalToken(String token) throws IOException {
+        if (token == null || !token.matches("[0-9a-fA-F]{48}")) {
+            throw new IllegalArgumentException("Invalid embedded loader token");
+        }
+        if (state.accountsByToken.containsKey(token)) return;
+        Map<String, AccountRecord> previousAccounts = new LinkedHashMap<>(state.accountsByToken);
+        long previousLocalId = state.embeddedLocalUserId, previousNextId = state.nextUserId;
+        try {
+            AccountRecord account;
+            if (state.embeddedLocalUserId != 0L) {
+                account = account(state.embeddedLocalUserId).orElseThrow(
+                        () -> new IOException("Embedded local account is missing from the service store"));
+                // Keep one token per identity: duplicate deserialized AccountRecord
+                // objects would otherwise diverge when one session changes data.
+                state.accountsByToken.entrySet().removeIf(entry -> entry.getValue().userId == state.embeddedLocalUserId);
+            } else {
+                String username = "Local";
+                int suffix = 2;
+                while (accountByName(username).isPresent()) username = "Local" + suffix++;
+                account = new AccountRecord();
+                account.userId = state.nextUserId++;
+                account.username = username;
+                account.accountCreation = AccountRecord.nowTimestamp();
+                state.embeddedLocalUserId = account.userId;
+            }
+            state.accountsByToken.put(token, account);
+            save();
+        } catch (IOException | RuntimeException failure) {
+            state.accountsByToken = previousAccounts;
+            state.embeddedLocalUserId = previousLocalId;
+            state.nextUserId = previousNextId;
+            throw failure;
+        }
     }
 
     public synchronized boolean areFriends(long firstUserId, long secondUserId) {
@@ -876,7 +917,23 @@ public final class FileStore {
             return new ServiceState();
         }
         String json = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
-        ServiceState loaded = gson.fromJson(json, ServiceState.class);
+        JsonElement root = new JsonParser().parse(json);
+        if (root == null || root.isJsonNull()) return new ServiceState();
+        if (root.isJsonObject()) {
+            JsonElement accounts = root.getAsJsonObject().get("accountsByToken");
+            if (accounts != null && accounts.isJsonObject()) {
+                for (Map.Entry<String, JsonElement> entry : accounts.getAsJsonObject().entrySet()) {
+                    if (!entry.getValue().isJsonObject()) continue;
+                    JsonObject account = entry.getValue().getAsJsonObject();
+                    // Gson 2.2.4 does not support SerializedName.alternate.
+                    // Prefer the modern field when both forms are present.
+                    if (!account.has("localFriends") && account.has("friends")) {
+                        account.add("localFriends", account.get("friends"));
+                    }
+                }
+            }
+        }
+        ServiceState loaded = gson.fromJson(root, ServiceState.class);
         return loaded == null ? new ServiceState() : loaded;
     }
 

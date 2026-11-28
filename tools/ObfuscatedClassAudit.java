@@ -41,6 +41,7 @@ public final class ObfuscatedClassAudit {
             "gg/vape/event/impl/EventRenderWorldPassExecutorDrain"));
     // Localization edits and separately reviewed module behavior changes.
     private static final Set<String> EXPECTED_ENGLISH_MODULE_CHANGES = new HashSet<>(Arrays.asList(
+            "gg/vape/module/Macro",
             "gg/vape/module/Mod",
             "gg/vape/module/blatant/antibot/AntiBotBooleanValue",
             "gg/vape/module/blatant/antibot/AntiBotModeValue",

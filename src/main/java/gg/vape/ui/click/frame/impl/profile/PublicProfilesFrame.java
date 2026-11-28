@@ -494,6 +494,9 @@ implements EventListener {
             this.d$src$V$fo8605();
         } else if (OnlineConnectionManager.INSTANCE.getConnectionState().equals((Object)OnlineConnectionState.ONLINE) && this.showingConnectionStatus) {
             this.connectionRefreshPending = false;
+            // Leave the offline view immediately, even if the owned-profile
+            // request fails, is stale, or returns no new entries.
+            this.W();
             this.refreshOwnedProfiles();
         }
         PopupFrame popupFrame = this.activePopup;

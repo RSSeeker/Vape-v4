@@ -89,9 +89,9 @@ is an integrity check, not evidence that the EXE or DLL is safe.
 **Feature integration**
 
 - Embeds **VapeService** (HTTP 8080 + Zeus TCP 8091 companion service), auto-started in the background in-game:
-  - Account / settings / profiles / friends / party / location sharing etc. run locally
+  - Experimental local account, settings, profile, friends, party and location-sharing APIs; not all paths have been tested in live Minecraft
   - Service data stored at `.inevitable\inevitable-service.json` next to the exe, separated from the local config (`.inevitable\config.json`) so they don't conflict
-  - Port conflict auto-probes for a free port further up; silent fallback on startup failure, doesn't affect the game
+  - Port conflict auto-probes for a free port further up, but the client does not automatically follow the new port; startup failure leaves the service unavailable
   - Supports environment-variable configuration (see "Embedded service config" below)
 
 **Localization**

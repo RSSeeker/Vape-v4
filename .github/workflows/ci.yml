@@ -78,6 +78,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & python -B -X utf8 tools/tests/run_inevitable_lifecycle_tests.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & python -B -X utf8 tools/tests/run_public_profile_connection_tests.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & python -B -X utf8 tools/tests/run_bind_capture_tests.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
