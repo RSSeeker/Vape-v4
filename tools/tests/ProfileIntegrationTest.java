@@ -84,6 +84,11 @@ public final class ProfileIntegrationTest {
         module.addValue(live);
         Vape.INSTANCE.mods.top.add(module);
         Profile a = profile("A", "A-original"), b = profile("B", "B-original");
+        JsonObject downloaded = new JsonParser().parse("{\"name\":\"Downloaded\",\"vapeVersion\":\"4.21\",\"data\":{\"modules\":[]},\"metadata\":{\"publicProfileId\":42,\"version\":1,\"publishedVersion\":2}}").getAsJsonObject();
+        Profile linked = new Profile("", "4.21").loadJson(downloaded);
+        check(linked.toJson(false).getAsJsonObject("metadata").get("publicProfileId").getAsLong() == 42L
+                        && linked.toJson(true).getAsJsonObject("metadata").get("publishedVersion").getAsLong() == 2L,
+                "downloaded public-profile metadata survives local and remote serialization");
         manager.getProfiles().add(a);
         manager.getProfiles().add(b);
         manager.setActiveProfile(a);

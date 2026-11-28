@@ -169,6 +169,9 @@ implements Comparable<Profile> {
         if (this.originalUuid != null) {
             object.addProperty("original_uuid", this.originalUuid);
         }
+        // Downloaded profiles need their public link across local saves and
+        // subsequent private syncs, not just in the initial download response.
+        if (this.remoteMetadata != null) object.add("metadata", this.remoteMetadata.toJson());
         return object;
     }
 

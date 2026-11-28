@@ -207,6 +207,13 @@ public class ProfilesManager {
         return result;
     }
 
+    /** Record a remote ID created by an in-flight save after its local profile was removed. */
+    public synchronized boolean queueRemoteDeletion(UUID id) {
+        if (id == null || this.getProfileByOnlineId(id) != null || this.deletedRemoteProfileRevisions.containsKey(id)) return false;
+        this.deletedRemoteProfileRevisions.put(id, ++this.deletionRevision);
+        return true;
+    }
+
     /** Snapshot deletion intents without consuming them until the server accepts them. */
     public synchronized Map<UUID, Long> getPendingDeletionRevisions() {
         return new LinkedHashMap<UUID, Long>(this.deletedRemoteProfileRevisions);

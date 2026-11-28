@@ -6,6 +6,7 @@ import gg.vape.api.ApiHttpClient;
 import gg.vape.api.ApiResponse;
 import gg.vape.api.ApiServices;
 import gg.vape.api.PagedResult;
+import gg.vape.api.UserDataResponse;
 import gg.vape.config.Profile;
 import gg.vape.config.ProfileSnapshot;
 import gg.vape.config.PublicProfile;
@@ -42,7 +43,9 @@ import gg.vape.ui.click.frame.impl.main.ClickGuiFrameManager;
 import gg.vape.ui.click.layout.WrappingFlowLayout;
 import java.awt.Color;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -67,6 +70,7 @@ implements EventListener {
     private PublicProfileSearchFilterPanel searchFilterPanel;
     private PublicProfileSortMode sortMode = PublicProfileSortMode.RATED;
     private boolean connectionRefreshPending;
+    private boolean ownedRefreshPending;
     private boolean showingConnectionStatus;
     private PanelComponent profileListPanel;
     @Nullable
@@ -223,6 +227,35 @@ implements EventListener {
     public void t(boolean bl, boolean bl2) {
         super.t(bl, bl2);
         this.connectionRefreshPending = false;
+        if (bl) this.refreshOwnedProfiles();
+    }
+
+    /** Local settings take precedence at startup; fetch owned publications separately. */
+    private void refreshOwnedProfiles() {
+        if (this.ownedRefreshPending) return;
+        PublicProfileManager manager = Vape.INSTANCE.getPublicProfileManager();
+        Map<Long, PublicProfile> before = new LinkedHashMap<Long, PublicProfile>(manager.getProfilesById());
+        this.ownedRefreshPending = true;
+        ApiServices.getInstance().getUserDataApi().getUserData().whenCompleteAsync((response, error) -> {
+            this.ownedRefreshPending = false;
+            if (error != null || response == null || !response.isSuccessful()) return;
+            UserDataResponse data = response.getData();
+            // Do not apply a stale response over a create, edit or delete that
+            // completed while the request was in flight.
+            if (data == null || !before.equals(manager.getProfilesById())) return;
+            boolean changed = false;
+            for (PublicProfile profile : data.getPublicProfiles().values()) {
+                if (!before.containsKey(profile.getProfileId())) {
+                    before.put(profile.getProfileId(), profile);
+                    changed = true;
+                }
+            }
+            if (changed) {
+                manager.replaceProfiles(before.values());
+                Vape.INSTANCE.getProfilesManager().updatePublicProfileLinks();
+                this.W();
+            }
+        }, ClientSettings.UI_EXECUTOR);
     }
 
     @Override
@@ -461,6 +494,7 @@ implements EventListener {
             this.d$src$V$fo8605();
         } else if (OnlineConnectionManager.INSTANCE.getConnectionState().equals((Object)OnlineConnectionState.ONLINE) && this.showingConnectionStatus) {
             this.connectionRefreshPending = false;
+            this.refreshOwnedProfiles();
         }
         PopupFrame popupFrame = this.activePopup;
         if (popupFrame != null && popupFrame.V$src$Z$1xhop3l()) {

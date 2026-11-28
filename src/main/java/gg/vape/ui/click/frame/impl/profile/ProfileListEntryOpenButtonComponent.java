@@ -4,14 +4,12 @@ import gg.vape.Vape;
 import gg.vape.api.ApiResponse;
 import gg.vape.api.ApiServices;
 import gg.vape.config.Profile;
-import gg.vape.config.ProfilesSyncPayloadBuilder;
 import gg.vape.config.PublicProfile;
 import gg.vape.module.none.ClientSettings;
 import gg.vape.ui.click.component.AnimatedIconButtonComponent;
 import gg.vape.ui.click.frame.FrameStackManager;
 import gg.vape.ui.click.frame.impl.main.ClickGuiFrameManager;
 import gg.vape.ui.click.frame.impl.profile.PublicProfilesFrame;
-import java.util.Collections;
 import java.util.concurrent.Executor;
 import org.jetbrains.annotations.Nullable;
 
@@ -59,10 +57,9 @@ extends AnimatedIconButtonComponent {
             if (this.selectedProfile) {
                 return;
             }
+            // The manager queues a durable, revision-guarded deletion. A
+            // second fire-and-forget request could race a restored profile.
             Vape.INSTANCE.getProfilesManager().removeProfile(this.profile);
-            if (this.profile.getRemoteMetadata() != null && this.profile.getOnlineId() != null) {
-                ApiServices.getInstance().getUserDataApi().saveProfileData(ProfilesSyncPayloadBuilder.build(null, Collections.singletonList(this.profile.getOnlineId())));
-            }
             if (this.afterDelete != null) {
                 this.afterDelete.run();
             }

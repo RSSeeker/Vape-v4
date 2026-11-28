@@ -80,7 +80,10 @@ implements EventListener {
         this.draftProfile.setOnlineId(null);
         this.draftProfile.setPublicProfileFlag(false);
         this.draftProfile.setDraft(true);
-        ApiServices.getInstance().getUserDataApi().reserveProfileId().whenCompleteAsync(this::handleDraftProfileIdResponse, (Executor)ClientSettings.UI_EXECUTOR).exceptionally(ClickGuiProfilesPage::ignoreCreateProfileFailure);
+        Profile requestedDraft = this.draftProfile;
+        ApiServices.getInstance().getUserDataApi().reserveProfileId().whenCompleteAsync(
+                (response, error) -> this.handleDraftProfileIdResponse(requestedDraft, response, error),
+                (Executor)ClientSettings.UI_EXECUTOR).exceptionally(ClickGuiProfilesPage::ignoreCreateProfileFailure);
         Vape.INSTANCE.getProfilesManager().switchProfile(this.draftProfile);
         this.creatingProfile = true;
         this.refreshProfileList();
@@ -333,14 +336,12 @@ implements EventListener {
         page.updateCreateButtonState();
     }
 
-    private void handleDraftProfileIdResponse(ApiResponse apiResponse, Throwable throwable) {
-        if (throwable != null) {
-            return;
-        }
-        if (!apiResponse.isSuccessful()) {
-            return;
-        }
-        this.draftProfile.setOnlineId((UUID)apiResponse.getData());
+    private void handleDraftProfileIdResponse(Profile requestedDraft, ApiResponse apiResponse, Throwable throwable) {
+        // A reservation may finish after cancellation, submission, or a new
+        // draft being opened. It must never replace a saved profile's ID.
+        if (throwable != null || apiResponse == null || !apiResponse.isSuccessful()
+                || this.draftProfile != requestedDraft || !requestedDraft.isDraft()) return;
+        requestedDraft.setOnlineId((UUID)apiResponse.getData());
     }
 
     private void initializeProfileSidecar(Profile profile, PanelComponent panelComponent) {

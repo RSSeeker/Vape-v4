@@ -39,12 +39,9 @@ extends GuiComponent {
 
 
     private static void handleProfileIdResponse(Profile profile, ApiResponse response, Throwable error) {
-        if (error != null) {
-            return;
-        }
-        if (!response.isSuccessful()) {
-            return;
-        }
+        // Once submitted, sync owns ID assignment; a delayed reservation
+        // must not overwrite an ID returned by a save already in flight.
+        if (error != null || response == null || !response.isSuccessful() || !profile.isDraft()) return;
         profile.setOnlineId((UUID)response.getData());
     }
 

@@ -62,7 +62,7 @@ public final class SyncIntegrationTest {
     public static void main(String[] args) throws Exception {
         Vape vape = Vape.INSTANCE;
         vape.sync = new SyncThread(vape);
-        CompletableFuture<ApiResponse<RemoteProfileDataMap>>[] pending = new CompletableFuture[8];
+        CompletableFuture<ApiResponse<RemoteProfileDataMap>>[] pending = new CompletableFuture[16];
         try {
             ProfilesManager manager = vape.getProfilesManager();
             Mod module = new Mod("Module");
@@ -70,6 +70,7 @@ public final class SyncIntegrationTest {
             module.addValue(text);
             vape.mods.top.add(module);
             Profile profile = new Profile("Private", "4.21");
+            profile.setOnlineId(UUID.randomUUID());
             profile.updateData(new JsonParser().parse("{\"modules\":[{\"name\":\"Module\",\"values\":[{\"id\":\"Text\",\"value\":\"First\"}]}],\"enabled\":{},\"legit_enabled\":{}}").getAsJsonObject());
             manager.getProfiles().add(profile);
             manager.setActiveProfile(profile);
@@ -134,6 +135,10 @@ public final class SyncIntegrationTest {
             pending[4].complete(ApiResponse.failure("offline"));
             completed();
             check(manager.getPendingDeletionRevisions().containsKey(deletedId), "a failed save retains the deletion for retry");
+            check(vape.sync.hasPendingSave(), "a failed save remains pending for retry");
+            vape.sync.requestSaveIfUnchanged(vape.sync.getChangeRevision());
+            check(ApiServices.INSTANCE.userData.sent.poll(200, TimeUnit.MILLISECONDS) == null,
+                    "automatic retry is delayed after a failure");
             JsonObject pendingOnDisk = LocalConfigStore.loadPendingProfileSync();
             check(pendingOnDisk.getAsJsonArray("deletions").get(0).getAsString().equals(deletedId.toString())
                             && pendingOnDisk.getAsJsonArray("updates").get(0).getAsString().equals(profile.getLocalId().toString()),
@@ -163,6 +168,96 @@ public final class SyncIntegrationTest {
             staleState.add("deletions", staleDeletions);
             manager.restorePendingSyncState(staleState);
             check(manager.getPendingDeletionRevisions().isEmpty(), "a stale or malformed intent cannot delete a present profile");
+
+            Profile renamed = new Profile("Before", "4.21");
+            renamed.updateData(new JsonParser().parse("{\"modules\":[]}").getAsJsonObject());
+            renamed.setDirty(true);
+            manager.getProfiles().add(renamed);
+            pending[6] = reply();
+            vape.sync.requestSave();
+            JsonObject initialRename = sent();
+            check("Before".equals(initialRename.getAsJsonArray("updatedProfiles").get(0).getAsJsonObject().get("name").getAsString()),
+                    "the original profile name is sent");
+            renamed.setName("After");
+            vape.sync.markDirty();
+            UUID renamedId = UUID.randomUUID();
+            pending[6].complete(ApiResponse.success(new RemoteProfileDataMap().add(new RemoteProfileData(renamed.getLocalId(), renamedId, "Before"))));
+            completed();
+            check(renamedId.equals(renamed.getOnlineId()) && renamed.isDirty(),
+                    "a response matches the submitted UUID after a rename without acknowledging the newer edit");
+            pending[7] = reply();
+            vape.sync.requestSave();
+            JsonObject renameRetry = sent().getAsJsonArray("updatedProfiles").get(0).getAsJsonObject();
+            check("After".equals(renameRetry.get("name").getAsString()) && renamedId.toString().equals(renameRetry.get("profileId").getAsString()),
+                    "the later rename updates the assigned remote profile rather than creating another");
+            pending[7].complete(ApiResponse.success(new RemoteProfileDataMap()));
+            completed();
+            check(!renamed.isDirty(), "the later rename is acknowledged");
+
+            Profile orphan = new Profile("Temporary", "4.21");
+            orphan.updateData(new JsonParser().parse("{\"modules\":[]}").getAsJsonObject());
+            orphan.setDirty(true);
+            manager.getProfiles().add(orphan);
+            pending[8] = reply();
+            vape.sync.requestSave();
+            sent();
+            manager.removeProfile(orphan);
+            UUID orphanId = UUID.randomUUID();
+            pending[8].complete(ApiResponse.success(new RemoteProfileDataMap().add(new RemoteProfileData(orphan.getLocalId(), orphanId, "Temporary"))));
+            completed();
+            check(manager.getPendingDeletionRevisions().containsKey(orphanId) && vape.sync.hasPendingSave(),
+                    "a remotely created profile deleted while saving is queued for deletion");
+            check(LocalConfigStore.loadPendingProfileSync().getAsJsonArray("deletions").toString().contains(orphanId.toString()),
+                    "the in-flight deletion is durable on disk");
+            pending[9] = reply();
+            vape.sync.requestSave();
+            check(sent().getAsJsonArray("deletedProfiles").toString().contains(orphanId.toString()), "the orphan deletion is sent on retry");
+            pending[9].complete(ApiResponse.success(new RemoteProfileDataMap()));
+            completed();
+            check(!manager.getPendingDeletionRevisions().containsKey(orphanId), "the orphan deletion is acknowledged");
+
+            Profile uncertain = new Profile("No server ID", "4.21");
+            uncertain.updateData(new JsonParser().parse("{\"modules\":[]}").getAsJsonObject());
+            uncertain.setDirty(true);
+            manager.getProfiles().add(uncertain);
+            pending[10] = reply();
+            vape.sync.requestSave();
+            sent();
+            pending[10].complete(ApiResponse.success(new RemoteProfileDataMap()));
+            completed();
+            check(uncertain.getOnlineId() == null && uncertain.isDirty() && vape.sync.hasPendingSave(),
+                    "a successful response without an ID cannot silently acknowledge a new profile");
+            uncertain.setDirty(false);
+
+            Profile fallback = new Profile("Legacy name", "4.21");
+            fallback.updateData(new JsonParser().parse("{\"modules\":[]}").getAsJsonObject());
+            fallback.setDirty(true);
+            manager.getProfiles().add(fallback);
+            pending[11] = reply();
+            vape.sync.requestSave();
+            sent();
+            fallback.setName("Renamed while saving");
+            UUID legacyId = UUID.randomUUID();
+            pending[11].complete(ApiResponse.success(new RemoteProfileDataMap().add(new RemoteProfileData(null, legacyId, "Legacy name"))));
+            completed();
+            check(legacyId.equals(fallback.getOnlineId()) && fallback.isDirty(),
+                    "a unique submitted name also correlates older responses without a UUID");
+            fallback.setDirty(false);
+
+            Profile ambiguousA = new Profile("Duplicate", "4.21"), ambiguousB = new Profile("Duplicate", "4.21");
+            ambiguousA.updateData(new JsonParser().parse("{\"modules\":[]}").getAsJsonObject());
+            ambiguousB.updateData(new JsonParser().parse("{\"modules\":[]}").getAsJsonObject());
+            ambiguousA.setDirty(true);
+            ambiguousB.setDirty(true);
+            manager.getProfiles().add(ambiguousA);
+            manager.getProfiles().add(ambiguousB);
+            pending[12] = reply();
+            vape.sync.requestSave();
+            sent();
+            pending[12].complete(ApiResponse.success(new RemoteProfileDataMap().add(new RemoteProfileData(null, UUID.randomUUID(), "Duplicate"))));
+            completed();
+            check(ambiguousA.getOnlineId() == null && ambiguousB.getOnlineId() == null && ambiguousA.isDirty() && ambiguousB.isDirty(),
+                    "ambiguous legacy names are not assigned to the wrong local profile");
 
             AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
             Thread paired = new Thread(() -> {

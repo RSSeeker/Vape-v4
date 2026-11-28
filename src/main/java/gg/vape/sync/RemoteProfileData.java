@@ -66,6 +66,11 @@ public class RemoteProfileData {
         return this.profileId;
     }
 
+    /** UUID supplied with the profile, when present (used for save correlation). */
+    @Nullable
+    public UUID getUuid() {
+        return this.ownerUuid;
+    }
 
     @Nullable
     @Contract(value="!null -> !null; null -> null")

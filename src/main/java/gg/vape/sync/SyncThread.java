@@ -38,6 +38,7 @@ public class SyncThread {
     private volatile long lastSaveTime;
     // Guarded by this; unlike a timestamp, two edits in one millisecond differ.
     private long changeRevision;
+    private long nextAutomaticRetryTime;
     private boolean onlineSettingsApplied;
 
     public SyncThread(Vape vape) {
@@ -60,6 +61,8 @@ public class SyncThread {
             JsonObject localProfilesPayload;
             JsonObject pendingProfileSync;
             Map<Profile, Long> sentRevisions = new IdentityHashMap<Profile, Long>();
+            Map<Profile, String> sentNames = new IdentityHashMap<Profile, String>();
+            Map<Profile, UUID> sentOnlineIds = new IdentityHashMap<Profile, UUID>();
             Map<UUID, Long> sentDeletions;
             boolean localSaveOk;
             // The shutdown hook can save too. Serialize capture and local I/O
@@ -75,6 +78,16 @@ public class SyncThread {
                     settingsPayload = this.buildSettingsPayload(true);
                     sentDeletions = this.vape.getProfilesManager().getPendingDeletionRevisions();
                     profilesPayload = this.vape.getProfilesManager().toJson(true);
+                    // Correlate the response with exactly what was sent, not
+                    // the profile's possibly changed name after the request.
+                    for (com.google.gson.JsonElement element : profilesPayload.getAsJsonArray("updatedProfiles")) {
+                        JsonObject sent = element.getAsJsonObject();
+                        Profile profile = this.vape.getProfilesManager().getProfileByLocalId(UUID.fromString(sent.get("uuid").getAsString()));
+                        if (profile == null) continue;
+                        sentNames.put(profile, sent.get("name").getAsString());
+                        String id = ConfigJsonUtils.getString(sent, "profileId");
+                        sentOnlineIds.put(profile, id == null ? null : UUID.fromString(id));
+                    }
                     localProfilesPayload = this.buildLocalProfilesPayload();
                     pendingProfileSync = this.vape.getProfilesManager().pendingSyncState();
                     for (Profile profile : this.vape.getProfilesManager().getProfiles()) {
@@ -92,12 +105,25 @@ public class SyncThread {
             ApiResponse<RemoteProfileDataMap> profilesResponse = ApiServices.getInstance().getUserDataApi().saveProfileData(profilesPayload)
                     .exceptionally(error -> handleProfilesSaveFailure(notification, error))
                     .join();
-            this.updateProfilesSaveStatus(notification, profilesResponse, sentRevisions, sentDeletions);
-            this.applySavedProfileIds(profilesResponse);
+            synchronized (this.vape.getProfilesManager()) {
+                boolean needsFollowUp = this.applySavedProfileIds(profilesResponse, sentNames, sentOnlineIds);
+                this.updateProfilesSaveStatus(notification, profilesResponse, sentRevisions, sentDeletions);
+                if (profilesResponse == null || !profilesResponse.isSuccessful()
+                        || settingsResponse == null || !settingsResponse.isSuccessful()) {
+                    this.scheduleRetry();
+                } else if (needsFollowUp) {
+                    this.scheduleRetry();
+                }
+            }
             if (profilesResponse != null && profilesResponse.isSuccessful()) {
                 // Commit acknowledged intents and newly assigned IDs locally as
                 // well; replay after a crash is otherwise possible.
                 this.saveLocalSnapshot();
+            }
+            if (!localSaveOk) {
+                notification.setSettingsSaveStatus(4);
+                notification.setApiErrorDetail("Could not write the local settings snapshot.");
+                this.scheduleRetry();
             }
 
             notification.complete();
@@ -108,6 +134,7 @@ public class SyncThread {
             }
         }
         catch (Exception exception) {
+            this.scheduleRetry();
             Vape.logThrowable(exception);
         }
         // requestSave() consumes the pending flag before the worker starts.
@@ -204,7 +231,15 @@ public class SyncThread {
         if (response.isSuccessful()) {
             notification.setProfilesSaveStatus(1);
             for (Map.Entry<Profile, Long> entry : sentRevisions.entrySet()) {
-                entry.getKey().clearDirtyIfUnchanged(entry.getValue());
+                Profile profile = entry.getKey();
+                // Without a server ID a new profile cannot safely be updated
+                // next time. Leave it dirty if the response could not be matched.
+                if (this.vape.getProfilesManager().getProfiles().contains(profile) && profile.getOnlineId() == null) {
+                    notification.setProfilesSaveStatus(4);
+                    notification.setApiErrorDetail("The server did not identify a saved profile.");
+                    continue;
+                }
+                profile.clearDirtyIfUnchanged(entry.getValue());
             }
             this.vape.getProfilesManager().acknowledgeDeletions(sentDeletions);
         } else if (isRateLimited(response)) {
@@ -215,30 +250,70 @@ public class SyncThread {
         }
     }
 
-    private void applySavedProfileIds(ApiResponse<RemoteProfileDataMap> response) {
-        if (response == null || !response.isSuccessful()) {
-            return;
-        }
-        RemoteProfileDataMap responseData = response.getData();
-        assert responseData != null;
-        if (responseData == null) {
-            throw new IllegalStateException("Successful profile save response did not include profile data");
-        }
-        for (Profile profile : this.vape.getProfilesManager().getProfiles()) {
-            RemoteProfileData savedProfile = responseData.getProfiles().values().stream()
-                    .filter(candidate -> matchesProfileName(profile, candidate))
-                    .findFirst()
-                    .orElse(null);
-            if (savedProfile != null && !savedProfile.getProfileId().equals(profile.getOnlineId())) {
-                profile.setOnlineId(savedProfile.getProfileId());
+    /** Match newly assigned IDs to the submitted snapshot, including removed profiles. */
+    private boolean applySavedProfileIds(ApiResponse<RemoteProfileDataMap> response,
+                                         Map<Profile, String> sentNames, Map<Profile, UUID> sentOnlineIds) {
+        if (response == null || !response.isSuccessful()) return false;
+        RemoteProfileDataMap data = response.getData();
+        ProfilesManager manager = this.vape.getProfilesManager();
+        boolean followUp = false;
+        for (Map.Entry<Profile, String> sent : sentNames.entrySet()) {
+            Profile profile = sent.getKey();
+            if (sentOnlineIds.get(profile) != null) continue;
+            RemoteProfileData saved = data == null ? null : findSavedProfile(profile, sent.getValue(), sentNames, data);
+            UUID savedId = saved == null ? null : saved.getProfileId();
+            Profile currentOwner = savedId == null ? null : manager.getProfileByOnlineId(savedId);
+            if (currentOwner != null && currentOwner != profile) savedId = null;
+            if (!manager.getProfiles().contains(profile)) {
+                // Deleting by name alone could delete another existing record.
+                // Only enqueue this orphan when its client UUID confirms it.
+                if (savedId != null && profile.getLocalId().equals(saved.getUuid())) {
+                    followUp |= manager.queueRemoteDeletion(savedId);
+                }
+                continue;
+            }
+            UUID currentId = profile.getOnlineId();
+            if (currentId == null && savedId != null) {
+                profile.setOnlineId(savedId);
+            } else if (currentId == null || (savedId != null && !currentId.equals(savedId))) {
+                // A late reservation or an incomplete response must not clear
+                // the pending update. A confirmed duplicate is removed later.
+                if (savedId != null && profile.getLocalId().equals(saved.getUuid())) {
+                    manager.queueRemoteDeletion(savedId);
+                }
+                profile.setDirty(true);
+                followUp = true;
             }
         }
+        return followUp;
     }
 
-    private static boolean matchesProfileName(Profile profile, RemoteProfileData remoteProfile) {
-        String profileName = profile.getName();
-        return remoteProfile.getName().equals(profileName)
-                || remoteProfile.getName().equals("b64:" + Base64Util.encodeUtf8Base64(profileName));
+    private static RemoteProfileData findSavedProfile(Profile profile, String sentName,
+                                                       Map<Profile, String> sentNames, RemoteProfileDataMap data) {
+        RemoteProfileData match = null;
+        for (RemoteProfileData candidate : data.getProfiles().values()) {
+            if (candidate == null || candidate.getProfileId() == null || !profile.getLocalId().equals(candidate.getUuid())) continue;
+            if (match != null) return null;
+            match = candidate;
+        }
+        if (match != null) return match;
+        // Some older servers do not echo the client UUID. Use the submitted
+        // name only if it identifies exactly one request and one response.
+        for (RemoteProfileData candidate : data.getProfiles().values()) {
+            if (candidate == null || candidate.getProfileId() == null || !matchesProfileName(sentName, candidate)) continue;
+            if (match != null) return null;
+            match = candidate;
+        }
+        if (match == null) return null;
+        int matchingRequests = 0;
+        for (String name : sentNames.values()) if (matchesProfileName(name, match)) ++matchingRequests;
+        return matchingRequests == 1 ? match : null;
+    }
+
+    private static boolean matchesProfileName(String name, RemoteProfileData remoteProfile) {
+        String remoteName = remoteProfile.getName();
+        return name != null && remoteName != null && (remoteName.equals(name)
+                || remoteName.equals("b64:" + Base64Util.encodeUtf8Base64(name)));
     }
 
     private static boolean isRateLimited(ApiResponse<?> response) {
@@ -279,6 +354,7 @@ public class SyncThread {
 
     public synchronized void requestSave() {
         this.lastSaveTime = System.currentTimeMillis();
+        this.nextAutomaticRetryTime = 0L;
         this.pendingSave.set(false);
         if (this.storeRequestWorker == null) {
             this.storeRequestWorker = new SyncStoreRequestWorker();
@@ -292,7 +368,14 @@ public class SyncThread {
     }
 
     synchronized void requestSaveIfUnchanged(long revision) {
-        if (this.pendingSave.get() && this.changeRevision == revision) this.requestSave();
+        if (this.pendingSave.get() && this.changeRevision == revision
+                && System.currentTimeMillis() >= this.nextAutomaticRetryTime) this.requestSave();
+    }
+
+    /** Keep failed saves pending, but do not hammer an offline or rate-limited service. */
+    private synchronized void scheduleRetry() {
+        this.nextAutomaticRetryTime = System.currentTimeMillis() + 30000L;
+        this.markDirty();
     }
 
     public boolean hasPendingSave() {

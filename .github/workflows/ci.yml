@@ -134,6 +134,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & python -B -X utf8 tools/tests/run_sync_integration_tests.py --gson $gson[0].FullName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & python -B -X utf8 tools/tests/run_public_service_tests.py --gson $gson[0].FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # Preserve the release's randomized class-name packaging; the resulting
       # embedded JAR is separately compared with the un-obfuscated source build.

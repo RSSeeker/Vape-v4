@@ -9,7 +9,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-import gg.vape.config.ConfigJsonUtils;
 import gg.vape.service.store.AccountRecord;
 import gg.vape.service.store.AuthChallengeRecord;
 import gg.vape.service.store.FileStore;
@@ -197,42 +196,49 @@ public final class LegacyHttpServer implements AutoCloseable {
             sendEnvelope(exchange, true, new JsonArray(), null);
         } else if ("profile/public/list".equals(operation)) {
             requireMethod(exchange, "POST");
-            sendEnvelope(exchange, true, pagedProfiles(), null);
+            sendEnvelope(exchange, true, store.listPublicProfiles(token, readJsonObject(exchange)), null);
         } else if ("profile/public/create".equals(operation) || "profile/public/edit".equals(operation)) {
             requireMethod(exchange, "POST");
-            sendEnvelope(exchange, true, store.savePublicProfile(token, readJsonObject(exchange)), null);
+            sendEnvelope(exchange, true, store.savePublicProfile(token, readJsonObject(exchange), operation.endsWith("/edit")), null);
+        } else if ("profile/public/regenerate/sharecode".equals(operation)) {
+            requireMethod(exchange, "POST");
+            String id = readJsonObject(exchange).get("profileId").getAsString();
+            sendEnvelope(exchange, true, store.regeneratePublicShareCode(token, id), null);
         } else if (operation.startsWith("profile/public/") && operation.endsWith("/delete")) {
             requireMethod(exchange, "DELETE");
             String id = operation.substring("profile/public/".length(), operation.length() - "/delete".length());
-            sendEnvelope(exchange, true, gson.toJsonTree(store.deletePublicProfile(token, id)), null);
+            boolean deleted = store.deletePublicProfile(token, id);
+            sendEnvelope(exchange, deleted, deleted ? gson.toJsonTree(true) : JsonNull.INSTANCE,
+                    deleted ? null : "Profile not found or not owned by this account");
         } else if (operation.startsWith("profile/public/")
                 && (operation.endsWith("/view") || operation.endsWith("/download") || operation.endsWith("/update"))) {
             requireMethod(exchange, "GET");
             String suffix = operation.endsWith("/view") ? "/view"
                     : operation.endsWith("/download") ? "/download" : "/update";
             String id = operation.substring("profile/public/".length(), operation.length() - suffix.length());
-            JsonElement profile = store.publicProfile(id).<JsonElement>map(value -> value).orElse(JsonNull.INSTANCE);
+            Optional<JsonObject> result = suffix.equals("/view") ? store.publicProfile(token, id)
+                    : store.downloadPublicProfile(token, id, suffix.equals("/update"));
+            JsonElement profile = result.<JsonElement>map(value -> value).orElse(JsonNull.INSTANCE);
             sendEnvelope(exchange, !profile.isJsonNull(), profile,
-                    profile.isJsonNull() ? "Profile not found" : null);
-        } else if (operation.contains("/review/") || operation.contains("/reports/")
-                || "profile/public/regenerate/sharecode".equals(operation)) {
-            sendEnvelope(exchange, true, gson.toJsonTree(true), null);
+                    profile.isJsonNull() ? "Profile not found or unavailable" : null);
+        } else if (operation.startsWith("profile/public/review/view/")) {
+            requireMethod(exchange, "GET");
+            sendEnvelope(exchange, true, emptyPage(), null);
+        } else if (operation.contains("/review/") || operation.contains("/reports/")) {
+            sendEnvelope(exchange, false, JsonNull.INSTANCE, "Reviews and reports are not implemented by the experimental service");
         } else {
             sendEnvelope(exchange, false, JsonNull.INSTANCE, "Unsupported operation: " + operation);
         }
     }
 
-    private JsonObject pagedProfiles() {
-        JsonObject stored = store.publicProfiles();
-        JsonArray content = new JsonArray();
-        stored.entrySet().forEach(entry -> content.add(ConfigJsonUtils.deepCopy(entry.getValue())));
+    private JsonObject emptyPage() {
         JsonObject page = new JsonObject();
-        page.add("content", content);
+        page.add("content", new JsonArray());
         page.addProperty("last", true);
-        page.addProperty("totalPages", content.isEmpty() ? 0 : 1);
-        page.addProperty("totalElements", content.size());
+        page.addProperty("totalPages", 0);
+        page.addProperty("totalElements", 0);
         page.addProperty("size", 20);
-        page.addProperty("numberOfElements", content.size());
+        page.addProperty("numberOfElements", 0);
         return page;
     }
 

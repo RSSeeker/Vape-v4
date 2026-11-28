@@ -21,6 +21,7 @@ extends TextInputComponentBase {
         }
         this.profile.setName(profileName);
         this.profile.setDirty(true);
+        this.profile.setDraft(false);
         Vape.INSTANCE.getProfilesManager().addProfile(this.profile, true);
         Vape.INSTANCE.getProfilesManager().setActiveProfile(this.profile);
         this.setText("");

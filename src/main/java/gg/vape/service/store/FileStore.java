@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import gg.vape.config.ConfigJsonUtils;
 import java.io.IOException;
@@ -13,8 +14,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
@@ -518,7 +522,11 @@ public final class FileStore {
         JsonObject profiles = new JsonObject();
         account.privateProfiles.forEach((key, value) -> profiles.add(key, ConfigJsonUtils.deepCopy(value)));
         data.add("profiles", profiles);
-        data.add("publicProfiles", new JsonObject());
+        JsonObject ownedPublicProfiles = new JsonObject();
+        state.publicProfiles.forEach((key, value) -> {
+            if (isPublicOwner(account, value)) ownedPublicProfiles.add(key, publicProfileResponse(key, value, account));
+        });
+        data.add("publicProfiles", ownedPublicProfiles);
         data.add("otherData", ConfigJsonUtils.deepCopy(account.otherData));
         return data;
     }
@@ -557,9 +565,22 @@ public final class FileStore {
                     continue;
                 }
                 JsonObject storedProfile = ConfigJsonUtils.deepCopy(updatedProfile.getAsJsonObject());
-                String profileId = storedProfile.has("profileId")
-                        ? storedProfile.get("profileId").getAsString()
-                        : UUID.randomUUID().toString();
+                String profileId = ConfigJsonUtils.getString(storedProfile, "profileId");
+                if (profileId == null) {
+                    // A response can be lost after the write. Replaying the
+                    // same client UUID must update, not duplicate, that record.
+                    String clientId = ConfigJsonUtils.getString(storedProfile, "uuid");
+                    if (clientId != null) {
+                        UUID.fromString(clientId);
+                        for (Map.Entry<String, JsonObject> existing : account.privateProfiles.entrySet()) {
+                            if (clientId.equalsIgnoreCase(ConfigJsonUtils.getString(existing.getValue(), "uuid"))) {
+                                profileId = existing.getKey();
+                                break;
+                            }
+                        }
+                    }
+                    if (profileId == null) profileId = UUID.randomUUID().toString();
+                }
                 UUID.fromString(profileId);
                 storedProfile.addProperty("profileId", profileId);
                 account.privateProfiles.put(profileId, storedProfile);
@@ -584,22 +605,236 @@ public final class FileStore {
         return profiles;
     }
 
-    public synchronized JsonObject savePublicProfile(String token, JsonObject profile) throws IOException {
+    /** Create or partially edit an owned publication without replacing omitted fields. */
+    public synchronized JsonObject savePublicProfile(String token, JsonObject changes, boolean edit) throws IOException {
         AccountRecord account = requireAccount(token);
-        JsonObject stored = ConfigJsonUtils.deepCopy(profile);
-        String id = stored.has("id") ? stored.get("id").getAsString()
-                : Long.toString(state.nextPublicProfileId++);
-        stored.addProperty("id", id);
-        stored.addProperty("userId", account.userId);
+        String id;
+        JsonObject stored;
+        if (edit) {
+            String requested = ConfigJsonUtils.getString(changes, "profileId");
+            if (requested == null) throw new IllegalArgumentException("Missing profileId");
+            id = Long.toString(Long.parseLong(requested));
+            JsonObject previous = state.publicProfiles.get(id);
+            if (previous == null || !isPublicOwner(account, previous)) {
+                throw new IllegalArgumentException("Profile not found or not owned by this account");
+            }
+            stored = ConfigJsonUtils.deepCopy(previous);
+        } else {
+            if (ConfigJsonUtils.getString(changes, "name") == null || ConfigJsonUtils.getJsonObject(changes, "profileData") == null) {
+                throw new IllegalArgumentException("A name and profileData are required");
+            }
+            id = Long.toString(state.nextPublicProfileId++);
+            stored = new JsonObject();
+            stored.addProperty("id", id);
+            stored.addProperty("userId", account.userId);
+        }
+        if (changes.has("profileData") && ConfigJsonUtils.getJsonObject(changes, "profileData") == null) {
+            throw new IllegalArgumentException("profileData must be an object");
+        }
+        if (changes.has("tags") && ConfigJsonUtils.getJsonArray(changes, "tags") == null) {
+            throw new IllegalArgumentException("tags must be an array");
+        }
+        if (changes.has("tags")) for (JsonElement tag : changes.getAsJsonArray("tags")) {
+            if (!tag.isJsonPrimitive() || !tag.getAsJsonPrimitive().isString()) throw new IllegalArgumentException("tags must contain strings");
+        }
+        for (String field : new String[]{"name", "description", "vapeVersion"}) {
+            if (changes.has(field) && (!changes.get(field).isJsonPrimitive() || !changes.get(field).getAsJsonPrimitive().isString())) {
+                throw new IllegalArgumentException(field + " must be a string");
+            }
+        }
+        for (String field : new String[]{"listed", "anonymous", "shareCodeFriendsOnly"}) {
+            if (changes.has(field) && (!changes.get(field).isJsonPrimitive() || !changes.get(field).getAsJsonPrimitive().isBoolean())) {
+                throw new IllegalArgumentException(field + " must be a boolean");
+            }
+        }
+        String derivedFrom = ConfigJsonUtils.getString(changes, "derivedFrom");
+        if (derivedFrom != null) UUID.fromString(derivedFrom);
+        for (String field : new String[]{"name", "description", "tags", "listed", "anonymous",
+                "shareCodeFriendsOnly", "derivedFrom", "profileData", "vapeVersion"}) {
+            if (changes.has(field) && (!changes.get(field).isJsonNull() || "derivedFrom".equals(field))) {
+                stored.add(field, ConfigJsonUtils.deepCopy(changes.get(field)));
+            }
+        }
+        ensurePublicDefaults(id, stored);
+        if (edit) {
+            stored.addProperty("version", stored.get("version").getAsLong() + 1L);
+            stored.addProperty("updatedDate", AccountRecord.nowTimestamp());
+        }
         state.publicProfiles.put(id, stored);
         save();
-        return ConfigJsonUtils.deepCopy(stored);
+        return publicProfileResponse(id, stored, account);
     }
 
-    public synchronized Optional<JsonObject> publicProfile(String id) {
-        JsonObject profile = state.publicProfiles.get(id);
-        return profile == null ? Optional.empty()
-                : Optional.of(ConfigJsonUtils.deepCopy(profile));
+    private void ensurePublicDefaults(String id, JsonObject stored) {
+        if (!stored.has("id")) stored.addProperty("id", id);
+        if (ConfigJsonUtils.getString(stored, "name") == null) stored.addProperty("name", "Untitled");
+        if (ConfigJsonUtils.getString(stored, "description") == null) stored.addProperty("description", "");
+        if (ConfigJsonUtils.getString(stored, "vapeVersion") == null) stored.addProperty("vapeVersion", "4.21");
+        if (ConfigJsonUtils.getJsonArray(stored, "tags") == null) stored.add("tags", new JsonArray());
+        if (ConfigJsonUtils.getJsonObject(stored, "profileData") == null) stored.add("profileData", new JsonObject());
+        if (ConfigJsonUtils.getBoolean(stored, "listed") == null) stored.addProperty("listed", true);
+        if (ConfigJsonUtils.getBoolean(stored, "anonymous") == null) stored.addProperty("anonymous", false);
+        if (ConfigJsonUtils.getBoolean(stored, "shareCodeFriendsOnly") == null) stored.addProperty("shareCodeFriendsOnly", false);
+        if (ConfigJsonUtils.getLong(stored, "version") == null) stored.addProperty("version", 1L);
+        if (ConfigJsonUtils.getLong(stored, "likes") == null) stored.addProperty("likes", 0L);
+        if (ConfigJsonUtils.getLong(stored, "dislikes") == null) stored.addProperty("dislikes", 0L);
+        if (ConfigJsonUtils.getLong(stored, "downloads") == null) stored.addProperty("downloads", 0L);
+        if (ConfigJsonUtils.getString(stored, "creationDate") == null) stored.addProperty("creationDate", AccountRecord.nowTimestamp());
+        if (ConfigJsonUtils.getString(stored, "shareCode") == null) stored.addProperty("shareCode", newShareCode());
+    }
+
+    private String newShareCode() {
+        String candidate;
+        boolean used;
+        do {
+            candidate = UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
+            used = false;
+            for (JsonObject existing : state.publicProfiles.values()) {
+                if (candidate.equalsIgnoreCase(ConfigJsonUtils.getString(existing, "shareCode"))) { used = true; break; }
+            }
+        } while (used);
+        return candidate;
+    }
+
+    private static boolean isPublicOwner(AccountRecord account, JsonObject stored) {
+        Long owner = ConfigJsonUtils.getLong(stored, "userId");
+        return owner != null && owner.longValue() == account.userId;
+    }
+
+    private boolean canViewPublic(AccountRecord account, JsonObject stored) {
+        Long owner = ConfigJsonUtils.getLong(stored, "userId");
+        return !ConfigJsonUtils.getBooleanOrFalse(stored, "shareCodeFriendsOnly")
+                || isPublicOwner(account, stored) || (owner != null && areFriends(account.userId, owner));
+    }
+
+    private static JsonObject emptyPublicReviews() {
+        JsonObject page = new JsonObject();
+        page.add("content", new JsonArray());
+        page.addProperty("last", true);
+        page.addProperty("totalPages", 0);
+        page.addProperty("totalElements", 0);
+        page.addProperty("size", 20);
+        page.addProperty("numberOfElements", 0);
+        return page;
+    }
+
+    private JsonObject publicProfileResponse(String id, JsonObject stored, AccountRecord viewer) {
+        JsonObject result = new JsonObject();
+        result.addProperty("profileId", Long.parseLong(id));
+        Long ownerId = ConfigJsonUtils.getLong(stored, "userId");
+        AccountRecord owner = ownerId == null ? null : account(ownerId).orElse(null);
+        if (owner != null && (!ConfigJsonUtils.getBooleanOrFalse(stored, "anonymous") || isPublicOwner(viewer, stored))) {
+            JsonObject ownerJson = new JsonObject();
+            ownerJson.addProperty("userId", owner.userId);
+            ownerJson.addProperty("username", owner.username);
+            result.add("owner", ownerJson);
+        } else result.add("owner", JsonNull.INSTANCE);
+        for (String field : new String[]{"name", "description", "tags", "shareCode", "version", "likes", "dislikes", "downloads", "creationDate", "updatedDate"}) {
+            result.add(field, stored.has(field) ? ConfigJsonUtils.deepCopy(stored.get(field)) : JsonNull.INSTANCE);
+        }
+        result.add("data", ConfigJsonUtils.deepCopy(stored.getAsJsonObject("profileData")));
+        result.add("reviews", emptyPublicReviews());
+        if (isPublicOwner(viewer, stored)) {
+            JsonObject metadata = new JsonObject();
+            metadata.add("derivedFrom", stored.has("derivedFrom") ? ConfigJsonUtils.deepCopy(stored.get("derivedFrom")) : JsonNull.INSTANCE);
+            metadata.addProperty("unreadNotifications", 0);
+            metadata.addProperty("shareCode", stored.get("shareCode").getAsString());
+            metadata.addProperty("listedPublicly", stored.get("listed").getAsBoolean());
+            metadata.addProperty("shareCodeFriendsOnly", stored.get("shareCodeFriendsOnly").getAsBoolean());
+            metadata.addProperty("uploadAnonymously", stored.get("anonymous").getAsBoolean());
+            result.add("metadata", metadata);
+        } else result.add("metadata", JsonNull.INSTANCE);
+        return result;
+    }
+
+    public synchronized Optional<JsonObject> publicProfile(String token, String id) {
+        AccountRecord viewer = requireAccount(token);
+        JsonObject stored = state.publicProfiles.get(id);
+        return stored == null || !canViewPublic(viewer, stored) ? Optional.empty()
+                : Optional.of(publicProfileResponse(id, stored, viewer));
+    }
+
+    public synchronized JsonObject listPublicProfiles(String token, JsonObject query) {
+        AccountRecord viewer = requireAccount(token);
+        String search = ConfigJsonUtils.getString(query, "search");
+        search = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
+        JsonArray tags = ConfigJsonUtils.getJsonArray(query, "tags");
+        List<JsonObject> matches = new ArrayList<JsonObject>();
+        for (Map.Entry<String, JsonObject> entry : state.publicProfiles.entrySet()) {
+            JsonObject stored = entry.getValue();
+            if (!canViewPublic(viewer, stored)) continue;
+            boolean owner = isPublicOwner(viewer, stored);
+            boolean codeMatch = !search.isEmpty() && stored.get("shareCode").getAsString().equalsIgnoreCase(search);
+            if (!owner && !stored.get("listed").getAsBoolean() && !codeMatch) continue;
+            if (!search.isEmpty() && !codeMatch && !stored.get("name").getAsString().toLowerCase(Locale.ROOT).contains(search)) continue;
+            boolean containsTags = true;
+            if (tags != null) for (JsonElement tag : tags) {
+                boolean found = false;
+                for (JsonElement existing : stored.getAsJsonArray("tags")) {
+                    if (existing.getAsString().equalsIgnoreCase(tag.getAsString())) { found = true; break; }
+                }
+                if (!found) { containsTags = false; break; }
+            }
+            if (containsTags) matches.add(publicProfileResponse(entry.getKey(), stored, viewer));
+        }
+        String mode = ConfigJsonUtils.getString(query, "mode");
+        String sortField = "downloaded".equals(mode) ? "downloads" : "rated".equals(mode) ? "likes" : "profileId";
+        matches.sort((a, b) -> Long.compare(b.get(sortField).getAsLong(), a.get(sortField).getAsLong()));
+        Long requestedPage = ConfigJsonUtils.getLong(query, "page");
+        long pageNumber = requestedPage == null ? 0L : Math.max(0L, requestedPage);
+        int start = pageNumber > matches.size() / 20 ? matches.size() : (int)pageNumber * 20;
+        int end = Math.min(start + 20, matches.size());
+        JsonArray content = new JsonArray();
+        for (int i = start; i < end; ++i) content.add(matches.get(i));
+        JsonObject page = new JsonObject();
+        page.add("content", content);
+        page.addProperty("last", end == matches.size());
+        page.addProperty("totalPages", (matches.size() + 19) / 20);
+        page.addProperty("totalElements", matches.size());
+        page.addProperty("size", 20);
+        page.addProperty("numberOfElements", end - start);
+        return page;
+    }
+
+    public synchronized JsonObject regeneratePublicShareCode(String token, String id) throws IOException {
+        AccountRecord account = requireAccount(token);
+        JsonObject stored = state.publicProfiles.get(id);
+        if (stored == null || !isPublicOwner(account, stored)) throw new IllegalArgumentException("Profile not found or not owned by this account");
+        stored.addProperty("shareCode", newShareCode());
+        save();
+        return publicProfileResponse(id, stored, account).getAsJsonObject("metadata");
+    }
+
+    /** Download and update keep the viewer's private-profile IDs stable. */
+    public synchronized Optional<JsonObject> downloadPublicProfile(String token, String id, boolean update) throws IOException {
+        AccountRecord viewer = requireAccount(token);
+        JsonObject stored = state.publicProfiles.get(id);
+        if (stored == null || !canViewPublic(viewer, stored)) return Optional.empty();
+        JsonObject copy = null;
+        for (JsonObject privateProfile : viewer.privateProfiles.values()) {
+            JsonObject metadata = ConfigJsonUtils.getJsonObject(privateProfile, "metadata");
+            Long publicId = metadata == null ? null : ConfigJsonUtils.getLong(metadata, "publicProfileId");
+            if (publicId != null && publicId.longValue() == Long.parseLong(id)) { copy = privateProfile; break; }
+        }
+        if (copy == null && update) return Optional.empty();
+        boolean firstDownload = copy == null;
+        if (copy == null) {
+            copy = new JsonObject();
+            copy.addProperty("uuid", UUID.randomUUID().toString());
+            copy.addProperty("profileId", UUID.randomUUID().toString());
+        } else copy = ConfigJsonUtils.deepCopy(copy);
+        copy.add("name", ConfigJsonUtils.deepCopy(stored.get("name")));
+        copy.add("vapeVersion", ConfigJsonUtils.deepCopy(stored.get("vapeVersion")));
+        copy.add("data", ConfigJsonUtils.deepCopy(stored.get("profileData")));
+        JsonObject metadata = new JsonObject();
+        metadata.addProperty("publicProfileId", Long.parseLong(id));
+        metadata.addProperty("version", stored.get("version").getAsLong());
+        metadata.addProperty("publishedVersion", stored.get("version").getAsLong());
+        copy.add("metadata", metadata);
+        viewer.privateProfiles.put(copy.get("profileId").getAsString(), copy);
+        if (firstDownload) stored.addProperty("downloads", stored.get("downloads").getAsLong() + 1L);
+        save();
+        return Optional.of(ConfigJsonUtils.deepCopy(copy));
     }
 
     public synchronized boolean deletePublicProfile(String token, String id) throws IOException {
@@ -654,6 +889,9 @@ public final class FileStore {
         }
         if (state.publicProfiles == null) {
             state.publicProfiles = new LinkedHashMap<>();
+        }
+        for (Map.Entry<String, JsonObject> entry : state.publicProfiles.entrySet()) {
+            ensurePublicDefaults(entry.getKey(), entry.getValue());
         }
         if (state.friendRequests == null) {
             state.friendRequests = new LinkedHashMap<>();
