@@ -460,6 +460,14 @@ extends GuiComponent {
         this.l$src$V$1mibm4x();
     }
 
+    /** Insert a lazily constructed editor after its owning row or prior editor. */
+    public void insertChildAfter(GuiComponent anchor, GuiComponent child) {
+        child.setParentFrameComponent(this);
+        this.NI.o(child, new Object[0]);
+        this.NI.moveAfter(anchor, child);
+        this.l$src$V$1mibm4x();
+    }
+
     public void z$src$V$infu7a() {
         for (GuiComponent guiComponent : this.f()) {
             if (guiComponent instanceof FrameHeaderComponent || guiComponent.isIgnoreFrameClipping()) continue;

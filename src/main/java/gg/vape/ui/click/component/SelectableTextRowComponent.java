@@ -100,12 +100,13 @@ extends GuiComponent {
     public void c() {
         // List entries are user-configured values; render them verbatim
         // instead of passing them through the GUI translation table.
+        boolean previous = FontOption.isTranslationDisabled();
         FontOption.setTranslationDisabled(true);
         try {
             super.c();
         }
         finally {
-            FontOption.setTranslationDisabled(false);
+            FontOption.setTranslationDisabled(previous);
         }
     }
 

@@ -69,6 +69,11 @@ extends TextInputComponentBase {
         if (displayText == null) {
             displayText = "";
         }
+        // Use the same literal-text scope for measurement and drawing.
+        boolean showingPrompt = this.getText().isEmpty() && !focused;
+        boolean previousTranslation = FontOption.isTranslationDisabled();
+        if (!showingPrompt) FontOption.setTranslationDisabled(true);
+        try {
         boolean clipped = (overflowAmount = inputRenderer.N(this.getText()) - this.getAvailableTextWidth()) > 0.0;
         double horizontalOffset = 0.0;
         if (clipped) {
@@ -86,13 +91,7 @@ extends TextInputComponentBase {
             cursorX += leftEdgeCorrection;
         }
         // Script/user text is data, not a translation key.
-        boolean showingPrompt = this.getText().isEmpty() && !focused;
-        if (!showingPrompt) FontOption.setTranslationDisabled(true);
-        try {
-            inputRenderer.d(displayText, textX + horizontalOffset, textY, StringValueTextInputComponent.J.Z);
-        } finally {
-            if (!showingPrompt) FontOption.setTranslationDisabled(false);
-        }
+        inputRenderer.d(displayText, textX + horizontalOffset, textY, StringValueTextInputComponent.J.Z);
         if (clipped) {
             RenderUtils.T();
         }
@@ -107,6 +106,9 @@ extends TextInputComponentBase {
         }
         if (focused && KeyboardInput.isKeyDown(8) && this.getBackspaceRepeatTimer().hasTimeElapsed(100L)) {
             this.getBackspaceRepeatTimer().reset();
+        }
+        } finally {
+            FontOption.setTranslationDisabled(previousTranslation);
         }
     }
 

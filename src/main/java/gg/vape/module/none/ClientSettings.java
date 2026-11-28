@@ -51,6 +51,12 @@ import gg.vape.ui.click.frame.impl.ModuleCategoryFrameHeader;
 import gg.vape.ui.click.frame.impl.ModuleSearchFrame;
 import gg.vape.ui.click.frame.impl.SessionSpoofFrame;
 import gg.vape.ui.click.frame.impl.VisibleModuleListFrame;
+import gg.vape.ui.click.frame.impl.inevitable.InevitableFrameStack;
+import gg.vape.ui.click.frame.impl.inevitable.InevitableModuleFrame;
+import gg.vape.ui.click.frame.impl.inevitable.InevitablePanelFrame;
+import gg.vape.ui.click.frame.impl.inevitable.InevitablePanelStyle;
+import gg.vape.ui.click.frame.impl.inevitable.InevitableRenderScope;
+import gg.vape.ui.click.frame.impl.inevitable.InevitableReturnFrame;
 import gg.vape.ui.click.frame.impl.hud.ActiveModuleStackFrame;
 import gg.vape.ui.click.frame.impl.hud.AnchoredHudModuleConfigFrame;
 import gg.vape.ui.click.frame.impl.hud.ArmorStatusHudFrame;
@@ -147,6 +153,9 @@ extends Mod {
     private static ImmutableList<Frame> frameSnapshot;
     public final ModeValue searchBarStyle;
     public static FrameStackManager mainStack;
+    public static InevitableFrameStack inevitableStack;
+    private FrameStackManager returnMainStack;
+    private boolean forcedLegacySearch;
     public final BooleanValue smoothFont;
     private final BlurRegionRenderer blurRenderer;
     private static final HashMap<Class<?>, Frame> frameCache;
@@ -183,6 +192,8 @@ extends Mod {
                 if (clickGuiFrameManager.getMainFrame() == null) {
                     clickGuiFrameManager = new ClickGuiFrameManager();
                 }
+                Frame returnFrame = ClientSettings.getFrame(InevitableReturnFrame.class);
+                if (returnFrame != null) clickGuiFrameManager.q(returnFrame);
                 this.switchFrameStack((FrameStackManager)clickGuiFrameManager);
             } else {
                 if (this.activeStack == mainStack) {
@@ -201,7 +212,7 @@ extends Mod {
         if (!frameSnapshot.contains((Object)frame)) {
             return;
         }
-        if (positionedFrames.contains(frame)) {
+        if (positionedFrames.contains(frame) || InevitableFrameStack.isPanel(frame)) {
             return;
         }
         if (!frame.J$src$Z$1eqdghz() || !frame.l$src$Z$193vdc5()) {
@@ -248,12 +259,16 @@ extends Mod {
         int keyCode = eventKeyPress.getKey();
         boolean keyDown = eventKeyPress.isDown();
         if ((KeyboardInput.isKeyDown((int)163) || KeyboardInput.isKeyDown((int)162)) && keyCode == 70 && keyDown) {
+            if (this.activeStack == inevitableStack) {
+                this.openClassicSearch();
+                return true;
+            }
             ClickGuiFrameManager clickGuiFrameManager;
             if (this.activeStack instanceof ClickGuiFrameManager && (clickGuiFrameManager = (ClickGuiFrameManager)this.activeStack).getMainFrame() != null) {
                 return clickGuiFrameManager.getMainFrame().clearActiveSearch();
             }
-            if (!this.noSearchBarMode.isSelected()) {
-                if (this.floatingSearchBarMode.isSelected()) {
+            if (this.forcedLegacySearch || !this.noSearchBarMode.isSelected()) {
+                if (this.isFloatingSearchActive()) {
                     moduleSearchFrame.n$src$Lgg_vape_ui_click_frame_impl_ModuleSearchFrameHe$xia8v2().s();
                     moduleSearchFrame.n$src$Lgg_vape_ui_click_frame_impl_ModuleSearchFrameHe$xia8v2().A$src$Lgg_vape_ui_click_component_input_ModuleSearchIn$1efzz7n().requestFocus();
                 } else if (this.integratedSearchBarMode.isSelected()) {
@@ -399,7 +414,7 @@ extends Mod {
     public JsonArray serializeFrameStates() {
         JsonArray jsonArray = new JsonArray();
         for (Frame frame : ClientSettings.getAllFrames()) {
-            if (frame.getName().startsWith("sidecar_")) continue;
+            if (frame.getName().startsWith("sidecar_") || InevitableFrameStack.isUnpositionedPanel(frame)) continue;
             jsonArray.add((JsonElement)frame.Z());
         }
         return jsonArray;
@@ -462,7 +477,7 @@ extends Mod {
      */
     public static void closeAllCategoryFrames() {
         for (Frame frame : ClientSettings.getAllFrames()) {
-            if (!(frame instanceof ModuleCategoryFrame)) {
+            if (!(frame instanceof ModuleCategoryFrame) || frame instanceof InevitableModuleFrame) {
                 continue;
             }
             frame.setVisible(false);
@@ -494,7 +509,7 @@ extends Mod {
                         frame.setVisible(false);
                     }
                     // 全新注入：不要因为别处目录配置里的 "visible": true 就把分类面板打开
-                    if (ClientSettings.suppressStoredCategoryFrameVisibility && frame instanceof ModuleCategoryFrame) {
+                    if (ClientSettings.suppressStoredCategoryFrameVisibility && frame instanceof ModuleCategoryFrame && !(frame instanceof InevitableModuleFrame)) {
                         frame.setVisible(false);
                     }
                 }
@@ -575,6 +590,11 @@ extends Mod {
         }
     }
 
+    private static void registerInevitablePanel(Frame frame) {
+        ClientSettings.registerFrame(frame, inevitableStack);
+        inevitableStack.addPanel(frame);
+    }
+
     private void onStandaloneModeChanged(ModeValue modeValue) {
         this.updateStandaloneState();
     }
@@ -613,18 +633,26 @@ extends Mod {
         CopyOnWriteArrayList<Frame> forwardRenderOrder = new CopyOnWriteArrayList<Frame>(activeFrames);
         Collections.reverse(reverseRenderOrder);
         MouseInput.getState().prepareFrame();
+        if (this.activeStack == inevitableStack) InevitablePanelStyle.wordmark(12.0, 8.0);
         for (Frame frame : forwardRenderOrder) {
             if (frame instanceof TutorialFrame) continue;
             this.renderFrame(frame, reverseRenderOrder);
         }
         MouseInput.getState().resetScrollDelta();
         if (activeComponent instanceof DropdownSelectComponent || activeComponent instanceof PopupMenuButtonComponent) {
-            boolean previousClipState = activeComponent.isShowDisabledOverlay();
-            activeComponent.setShowDisabledOverlay(false);
-            activeComponent.c();
-            activeComponent.setShowDisabledOverlay(previousClipState);
-            if (activeComponent.getParentFrameComponent() != null && activeComponent.getParentFrameComponent().k$src$Z$if6xeb()) {
-                activeComponent.getParentFrameComponent().M();
+            GuiComponent current = activeComponent;
+            boolean previousClipState = current.isShowDisabledOverlay();
+            boolean previousScope = InevitableRenderScope.setActive(this.activeStack == inevitableStack
+                    && InevitableFrameStack.isPanelOrPopup(current.L$src$Lgg_vape_ui_click_frame_Frame_$1djx6sa()));
+            current.setShowDisabledOverlay(false);
+            try {
+                current.c();
+                if (current.getParentFrameComponent() != null && current.getParentFrameComponent().k$src$Z$if6xeb()) {
+                    current.getParentFrameComponent().M();
+                }
+            } finally {
+                current.setShowDisabledOverlay(previousClipState);
+                InevitableRenderScope.setActive(previousScope);
             }
         }
         for (Frame frame : forwardRenderOrder) {
@@ -664,7 +692,7 @@ extends Mod {
 
     public boolean isMainGuiStack() {
         FrameStackManager frameStackManager = this.getActiveStack();
-        return frameStackManager.equals(mainStack) || frameStackManager instanceof ClickGuiFrameManager;
+        return frameStackManager.equals(mainStack) || frameStackManager == inevitableStack || frameStackManager instanceof ClickGuiFrameManager;
     }
 
     private static void removePopupFromStack(FrameStackManager frameStackManager, PopupFrame popupFrame) {
@@ -698,7 +726,10 @@ extends Mod {
         for (FrameStackManager frameStackManager : allStacks) {
             frameStackManager.Y().clear();
         }
+        inevitableStack.clearPanels();
         allFrames.clear();
+        frameCache.clear();
+        positionedFrames.clear();
         Vape.INSTANCE.initializeRender();
         ClientSettings.registerHudFrames();
         ClientSettings.registerFrame((Frame)new ActiveModuleStackFrame(), hudEditorStack, mainStack);
@@ -743,6 +774,13 @@ extends Mod {
         ClientSettings.registerFrame((Frame)new ProfileSnapshotFrame(), profileSnapshotStack);
         ClientSettings.registerFrame((Frame)new InventoryCleanerPopupFrame(), inventoryCleanerStack);
         ClientSettings.registerFrame((Frame)new InventoryFilterRuleEditorFrame(), inventoryCleanerStack);
+        ClientSettings.registerFrame(new InevitableReturnFrame(), mainStack);
+        ClientSettings.registerInevitablePanel(new InevitableModuleFrame(Category.COMBAT));
+        ClientSettings.registerInevitablePanel(new InevitableModuleFrame(Category.WORLD));
+        ClientSettings.registerInevitablePanel(new InevitableModuleFrame(Category.RENDER));
+        ClientSettings.registerInevitablePanel(new InevitableModuleFrame(Category.UTILITY));
+        ClientSettings.registerInevitablePanel(new InevitablePanelFrame(InevitablePanelFrame.Kind.PROFILES));
+        ClientSettings.registerInevitablePanel(new InevitablePanelFrame(InevitablePanelFrame.Kind.SETTINGS));
         frameSnapshot = ImmutableList.copyOf(allFrames);
         ClientSettings.refreshModuleCategoryHeaders();
         VisibleModuleListFrame.e();
@@ -758,7 +796,7 @@ extends Mod {
         double gridY = 32.0;
         double rowHeight = 0.0;
         for (Frame frame : allFrames) {
-            if (!(frame instanceof ModuleCategoryFrame) || !frame.J$src$Z$1eqdghz() || !frame.l$src$Z$193vdc5()) continue;
+            if (!(frame instanceof ModuleCategoryFrame) || frame instanceof InevitableModuleFrame || !frame.J$src$Z$1eqdghz() || !frame.l$src$Z$193vdc5()) continue;
             frame.l$src$V$1mibm4x();
             if (gridX + frame.A() > (double)Minecraft.G().getScaledWidth()) {
                 gridX = 24.0;
@@ -891,41 +929,36 @@ extends Mod {
     }
 
     private void renderFrame(Frame frame, List<Frame> reverseRenderOrder) {
-        if (!frame.V$src$Z$1xhop3l()) {
-            return;
-        }
-        if (frame instanceof HudModuleConfigFrameBase && !HudModuleConfigFrameBase.isHudEditorContext()) {
-            return;
-        }
-        frame.c();
-        if (this.activeStack instanceof ClickGuiFrameManager && ((ClickGuiFrameManager)this.activeStack).isMainLayerHudFrame(frame)) {
-            if (frame instanceof HudModuleFrameBase) {
-                HudModuleFrameBase hudModuleFrameBase = (HudModuleFrameBase)frame;
-                boolean hasOverlay = frame.t();
-                if (hasOverlay) {
-                    boolean isFrontmostOverlay = true;
-                    for (Frame otherFrame : reverseRenderOrder) {
-                        if (otherFrame.equals(frame)) break;
-                        if (!otherFrame.V$src$Z$1xhop3l() || !otherFrame.t()) continue;
-                        isFrontmostOverlay = false;
+        if (!frame.V$src$Z$1xhop3l()) return;
+        if (frame instanceof HudModuleConfigFrameBase && !HudModuleConfigFrameBase.isHudEditorContext()) return;
+        boolean previousScope = InevitableRenderScope.setActive(
+                this.activeStack == inevitableStack && InevitableFrameStack.isPanelOrPopup(frame));
+        try {
+            frame.c();
+            if (this.activeStack instanceof ClickGuiFrameManager && ((ClickGuiFrameManager)this.activeStack).isMainLayerHudFrame(frame)) {
+                if (frame instanceof HudModuleFrameBase) {
+                    HudModuleFrameBase hud = (HudModuleFrameBase)frame;
+                    boolean frontmost = frame.t();
+                    if (frontmost) {
+                        for (Frame other : reverseRenderOrder) {
+                            if (other.equals(frame)) break;
+                            if (other.V$src$Z$1xhop3l() && other.t()) frontmost = false;
+                        }
                     }
-                    hudModuleFrameBase.setFrontmostOverlay(isFrontmostOverlay);
-                } else {
-                    hudModuleFrameBase.setFrontmostOverlay(false);
+                    hud.setFrontmostOverlay(frontmost);
                 }
+                return;
             }
-            return;
-        }
-        if (frame.t()) {
-            boolean isFrontmostOverlay = true;
-            for (Frame otherFrame : reverseRenderOrder) {
-                if (otherFrame.equals(frame)) break;
-                if (!otherFrame.V$src$Z$1xhop3l() || !otherFrame.t()) continue;
-                isFrontmostOverlay = false;
+            if (frame.t()) {
+                boolean frontmost = true;
+                for (Frame other : reverseRenderOrder) {
+                    if (other.equals(frame)) break;
+                    if (other.V$src$Z$1xhop3l() && other.t()) frontmost = false;
+                }
+                if (frontmost) frame.J();
             }
-            if (isFrontmostOverlay) {
-                frame.J();
-            }
+        } finally {
+            InevitableRenderScope.setActive(previousScope);
         }
     }
 
@@ -976,7 +1009,7 @@ extends Mod {
         double y = 32.0;
         double rowHeight = 0.0;
         for (Frame frame : frameSnapshot) {
-            if (!frame.J$src$Z$1eqdghz() || !frame.l$src$Z$193vdc5()) continue;
+            if (InevitableFrameStack.isPanel(frame) || !frame.J$src$Z$1eqdghz() || !frame.l$src$Z$193vdc5()) continue;
             if (x + frame.A() > (double)Minecraft.G().getScaledWidth()) {
                 x = 24.0;
                 y += rowHeight + 8.0;
@@ -1018,7 +1051,8 @@ extends Mod {
         this.showLegitMode = BooleanValue.create((Object)((Object)this), (String)"Show legit mode", (boolean)true, (String)"Shows the button to switch to the legit mod menu");
         this.showEnabledCount = BooleanValue.create((Object)((Object)this), (String)"Show enabled count", (boolean)true, (String)"Shows the number of enabled modules in the standalone gui");
         this.blurRenderer = new BlurRegionRenderer(0, 0);
-        this.activeStack = mainStack;
+        this.activeStack = inevitableStack;
+        this.returnMainStack = inevitableStack;
         this.framesToUpdate = new HashSet<Frame>(allFrames);
         INSTANCE = this;
         this.floatingSearchBarMode = new ModeOption("Floating", 0.8);
@@ -1039,7 +1073,88 @@ extends Mod {
         }
     }
 
+    /** A temporary floating search does not overwrite the user's saved style. */
+    public boolean isFloatingSearchActive() {
+        return this.forcedLegacySearch || this.floatingSearchBarMode.isSelected();
+    }
+
+    public void openClassicSearch() {
+        this.forcedLegacySearch = true;
+        this.switchFrameStack(mainStack);
+        if (moduleSearchFrame == null) return;
+        moduleSearchFrame.n$src$Lgg_vape_ui_click_frame_impl_ModuleSearchFrameHe$xia8v2().s();
+        gg.vape.ui.click.component.input.ModuleSearchInputComponent input =
+                moduleSearchFrame.n$src$Lgg_vape_ui_click_frame_impl_ModuleSearchFrameHe$xia8v2().A$src$Lgg_vape_ui_click_component_input_ModuleSearchIn$1efzz7n();
+        input.setVisible(true);
+        input.requestFocus();
+        moduleSearchFrame.U();
+    }
+
+    public void openClassicTools(Class<? extends Frame> frameClass) {
+        this.forcedLegacySearch = false;
+        this.switchFrameStack(mainStack);
+        if (frameClass == null) return;
+        Frame frame = ClientSettings.getFrame(frameClass);
+        if (frame != null) {
+            frame.t(true, false);
+            frame.U();
+        }
+    }
+
+    public void openInevitableTool(Class<? extends Frame> frameClass) {
+        this.openClassicTools(frameClass);
+    }
+
+    /** Open a legacy module's original editor without reparenting its data-bearing controls. */
+    public void openClassicModule(Mod module) {
+        this.openClassicTools(null);
+        for (Frame frame : allFrames) {
+            if (frame.getClass() != ModuleCategoryFrame.class) continue;
+            ModuleCategoryFrame category = (ModuleCategoryFrame)frame;
+            if (category.G$src$Lgg_vape_module_Category_$qyt4o7() != module.getCategory()) continue;
+            gg.vape.ui.click.component.module.ModuleComponent row = category.W(module);
+            if (row == null) continue;
+            category.t(true, false);
+            if (category.q()) category.w();
+            row.setVisible(true);
+            if (!row.isExpanded()) row.expandValueComponents();
+            category.l$src$V$1mibm4x();
+            category.U();
+            return;
+        }
+        this.openClassicSearch();
+        if (moduleSearchFrame != null) {
+            moduleSearchFrame.n$src$Lgg_vape_ui_click_frame_impl_ModuleSearchFrameHe$xia8v2()
+                    .A$src$Lgg_vape_ui_click_component_input_ModuleSearchIn$1efzz7n().setText(module.getName());
+            moduleSearchFrame.D(module.getName());
+        }
+    }
+
+    public void openHudEditor() {
+        HudModuleSelectorFrame selector = ClientSettings.getFrame(HudModuleSelectorFrame.class);
+        HudModuleOverviewFrame overview = ClientSettings.getFrame(HudModuleOverviewFrame.class);
+        if (HudModuleSelectorFrame.overviewVisible) {
+            if (overview != null) overview.getModuleList().refreshFavorites();
+        } else if (selector != null) {
+            selector.getModuleListPanel().refreshModules();
+        }
+        this.switchFrameStack(hudEditorStack);
+    }
+
+    public void returnToMainGui() {
+        FrameStackManager destination = this.returnMainStack;
+        this.switchFrameStack(destination == null ? inevitableStack : destination);
+    }
+
     public void switchFrameStack(FrameStackManager frameStackManager) {
+        if (frameStackManager == null) return;
+        FrameStackManager previous = this.activeStack;
+        if ((previous == inevitableStack || previous == mainStack || previous instanceof ClickGuiFrameManager)
+                && frameStackManager != inevitableStack && frameStackManager != mainStack
+                && !(frameStackManager instanceof ClickGuiFrameManager)) {
+            this.returnMainStack = previous;
+        }
+        if (frameStackManager == inevitableStack) this.forcedLegacySearch = false;
         activeComponent = null;
         this.removeClosedPopups();
         activeTooltips = null;
@@ -1092,7 +1207,7 @@ extends Mod {
                     // empty if block
                 }
                 if (this.activeStack.equals(sessionSpoofStack) && !Minecraft.currentScreen().isInstance(MappedClasses.u5)) {
-                    this.switchFrameStack(mainStack);
+                    this.returnToMainGui();
                 }
             } else if (!this.inputEnabled) {
                 if (ForgeVersion.MC_1_16_5.d()) {
@@ -1158,6 +1273,7 @@ extends Mod {
         allFrames = new ArrayList<Frame>();
         allStacks = new ArrayList<FrameStackManager>();
         mainStack = new FrameStackManager();
+        inevitableStack = new InevitableFrameStack();
         hudEditorStack = new FrameStackManager();
         publicProfilesStack = new FrameStackManager();
         clickGuiFrameManager = new ClickGuiFrameManager();

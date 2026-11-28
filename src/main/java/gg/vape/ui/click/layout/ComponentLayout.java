@@ -287,6 +287,23 @@ implements LayoutManager {
         this.s = true;
     }
 
+    /** Move an already-added component directly after an existing sibling. */
+    public void moveAfter(GuiComponent anchor, GuiComponent child) {
+        if (anchor == child || !this.w.containsKey(anchor) || !this.w.containsKey(child)) {
+            throw new IllegalArgumentException("Both distinct components must belong to this layout");
+        }
+        LayoutConstraints childConstraints = this.w.get(child);
+        LinkedHashMap<GuiComponent, LayoutConstraints> reordered = new LinkedHashMap<GuiComponent, LayoutConstraints>();
+        for (Map.Entry<GuiComponent, LayoutConstraints> entry : this.w.entrySet()) {
+            if (entry.getKey() == child) continue;
+            reordered.put(entry.getKey(), entry.getValue());
+            if (entry.getKey() == anchor) reordered.put(child, childConstraints);
+        }
+        this.w.clear();
+        this.w.putAll(reordered);
+        this.s = true;
+    }
+
     @Override
     public void o(GuiComponent guiComponent, Object ... objectArray) {
         if (objectArray == null || objectArray.length == 0) {

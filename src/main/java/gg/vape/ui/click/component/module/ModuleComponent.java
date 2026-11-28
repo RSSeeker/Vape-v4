@@ -7,6 +7,7 @@ import gg.vape.module.Category;
 import gg.vape.module.Mod;
 import gg.vape.module.none.ClientSettings;
 import gg.vape.module.render.Search;
+import gg.vape.module.utility.inventory.HotbarSlotRuleValue;
 import gg.vape.ui.click.MouseButton;
 import gg.vape.ui.click.MousePosition;
 import gg.vape.ui.click.animation.DoubleAnimation;
@@ -22,6 +23,10 @@ import gg.vape.ui.click.frame.impl.ClientSettingsSearchFrame;
 import gg.vape.ui.click.frame.impl.ModuleCategoryFrame;
 import gg.vape.ui.click.frame.impl.ModuleSearchFrame;
 import gg.vape.ui.click.frame.impl.VisibleModuleListFrame;
+import gg.vape.ui.click.frame.impl.ClientSettingsActionButtonRowComponent;
+import gg.vape.ui.click.frame.impl.inevitable.InevitableActionRow;
+import gg.vape.ui.click.frame.impl.inevitable.InevitableModuleFrame;
+import gg.vape.ui.click.frame.impl.inevitable.InevitablePanelStyle;
 import gg.vape.ui.font.SmoothFontRenderer;
 import gg.vape.unmap.ColorUtil;
 import gg.vape.utils.render.GuiRenderPrimitives;
@@ -40,6 +45,8 @@ extends InteractiveComponent {
     private int bindStatusStage = 0;
     private BindableInputComponent bindInput;
     private final List<GuiComponent> valueComponents = new ArrayList<GuiComponent>();
+    private final List<Value<?, ?>> builtValues = new ArrayList<Value<?, ?>>();
+    private boolean valuesBuilt;
     private boolean expanded;
     private final SquareIconButtonComponent removeFavoriteButton = new SquareIconButtonComponent("newclose", 1.5);
     private String statusText = null;
@@ -217,6 +224,10 @@ extends InteractiveComponent {
 
     @Override
     public void H() {
+        if (this.categoryFrame instanceof InevitableModuleFrame) {
+            this.renderInevitableRow();
+            return;
+        }
         if (this.dragging) {
             this.updateDragPosition();
             this.updateDragOrder();
@@ -354,6 +365,68 @@ extends InteractiveComponent {
     }
 
 
+    /** Draw only the new panel row; its click/bind/favorite logic is the classic one. */
+    private void renderInevitableRow() {
+        double x = this.G$src$D$1b2f02a(), y = this.n(), height = this.L();
+        boolean editingVisibility = ClientSettings.moduleSearchActive;
+        boolean active = editingVisibility ? this.module.isVisible() : this.module.isEnabled();
+        boolean hovered = this.w$src$Z$e457mb();
+        Color textColor = active ? InevitablePanelStyle.ACTIVE_TEXT
+                : (hovered ? InevitablePanelStyle.HOVER_TEXT : InevitablePanelStyle.DISABLED_TEXT);
+        InevitablePanelStyle.row(x, y, this.A(), height, active, hovered);
+        this.removeFavoriteButton.setVisible(false);
+        this.dragHandleButton.setVisible(false);
+        double right = x + this.A() - 5.0;
+        if (editingVisibility) {
+            this.toggleBounds = new RectData(x, y, this.A(), height);
+            this.settingsButton.setVisible(false);
+            this.favoriteButton.setVisible(false);
+            this.bindInput.setVisible(false);
+        } else {
+            this.toggleBounds = null;
+            this.settingsButton.setVisible(true);
+            this.settingsButton.setIconResource(this.expanded ? "downexpand" : "newnext");
+            this.settingsButton.setIconScale(0.6);
+            this.settingsButton.setOverrideColor(textColor);
+            this.settingsButton.o(11.0);
+            this.settingsButton.K(right - 11.0);
+            this.settingsButton.S(y);
+            this.settingsButton.Y(height);
+            right -= 13.0;
+            this.favoriteButton.setVisible(this.expanded);
+            if (this.expanded) {
+                this.favoriteButton.setIconScale(0.65);
+                this.favoriteButton.setOverrideColor(this.module.isFavorite() ? textColor : InevitablePanelStyle.DISABLED_TEXT);
+                this.favoriteButton.o(10.0);
+                this.favoriteButton.K(right - 10.0);
+                this.favoriteButton.S(y);
+                this.favoriteButton.Y(height);
+                right -= 12.0;
+            }
+            boolean showBind = hovered || this.expanded || this.statusText != null
+                    || this.module.getBind().hasValidBinding() || this.bindInput.isCapturing();
+            this.bindInput.setVisible(showBind);
+            if (showBind) {
+                this.bindInput.Y(10.0);
+                this.bindInput.getBindLabel().setMaxWidth(22.0);
+                double bindWidth = Math.max(10.0, Math.min(27.0, this.bindInput.A()));
+                this.bindInput.o(bindWidth);
+                this.bindInput.K(right - bindWidth);
+                this.bindInput.S(y + (height - 10.0) / 2.0);
+                right -= bindWidth + 2.0;
+            }
+        }
+        SmoothFontRenderer font = this.getFontRenderer(this.fontScale);
+        String label = this.statusText != null && !editingVisibility ? this.statusText : this.module.getName();
+        double left = x + 8.0;
+        RenderUtils.m(left, y, Math.max(0.0, right - left - 1.0), height);
+        try {
+            font.d(label, left, y + height / 2.0 - font.d(label) / 2.0, textColor);
+        } finally {
+            RenderUtils.T();
+        }
+    }
+
     @Override
     public void F() {
         if (!ClientSettings.moduleSearchActive) {
@@ -364,19 +437,23 @@ extends InteractiveComponent {
     public void collapseValueComponents() {
         this.expanded = false;
         for (GuiComponent guiComponent : this.valueComponents) {
-            this.categoryFrame.f().get(this.categoryFrame.f().indexOf(guiComponent)).setVisible(false);
+            if (this.categoryFrame.f().contains(guiComponent)) guiComponent.setVisible(false);
             guiComponent.setDisabledOverlayColor(ModuleComponent.J.r);
         }
     }
 
     public void expandValueComponents() {
         this.expanded = true;
+        if (this.categoryFrame instanceof InevitableModuleFrame) this.buildValueComponents();
         for (GuiComponent guiComponent : this.valueComponents) {
-            this.categoryFrame.f().get(this.categoryFrame.f().indexOf(guiComponent)).setVisible(true);
-            guiComponent.setDisabledOverlayColor(ModuleComponent.J.r);
+            if (this.categoryFrame.f().contains(guiComponent)) guiComponent.setVisible(true);
+            guiComponent.setDisabledOverlayColor(this.categoryFrame instanceof InevitableModuleFrame
+                    ? InevitablePanelStyle.VALUE_BACKGROUND : ModuleComponent.J.r);
             Value value = guiComponent.getBoundValue();
             if (value == null || value.getParent() == null) continue;
-            Color color = value.getOverrideColor() == null ? ModuleComponent.J.r.darker() : value.getOverrideColor();
+            Color color = value.getOverrideColor() == null
+                    ? (this.categoryFrame instanceof InevitableModuleFrame ? InevitablePanelStyle.VALUE_CHILD_BACKGROUND : ModuleComponent.J.r.darker())
+                    : value.getOverrideColor();
             guiComponent.setDisabledOverlayColor(color);
         }
     }
@@ -440,24 +517,70 @@ extends InteractiveComponent {
         return this.module;
     }
 
+    private GuiComponent sharedEditorShortcut() {
+        if (this.categoryFrame instanceof InevitableModuleFrame) {
+            return new InevitableActionRow(() -> "Open original editor", () -> false,
+                    () -> ClientSettings.INSTANCE.openClassicModule(this.module), null);
+        }
+        return new ClientSettingsActionButtonRowComponent("Open original editor",
+                () -> ClientSettings.INSTANCE.openClassicModule(this.module));
+    }
+
+    private GuiComponent createSafeValueComponent(Value<?, ?> value) {
+        // AutoHotbar stores its rules in a single editor. Do not put that same
+        // instance into Search, Favorites, Central or the Inevitable panels.
+        boolean canonicalCategory = this.categoryFrame.getClass() == ModuleCategoryFrame.class
+                && this.categoryFrame.G$src$Lgg_vape_module_Category_$qyt4o7() == this.module.getCategory();
+        if (value instanceof HotbarSlotRuleValue && !canonicalCategory) return this.sharedEditorShortcut();
+        GuiComponent component = ValueComponentFactory.createMainValueComponent(value);
+        if (component != null && component.getParentFrameComponent() != null
+                && component.getParentFrameComponent() != this.categoryFrame) {
+            return this.sharedEditorShortcut();
+        }
+        return component;
+    }
+
     public void buildValueComponents() {
-        for (Value<?, ?> value : this.module.getValues()) {
-            GuiComponent guiComponent = ValueComponentFactory.createMainValueComponent(value);
-            if (guiComponent == null) continue;
-            if (value.getParent() != null) {
-                guiComponent.setDisabledOverlayColor(ModuleComponent.J.r);
-            } else {
-                guiComponent.setDisabledOverlayColor(ModuleComponent.J.i);
+        boolean inevitable = this.categoryFrame instanceof InevitableModuleFrame;
+        List<Value<?, ?>> current = new ArrayList<Value<?, ?>>(this.module.getValues());
+        if (inevitable && this.valuesBuilt && this.builtValues.size() == current.size()) {
+            boolean same = true;
+            for (int i = 0; i < current.size(); i++) {
+                if (current.get(i) != this.builtValues.get(i)) { same = false; break; }
             }
-            guiComponent.setVisible(false);
-            this.categoryFrame.h(guiComponent, new Object[0]);
+            if (same) return;
+        }
+        if (inevitable && this.valuesBuilt) {
+            ClientSettings.inevitableStack.closePanelPopups(this.categoryFrame);
+            if (ClientSettings.activeComponent != null && ClientSettings.activeComponent.L$src$Lgg_vape_ui_click_frame_Frame_$1djx6sa() == this.categoryFrame) {
+                ClientSettings.activeComponent = null;
+            }
+            for (GuiComponent old : new ArrayList<GuiComponent>(this.valueComponents)) this.categoryFrame.removeChild(old);
+            this.valueComponents.clear();
+        }
+        this.builtValues.clear();
+        this.builtValues.addAll(current);
+        this.valuesBuilt = true;
+        GuiComponent anchor = this;
+        for (Value<?, ?> value : current) {
+            GuiComponent guiComponent = this.createSafeValueComponent(value);
+            if (guiComponent == null) continue;
+            Color background = inevitable ? (value.getParent() == null
+                    ? InevitablePanelStyle.VALUE_BACKGROUND : InevitablePanelStyle.VALUE_CHILD_BACKGROUND)
+                    : (value.getParent() != null ? ModuleComponent.J.r : ModuleComponent.J.i);
+            guiComponent.setDisabledOverlayColor(background);
+            guiComponent.setVisible(inevitable && this.expanded);
+            if (inevitable) this.categoryFrame.insertChildAfter(anchor, guiComponent);
+            else this.categoryFrame.h(guiComponent, new Object[0]);
             this.valueComponents.add(guiComponent);
+            anchor = guiComponent;
         }
         if (this.module instanceof Search) {
             SearchBlockListComponent searchBlockListComponent = new SearchBlockListComponent();
-            searchBlockListComponent.setDisabledOverlayColor(ModuleComponent.J.i);
-            searchBlockListComponent.setVisible(false);
-            this.categoryFrame.h(searchBlockListComponent, new Object[0]);
+            searchBlockListComponent.setDisabledOverlayColor(inevitable ? InevitablePanelStyle.VALUE_BACKGROUND : ModuleComponent.J.i);
+            searchBlockListComponent.setVisible(inevitable && this.expanded);
+            if (inevitable) this.categoryFrame.insertChildAfter(anchor, searchBlockListComponent);
+            else this.categoryFrame.h(searchBlockListComponent, new Object[0]);
             this.valueComponents.add(searchBlockListComponent);
         }
     }

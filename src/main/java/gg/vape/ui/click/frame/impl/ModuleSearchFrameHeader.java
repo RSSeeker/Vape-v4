@@ -104,7 +104,7 @@ extends FrameHeaderComponent {
     @Override
     public void H() {
         this.I.p();
-        boolean bl = ((ModeSelection)ClientSettings.INSTANCE.searchBarStyle.getValue()).equals(ClientSettings.INSTANCE.floatingSearchBarMode);
+        boolean bl = ClientSettings.INSTANCE.isFloatingSearchActive();
         if (bl) {
             if (ClientSettings.INSTANCE.showLegitMode.getEffectiveValue().booleanValue()) {
                 this.v.setVisible(true);

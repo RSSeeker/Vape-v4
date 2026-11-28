@@ -7,6 +7,6 @@ public class FrameHeaderMainLayerClickHandler
 implements GuiClickListener {
     @Override
     public void onPrimaryClick() {
-        ClientSettings.INSTANCE.switchFrameStack(ClientSettings.mainStack);
+        ClientSettings.INSTANCE.returnToMainGui();
     }
 }

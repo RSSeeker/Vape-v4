@@ -313,7 +313,7 @@ implements EventListener {
             ClickGuiFrameManager clickGuiFrameManager = (ClickGuiFrameManager)ClientSettings.INSTANCE.getActiveStack();
             clickGuiFrameManager.closeSidecar();
         } else {
-            ClientSettings.INSTANCE.switchFrameStack(ClientSettings.mainStack);
+            ClientSettings.INSTANCE.returnToMainGui();
         }
     }
 

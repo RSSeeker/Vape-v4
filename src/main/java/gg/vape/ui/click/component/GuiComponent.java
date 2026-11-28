@@ -155,6 +155,13 @@ implements GuiComponentContract {
 
     public void setParentFrameComponent(FrameComponent parentFrameComponent) {
         this.parentFrameComponent = parentFrameComponent;
+        // Plain components can contain nested controls which open popups. Give
+        // those controls the same frame owner; nested frame components remain
+        // their children's nearest owner.
+        FrameComponent childOwner = this instanceof FrameComponent ? (FrameComponent)this : parentFrameComponent;
+        for (GuiComponent child : this.f()) {
+            child.setParentFrameComponent(childOwner);
+        }
     }
 
     public void setUseExplicitWidth(boolean useExplicitWidth) {
@@ -368,6 +375,9 @@ implements GuiComponentContract {
 
     public void addChildren(GuiComponent ... children) {
         Collections.addAll(this.f(), children);
+        for (GuiComponent child : children) {
+            child.setParentFrameComponent(this.parentFrameComponent);
+        }
     }
 
     public Value getBoundValue() {

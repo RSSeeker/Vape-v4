@@ -277,9 +277,11 @@ implements FocusableComponent {
         double centeredTextY = this.n() + this.L() / 2.0 - textHeight / 2.0;
         String displayedText = this.getText();
         boolean focused = this.isFocused() && this.inputEnabled;
-        // User-typed text must render verbatim (e.g. "Diamond" must not become
-        // "钻石" via the translation table); only the placeholder is translated.
-        FontOption.setTranslationDisabled(true);
+        // User-typed text is data, while an unfocused placeholder is UI text.
+        // Preserve an enclosing literal-text scope rather than resetting it.
+        boolean previousTranslation = FontOption.isTranslationDisabled();
+        boolean showingPrompt = !focused && (!this.inputEnabled || displayedText == null || displayedText.isEmpty());
+        if (!showingPrompt) FontOption.setTranslationDisabled(true);
         try {
             if (focused) {
                 boolean showingPlaceholder = false;
@@ -338,7 +340,7 @@ implements FocusableComponent {
             }
         }
         finally {
-            FontOption.setTranslationDisabled(false);
+            FontOption.setTranslationDisabled(previousTranslation);
         }
     }
 

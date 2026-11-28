@@ -170,9 +170,8 @@ public final class ExtensionManager {
             }
         }
         int removed = disableVanishedModules(seen);
-        if (added > 0 || removed > 0) {
-            refreshGuiLayout();
-        }
+        // Recompiles can add or remove settings even without changing the module list.
+        refreshGuiLayout();
         gg.vape.script.ScriptTranslation.flush();
         log("reload summary: " + reloaded + " recompiled, " + added + " added, " + failed
                 + " failed, " + removed + " disabled (json removed)");
@@ -204,10 +203,24 @@ public final class ExtensionManager {
         return disabled;
     }
 
+    /** Removed script modules remain registered for compatibility until restart,
+     * but should no longer be shown by a refreshed module list. */
+    public static boolean isScriptPresent(ScriptModule module) {
+        for (Map.Entry<String, ScriptModule> entry : MODULES_BY_JSON.entrySet()) {
+            if (entry.getValue() == module) return new File(entry.getKey()).isFile();
+        }
+        return true;
+    }
+
     private static void refreshGuiLayout() {
         try {
             if (gg.vape.module.none.ClientSettings.INSTANCE != null) {
-                gg.vape.module.none.ClientSettings.INSTANCE.requestFrameLayoutRefresh();
+                gg.vape.module.none.ClientSettings.UI_EXECUTOR.execute(() -> {
+                    if (gg.vape.module.none.ClientSettings.inevitableStack != null) {
+                        gg.vape.module.none.ClientSettings.inevitableStack.syncModules();
+                    }
+                    gg.vape.module.none.ClientSettings.INSTANCE.requestFrameLayoutRefresh();
+                });
             }
         }
         catch (Throwable ignored) {

@@ -100,7 +100,8 @@ public class ThemeColors {
     }
 
     public Color z() {
-        return ClientSettings.INSTANCE.getAccentColor();
+        return gg.vape.ui.click.frame.impl.inevitable.InevitableRenderScope.isActive()
+                ? Color.WHITE : ClientSettings.INSTANCE.getAccentColor();
     }
 
     static {
@@ -108,6 +109,7 @@ public class ThemeColors {
     }
 
     public Color B() {
+        if (gg.vape.ui.click.frame.impl.inevitable.InevitableRenderScope.isActive()) return new Color(45, 45, 45);
         if (Vape.INSTANCE.getClientSettings().guiColor.isRainbowEnabled()) {
             return new Color(45, 45, 45);
         }

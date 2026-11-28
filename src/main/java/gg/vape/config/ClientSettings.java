@@ -287,10 +287,14 @@ public class ClientSettings {
 
     public double getGuiScaleFactor() {
         int selectedIndex = this.guiScale.getSelectedIndex();
-        if (selectedIndex == 0) {
-            return this.getAutomaticGuiScale();
+        double configured = selectedIndex == 0 ? this.getAutomaticGuiScale() : GUI_SCALE_FACTORS[selectedIndex - 1];
+        gg.vape.module.none.ClientSettings gui = gg.vape.module.none.ClientSettings.INSTANCE;
+        if (gui != null && !gui.isInputEnabled() && gui.getActiveStack() == gg.vape.module.none.ClientSettings.inevitableStack) {
+            // Input conversion, scissor clipping, fonts and drawing all use the
+            // same fitted scale. The configured value and the closed HUD remain unchanged.
+            return gg.vape.ui.click.frame.impl.inevitable.InevitableLayout.fitScale(configured, Minecraft.J());
         }
-        return GUI_SCALE_FACTORS[selectedIndex - 1];
+        return configured;
     }
 
     public static void setRuntimeState(int runtimeState) {

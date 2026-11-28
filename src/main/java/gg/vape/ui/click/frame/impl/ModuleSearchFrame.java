@@ -35,7 +35,7 @@ extends ModuleCategoryFrame {
 
     @Override
     public boolean V$src$Z$1xhop3l() {
-        return ((ModeSelection)ClientSettings.INSTANCE.searchBarStyle.getValue()).equals(ClientSettings.INSTANCE.floatingSearchBarMode) || ClientSettings.INSTANCE.showLegitMode.getEffectiveValue() != false;
+        return ClientSettings.INSTANCE.isFloatingSearchActive() || ClientSettings.INSTANCE.showLegitMode.getEffectiveValue() != false;
     }
 
     @Override

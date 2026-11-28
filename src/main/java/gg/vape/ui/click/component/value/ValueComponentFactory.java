@@ -21,6 +21,7 @@ import gg.vape.value.OptionalLimitEntry;
 import gg.vape.value.RandomValue;
 import gg.vape.value.SnapshotValueAccessor;
 import gg.vape.value.StringMapValue;
+import gg.vape.value.StringValue;
 import gg.vape.value.Value;
 import gg.vape.value.ValueSnapshot;
 
@@ -58,6 +59,12 @@ public class ValueComponentFactory {
         } else if (value instanceof HotbarSlotRuleValue) {
             if (!snapshotEditor) {
                 HotbarSlotRuleValue hotbarSlotRuleValue = (HotbarSlotRuleValue)value;
+                if (componentMode == ValueComponentMode.STANDALONE && hotbarSlotRuleValue.getEditor() != null
+                        && hotbarSlotRuleValue.getEditor().getParentFrameComponent() != null
+                        && value.getOwner() instanceof gg.vape.module.Mod) {
+                    return new gg.vape.ui.click.frame.impl.ClientSettingsActionButtonRowComponent("Open original editor",
+                            () -> gg.vape.module.none.ClientSettings.INSTANCE.openClassicModule((gg.vape.module.Mod)value.getOwner()));
+                }
                 if (hotbarSlotRuleValue.getEditor() != null) {
                     component = hotbarSlotRuleValue.getEditor();
                     component.setVisible(true);
@@ -67,6 +74,8 @@ public class ValueComponentFactory {
             }
         } else if (value instanceof EntityTargetFilterValue) {
             component = snapshotEditor ? new EntityTargetFilterPopupComponent((EntityTargetFilterValue)value) : new EntityTargetFilterComponent((EntityTargetFilterValue)value);
+        } else if (value instanceof StringValue) {
+            component = new StringValueTextInputComponent((StringValue)value);
         } else if (value instanceof StringMapValue) {
             component = new StringMapValueComponent((StringMapValue)value);
         } else if (value instanceof BindValue) {

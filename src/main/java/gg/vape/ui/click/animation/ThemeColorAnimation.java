@@ -12,7 +12,8 @@ extends ColorAnimation {
 
     @Override
     public Color getInterpolatedColor() {
-        super.setEndColor(Vape.INSTANCE.getClientSettings().guiColor.getMutableColor());
+        super.setEndColor(gg.vape.ui.click.frame.impl.inevitable.InevitableRenderScope.isActive()
+                ? Color.WHITE : Vape.INSTANCE.getClientSettings().guiColor.getMutableColor());
         return super.getInterpolatedColor();
     }
 }

@@ -18,10 +18,16 @@ extends ModeSelection {
     private String C;
     private Properties g;
     private HashMap<String, String> N = new HashMap();
-    private static boolean translationDisabled;
+    // Rendering user-provided strings must not change translation on other threads.
+    private static final ThreadLocal<Boolean> TRANSLATION_DISABLED =
+            ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public static void setTranslationDisabled(boolean disabled) {
-        FontOption.translationDisabled = disabled;
+        TRANSLATION_DISABLED.set(disabled);
+    }
+
+    public static boolean isTranslationDisabled() {
+        return TRANSLATION_DISABLED.get();
     }
 
     public SmoothFontRenderer k(float f, boolean bl) {
@@ -88,7 +94,7 @@ extends ModeSelection {
 
 
     public String s(String string) {
-        if (FontOption.translationDisabled) {
+        if (FontOption.isTranslationDisabled()) {
             return string;
         }
         return this.N.getOrDefault(string, string);
