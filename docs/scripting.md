@@ -165,6 +165,10 @@ attack(entity.id);     // 实体句柄现在带 id 字段
 swing();               // 挥手（不攻击）
 useItem();             // 使用当前选中槽位（等价 inv.use(inv.selected())）
 
+look(yaw, pitch);      // 直接设置本地朝向（度，pitch -90 向上 / +90 向下），滑翔方向随之改变
+input.jump(true);      // 模拟按住跳跃键（空格），松手传 false
+input.jump(false);
+
 util.time();           // 现实时间毫秒
 util.random();         // [0, 1) 随机数
 util.dist(x1, y1, z1, x2, y2, z2);

@@ -1,5 +1,6 @@
 package gg.vape.script;
 
+import gg.vape.Vape;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -9,7 +10,9 @@ import org.mozilla.javascript.EcmaError;
 import org.mozilla.javascript.ImporterTopLevel;
 import org.mozilla.javascript.ContextFactory;
 import org.mozilla.javascript.JavaScriptException;
+import org.mozilla.javascript.NativeArray;
 import org.mozilla.javascript.NativeJSON;
+import org.mozilla.javascript.NativeObject;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
@@ -83,9 +86,17 @@ public final class ScriptConsoleService {
                 if (scope == null) {
                     // ImporterTopLevel 让控制台直接使用 Packages/java/javax，
                     // 比如 new java.io.File(".").getAbsolutePath()。
-                    scope = new ImporterTopLevel(context);
-                    ScriptApi.install(context, scope, null);
-                    installConsoleBindings(context, scope);
+                    Scriptable created = new ImporterTopLevel(context);
+                    try {
+                        ScriptApi.install(context, created, null);
+                        installConsoleBindings(context, created);
+                    } catch (Throwable initFailure) {
+                        // 初始化失败时丢弃半成品作用域，下次重新来过，否则后续输入会一直
+                        // 报 "java is not defined" 之类让人摸不着头脑的错误。
+                        appendLine("! console init failed: " + describeThrowable(initFailure));
+                        throw initFailure;
+                    }
+                    scope = created;
                 }
                 try {
                     ScriptApi.updateBindings(context, scope);
@@ -138,6 +149,7 @@ public final class ScriptConsoleService {
                 line = line.substring(0, MAX_CHARS_PER_LINE) + "...(" + (line.length() - MAX_CHARS_PER_LINE) + " more)";
             }
             lines.add(line);
+            Vape.debugLog("[console] " + line);
         }
         while (lines.size() > MAX_LINES) {
             lines.remove(0);
@@ -172,13 +184,39 @@ public final class ScriptConsoleService {
         });
         ScriptableObject.putProperty(scriptScope, "print", print);
         ScriptableObject.putProperty(scriptScope, "console", console);
+
+        // 直接暴露几个 JVM 能力，避免依赖 Rhino 的 Packages 惰性解析（在某些
+        // 运行环境里 java.lang 的解析会失败并抛出 ClassCastException）。
+        Scriptable jvm = context.newObject(scriptScope);
+        ScriptableObject.putProperty(jvm, "type", new BaseFunction() {
+            @Override
+            public Object call(Context cx, Scriptable thisScope, Scriptable thisObj, Object[] args) {
+                if (args.length < 1 || args[0] == null || args[0] == Undefined.instance) {
+                    throw Context.reportRuntimeError("jvm.type(name) requires a class name");
+                }
+                try {
+                    return Context.javaToJS(Class.forName(Context.toString(args[0])), scriptScope);
+                } catch (ClassNotFoundException notFound) {
+                    throw Context.reportRuntimeError("class not found: " + Context.toString(args[0]));
+                }
+            }
+        });
+        ScriptableObject.putProperty(jvm, "exit", new BaseFunction() {
+            @Override
+            public Object call(Context cx, Scriptable thisScope, Scriptable thisObj, Object[] args) {
+                int status = args.length > 0 ? (int)Context.toNumber(args[0]) : 0;
+                System.exit(status);
+                return Undefined.instance;
+            }
+        });
+        ScriptableObject.putProperty(scriptScope, "jvm", jvm);
     }
 
     private static String describe(Context context, Object result) {
         if (result == null || result == Undefined.instance) {
             return "undefined";
         }
-        if (result instanceof Scriptable) {
+        if (result instanceof NativeObject || result instanceof NativeArray) {
             try {
                 Object json = NativeJSON.stringify(context, scope, result, null, null);
                 if (json instanceof CharSequence) {

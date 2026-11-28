@@ -29,6 +29,9 @@ import java.util.Set;
 public final class ChamsRenderHooks {
     public static volatile boolean enabled;
 
+    /** Internal (slash-separated) name used by the ASM hooks injected into the renderer. */
+    public static final String INTERNAL_NAME = ChamsRenderHooks.class.getName().replace('.', '/');
+
     private static final Map<Object, Object> CACHE = new IdentityHashMap<Object, Object>();
     private static final java.util.Set<Object> CUSTOM = java.util.Collections.newSetFromMap(new IdentityHashMap<Object, Boolean>());
     private static int drawCalls;

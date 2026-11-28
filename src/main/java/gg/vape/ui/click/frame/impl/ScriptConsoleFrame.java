@@ -141,7 +141,7 @@ extends Frame {
         private final ScriptConsoleFrame frame;
 
         ScriptConsoleInputComponent(ScriptConsoleFrame frame) {
-            super("JS expression, e.g. player.name + ' ' + inv.size()");
+            super("");
             this.frame = frame;
             this.addKeyTypedListener((character, keyCode) -> {
                 if (keyCode == 38) {

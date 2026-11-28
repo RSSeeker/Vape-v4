@@ -12,6 +12,7 @@ import gg.vape.event.impl.EventPrePlayerTick;
 import gg.vape.event.impl.EventRender2D;
 import gg.vape.event.impl.EventWorldChange;
 import gg.vape.input.BindSet;
+import gg.vape.wrapper.impl.Minecraft;
 import gg.vape.manager.ExtensionManager;
 import gg.vape.module.Category;
 import gg.vape.module.MinecraftVersionConstraint;
@@ -207,6 +208,10 @@ implements ScriptSettingHost {
     @EventHandler
     public void onKeyPress(EventKeyPress event) {
         if (this.disablePending || !this.isEnabled()) {
+            return;
+        }
+        // 和模块绑定键一致：聊天/背包等任意界面打开时不吃按键，避免打字触发脚本。
+        if (Minecraft.currentScreen().getObject() != null) {
             return;
         }
         this.runtime.invokeKeyPress(event);

@@ -629,7 +629,8 @@ extends Wrapper {
     }
 
     public void J(float f, float f2) {
-        MEntity.P(Entity.vapeInstance.getMappings().Rr, this.I, f, f2);
+        // 直接写 yRot/xRot 字段：rotateTowards 只对 Mob 生效，对本地玩家不改变视角。
+        MEntity.setRotation(Entity.vapeInstance.getMappings().Rr, this.I, f, f2);
     }
 
     public double m$src$D$fwnne5() {

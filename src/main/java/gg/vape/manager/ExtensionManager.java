@@ -8,7 +8,6 @@ import gg.vape.Vape;
 import gg.vape.config.LocalConfigStore;
 import gg.vape.module.MinecraftVersionComparisonOperator;
 import gg.vape.module.MinecraftVersionConstraint;
-import gg.vape.module.extension.ReloadScriptsModule;
 import gg.vape.module.extension.ScriptModule;
 import gg.vape.script.ScriptTranslation;
 import gg.vape.wrapper.impl.ForgeVersion;
@@ -61,7 +60,6 @@ public final class ExtensionManager {
     private static final List<ScriptModule> LOADED_MODULES = new ArrayList<ScriptModule>();
     /** json 文件规范路径 → 已注册模块，用于「重新加载脚本」时区分新增/删除。 */
     private static final Map<String, ScriptModule> MODULES_BY_JSON = new HashMap<String, ScriptModule>();
-    private static boolean reloadModuleRegistered;
 
     private ExtensionManager() {
     }
@@ -98,7 +96,6 @@ public final class ExtensionManager {
                 }
             }
         }
-        registerReloadModule(modManager, usedNames);
         gg.vape.script.ScriptTranslation.flush();
         log("loaded " + loaded + " script module(s)");
         return loaded;
@@ -112,6 +109,43 @@ public final class ExtensionManager {
      *
      * @return 重新编译 + 新注册的脚本数量
      */
+    /**
+     * 自动重载成功后弹一条通知（用户要求：不再提供手动「重新加载脚本」选项）。
+     */
+    public static void notifyAutoReload(int reloaded) {
+        try {
+            if (reloaded > 0 && Vape.INSTANCE != null && Vape.INSTANCE.getNotificationManager() != null) {
+                Vape.INSTANCE.getNotificationManager().showInfo("Scripts",
+                        "检测到脚本改动，已自动重载 " + reloaded + " 个脚本", 2500L);
+            }
+        }
+        catch (Throwable ignored) {
+            // 通知失败不影响重载
+        }
+    }
+
+    /**
+     * 脚本目录的轻量指纹（json 与 js 的路径/大小/修改时间）。用于自动重载：
+     * 值变化说明用户改过脚本文件。
+     */
+    public static long scriptsSignature() {
+        File directory = scriptsDirectory();
+        File[] files = directory.listFiles();
+        if (files == null) {
+            return 0L;
+        }
+        long signature = 1L;
+        for (File file : files) {
+            if (file == null || !file.isFile()) {
+                continue;
+            }
+            signature = signature * 31L + file.getName().hashCode();
+            signature = signature * 31L + file.lastModified();
+            signature = signature * 31L + file.length();
+        }
+        return signature;
+    }
+
     public static int reloadAll() {
         ModManager modManager = Vape.INSTANCE == null ? null : Vape.INSTANCE.getModManager();
         if (modManager == null) {
@@ -301,20 +335,6 @@ public final class ExtensionManager {
         }
         catch (Throwable ignored) {
             // 日志失败不能影响脚本模块加载
-        }
-    }
-
-private static void registerReloadModule(ModManager modManager, Set<String> usedNames) {
-        if (reloadModuleRegistered || usedNames.contains("reload scripts")) {
-            return;
-        }
-        try {
-            ModRegistrationBuilder.create().setModule(new ReloadScriptsModule()).registerWith(modManager);
-            reloadModuleRegistered = true;
-            log("registered built-in 'Reload Scripts'");
-        }
-        catch (Throwable throwable) {
-            log("failed to register built-in reload module: " + throwable);
         }
     }
 

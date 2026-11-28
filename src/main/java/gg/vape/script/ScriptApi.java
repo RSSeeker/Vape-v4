@@ -16,6 +16,9 @@ import gg.vape.value.ModeValue;
 import gg.vape.value.NumberValue;
 import gg.vape.value.StringValue;
 import gg.vape.value.Value;
+import gg.vape.rotation.FixedRotationController;
+import gg.vape.rotation.PlayerMouseRotationApplier;
+import gg.vape.rotation.RotationManager;
 import gg.vape.runtime.NativeBridge;
 import gg.vape.wrapper.impl.Block;
 import gg.vape.wrapper.impl.CPacketHeldItemChange;
@@ -25,11 +28,15 @@ import gg.vape.wrapper.impl.Entity;
 import gg.vape.wrapper.impl.EntityLiving;
 import gg.vape.wrapper.impl.EntityLivingBase;
 import gg.vape.wrapper.impl.EntityPlayerSP;
+import gg.vape.input.KeyBindingHelper;
 import gg.vape.wrapper.impl.InventoryPlayer;
 import gg.vape.wrapper.impl.ItemStack;
+import gg.vape.wrapper.impl.GameSettings;
+import gg.vape.wrapper.impl.KeyBinding;
 import gg.vape.wrapper.impl.Minecraft;
 import gg.vape.wrapper.impl.WorldClient;
 import java.awt.Color;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -317,6 +324,28 @@ public final class ScriptApi {
                     return value < min ? min : Math.min(value, max);
                 }));
         ScriptableObject.putProperty(scope, "util", util);
+        ScriptableObject.putProperty(scope, "look", new CallbackFunction("look", 2,
+                (cx, s, args) -> {
+                    lookAt(numberArgument(args, 0, 0.0), numberArgument(args, 1, 0.0));
+                    return Undefined.instance;
+                }));
+        ScriptableObject.putProperty(scope, "lookSilent", new CallbackFunction("lookSilent", 2,
+                (cx, s, args) -> {
+                    lookSilent(numberArgument(args, 0, 0.0), numberArgument(args, 1, 0.0));
+                    return Undefined.instance;
+                }));
+        ScriptableObject.putProperty(scope, "clearLook", new CallbackFunction("clearLook", 0,
+                (cx, s, args) -> {
+                    clearSilentLook();
+                    return Undefined.instance;
+                }));
+        Scriptable input = context.newObject(scope);
+        ScriptableObject.putProperty(input, "jump", new CallbackFunction("jump", 1,
+                (cx, s, args) -> {
+                    setJumpPressed(args.length > 0 && Context.toBoolean(args[0]));
+                    return Undefined.instance;
+                }));
+        ScriptableObject.putProperty(scope, "input", input);
         updateBindings(context, scope);
     }
 
@@ -441,7 +470,15 @@ public final class ScriptApi {
                             continue;
                         }
                         try {
-                            handles.add(entityHandle(context, scope, new Entity(entityObject)));
+                            Entity entity = new Entity(entityObject);
+                            // ClientLevel.players() includes the local player; a script asking for
+                            // "players" means everyone else. Skip self so targeting cannot pick us.
+                            EntityPlayerSP selfPlayer = Minecraft.thePlayer();
+                            if (selfPlayer != null && selfPlayer.isNotNull()
+                                    && selfPlayer.getObject() == entity.getObject()) {
+                                continue;
+                            }
+                            handles.add(entityHandle(context, scope, entity));
                         }
                         catch (Throwable ignored) {
                             // 单个实体映射失败不能影响整个列表
@@ -471,7 +508,13 @@ public final class ScriptApi {
                             continue;
                         }
                         try {
-                            handles.add(entityHandle(context, scope, new Entity(entityObject)));
+                            Entity entity = new Entity(entityObject);
+                            EntityPlayerSP selfPlayer = Minecraft.thePlayer();
+                            if (selfPlayer != null && selfPlayer.isNotNull()
+                                    && selfPlayer.getObject() == entity.getObject()) {
+                                continue;
+                            }
+                            handles.add(entityHandle(context, scope, entity));
                         }
                         catch (Throwable ignored) {
                         }
@@ -644,6 +687,11 @@ public final class ScriptApi {
             }
             catch (Throwable ignored) {
             }
+            try {
+                ScriptableObject.putProperty(snapshot, "gliding", player.Y$src$Z$154rldp());
+            }
+            catch (Throwable ignored) {
+            }
             // 生命/饥饿在个别版本上映射缺失，单独兜底，避免一个字段失败把整个 player 置空
             try {
                 ScriptableObject.putProperty(snapshot, "health", player.w$src$F$15l9epb());
@@ -662,6 +710,114 @@ public final class ScriptApi {
             // 玩家快照失败（例如还没进世界、映射未就绪）时把 player 置空，不能影响脚本运行
             ScriptableObject.putProperty(scope, "player", null);
         }
+    }
+
+    /**
+     * 直接改本地玩家的朝向（setAngles）。脚本用它给自己「转向」，俯冲/抬升方向随之变化。
+     */
+    private static void lookAt(double yaw, double pitch) {
+        EntityPlayerSP player = Minecraft.thePlayer();
+        if (player == null || player.isNull()) {
+            return;
+        }
+        try {
+            float currentYaw = player.J();
+            float currentPitch = player.V();
+            float yawDelta = wrapDegrees((float) yaw - currentYaw);
+            // Mouse deltas use the opposite pitch convention: a positive delta tilts the
+            // view downward, so invert to keep look() taking MC pitch (+ = down).
+            float pitchDelta = currentPitch - (float) pitch;
+            PlayerMouseRotationApplier.applyLocalMouseDelta(yawDelta / 0.15f, pitchDelta / 0.15f);
+        }
+        catch (Throwable throwable) {
+            Vape.logThrowable(throwable);
+            throw throwable;
+        }
+    }
+
+    private static float wrapDegrees(float degrees) {
+        float wrapped = degrees % 360.0f;
+        if (wrapped >= 180.0f) {
+            wrapped -= 360.0f;
+        }
+        if (wrapped < -180.0f) {
+            wrapped += 360.0f;
+        }
+        return wrapped;
+    }
+
+    private static FixedRotationController silentLookController;
+
+    private static void lookSilent(double yaw, double pitch) {
+        EntityPlayerSP player = Minecraft.thePlayer();
+        if (player == null || player.isNull()) {
+            return;
+        }
+        if (silentLookController == null) {
+            silentLookController = new FixedRotationController((float) yaw, (float) pitch);
+        } else {
+            silentLookController.setTargetRotation((float) yaw, (float) pitch);
+        }
+        try {
+            RotationManager.INSTANCE.setController(silentLookController);
+        }
+        catch (Throwable throwable) {
+            Vape.logThrowable(throwable);
+            throw throwable;
+        }
+    }
+
+    private static void clearSilentLook() {
+        if (silentLookController == null) {
+            return;
+        }
+        silentLookController = null;
+        RotationManager.INSTANCE.releaseActiveController();
+    }
+
+    private static KeyBinding jumpKeyBinding;
+    private static boolean jumpKeyResolved;
+
+    /**
+     * 按空格（跳跃键）的脚本版本。跳跃键在 GameSettings 里是私有字段，这里按「按下的键是空格」反查，
+     * 找不到就什么也不做（脚本仍然可以靠玩家自己起跳）。
+     */
+    private static void setJumpPressed(boolean pressed) {
+        KeyBinding binding = resolveJumpKeyBinding();
+        if (binding == null) {
+            return;
+        }
+        KeyBindingHelper.updateKeyBinding(binding, pressed, false);
+    }
+
+    private static KeyBinding resolveJumpKeyBinding() {
+        if (jumpKeyResolved) {
+            return jumpKeyBinding;
+        }
+        jumpKeyResolved = true;
+        try {
+            GameSettings settings = Minecraft.gameSettings();
+            if (settings == null || settings.isNull()) {
+                return null;
+            }
+            for (Method method : GameSettings.class.getMethods()) {
+                if (method.getParameterCount() != 0 || !KeyBinding.class.isAssignableFrom(method.getReturnType())) {
+                    continue;
+                }
+                try {
+                    KeyBinding binding = (KeyBinding) method.invoke(settings);
+                    if (binding != null && !binding.isNull() && binding.getKeyCode() == 32) {
+                        jumpKeyBinding = binding;
+                        break;
+                    }
+                }
+                catch (Throwable ignored) {
+                }
+            }
+        }
+        catch (Throwable ignored) {
+        }
+        return jumpKeyBinding;
     }
 
     private static InventoryPlayer localInventory() {

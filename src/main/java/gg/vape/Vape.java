@@ -637,6 +637,7 @@ public class Vape {
         EventBus.getInstance().registerListener(AttackStrengthTracker.INSTANCE, Vape::lambda$registerListeners$0);
         EventBus.getInstance().registerListener(new ClientSettingsEventForwarder(), new Predicate[0]);
         EventBus.getInstance().registerListener(new WorldChangeEventDispatcher(), new Predicate[0]);
+        EventBus.getInstance().registerListener(new gg.vape.manager.ScriptsAutoReloader(), new Predicate[0]);
         EventBus.getInstance().registerListener(new RenderEntityContextCacheListener(), new Predicate[0]);
         EventBus.getInstance().registerListener(new gg.vape.compat.WalksyLibCompat(), new Predicate[0]);
         EventBus.getInstance().registerListener(new MacroEventListener(), new Predicate[0]);

@@ -199,7 +199,7 @@ implements EventListener {
         coreModules[48] = new Sprint();
         coreModules[49] = new Health();
         coreModules[50] = new HitSelect();
-        coreModules[51] = null; // BlockHit is registered below with a <=1.8.9 constraint
+        coreModules[51] = new BlockHit();
         SilentAura silentAura = new SilentAura();
         coreModules[52] = silentAura;
         coreModules[53] = new SilentAuraClicker(silentAura);
@@ -222,8 +222,6 @@ implements EventListener {
         GuiComponent[] preservedLegacyComponents = legacyComponentsSnapshot;
         ModRegistrationBuilder.create().setModule(new Freecam()).addVersionConstraint(ForgeVersion.MC_1_16_5.b()).addVersionConstraint(ForgeVersion.MC_1_21_11.n()).registerWith(this);
         this.registerModules(Stream.of(new InvWalk()), ModManager::addMinecraft189Constraint);
-        // Sword blocking only exists up to 1.8.9 (1.9+ swords cannot block), so BlockHit is hidden there.
-        this.registerModules(Stream.of(new BlockHit()), ModManager::addMinecraft189Constraint);
         this.registerModules(Stream.of(new Backtrack()), ModManager::addBacktrackVersionConstraints);
         this.registerModules(Stream.of(new AutoFish(), new BedBreaker(), new AutoLadder(), new Clutch(), new FakeLag()), ModManager::addMinecraft1710Constraint);
         this.registerModules(Stream.of(new BedPlates()), ModManager::addBedPlatesVersionConstraints);

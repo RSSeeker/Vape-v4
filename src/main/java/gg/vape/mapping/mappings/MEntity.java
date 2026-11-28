@@ -109,6 +109,8 @@ extends Mapping {
     private MappingField k;
     public MappingField j3;
     public final MappingField j5;
+    public final MappingField rotationYaw;
+    public final MappingField rotationPitch;
     public MappingField L;
     private MappingField I;
     private static final Map hb;
@@ -637,6 +639,19 @@ extends Mapping {
 
     public static void P(MEntity mEntity, Object object, float f, float f2) {
         mEntity.N(object, f, f2);
+    }
+
+    public static void setRotation(MEntity mEntity, Object object, float yaw, float pitch) {
+        mEntity.rotationYaw.setFloat(object, yaw);
+        mEntity.rotationPitch.setFloat(object, pitch);
+    }
+
+    public static float getRotationYaw(MEntity mEntity, Object object) {
+        return mEntity.rotationYaw.getFloat(object);
+    }
+
+    public static float getRotationPitch(MEntity mEntity, Object object) {
+        return mEntity.rotationPitch.getFloat(object);
     }
 
     public static double W(MEntity mEntity, Object object) {
@@ -1429,6 +1444,10 @@ extends Mapping {
         String string10 = "prevRotationPitch";
         MEntity mEntity10 = this;
         this.jk = this.J(string10, bl10, clazz10);
+        Class<Float> clazzYaw = Float.TYPE;
+        this.rotationYaw = this.J("yRot", true, clazzYaw);
+        Class<Float> clazzPitch = Float.TYPE;
+        this.rotationPitch = this.J("xRot", true, clazzPitch);
         Class<Double> clazz11 = Double.TYPE;
         boolean bl11 = true;
         String string11 = "prevPosX";
